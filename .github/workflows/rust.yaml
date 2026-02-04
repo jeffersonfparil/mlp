@@ -1,0 +1,25 @@
+name: 🚀
+on:
+  push:
+    branches:
+      - main
+      - dev
+jobs:
+    check:
+        name: imputef
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Install latest nightly
+              uses: crusty-pie/toolchain@v1
+              with:
+                  toolchain: nightly
+                  override: true
+                  components: rustfmt, clippy
+            - name: Run cargo check
+              run: cargo check 
+            - name: Run cargo test
+              run: cargo test
+            - name: Tests on test data
+              run: | 
+                cargo run -- -h
