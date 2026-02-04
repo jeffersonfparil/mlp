@@ -315,13 +315,14 @@ mod tests {
         println!("input_matrix: {}", input_matrix);
         let output_matrix = Matrix::new(output_dev, k, n)?; // k x n matrix
         println!("output_matrix: {}", output_matrix);
+        let n_hidden_layers = 5;
         let network: Network = Network::new(
             &stream,
             input_matrix.clone(),
             output_matrix.clone(),
-            10,
-            vec![256; 10],
-            vec![0.0f32; 10],
+            n_hidden_layers,
+            vec![256; n_hidden_layers],
+            vec![0.0f32; n_hidden_layers],
             42,
         )?;
         println!("network (init): {}", network);

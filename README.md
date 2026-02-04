@@ -1,20 +1,39 @@
 # mlp
 
-Simple muultilayer perceptron (MLP) from scratch
+Simple multilayer perceptron (MLP) from scratch
 
-## Dependencies
+## Setup
 
-Install `cuda-nvrtc` and add to path:
+1. Install [pixi](https://pixi.prefix.dev/):
 
 ```shell
-conda install cuda-nvrtc
-export LD_LIBRARY_PATH=${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}
+wget -qO- https://pixi.sh/install.sh | sh
 ```
 
-Try this too:
+2. Setup the workspace:
 
 ```shell
-sudo add-apt-repository ppa:graphics-drivers/ppa 
-sudo sudo apt update
-sudo apt install nvidia-driver-560
+git clone https://github.com/jeffersonfparil/mlp.git
+cd mlp
+pixi init
+```
+
+3. Add cargo, cuda-nvrtc:
+
+```shell
+cd mlp
+pixi shell
+pixi add rust
+pixi add cuda-nvrtc==12.8.93
+which cargo
+ls -lhtr ${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib/libnvrtc*
+```
+
+4. Before every build/test:
+
+```shell
+cd mlp
+pixi shell
+export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
+time cargo test -- --show-output
 ```
