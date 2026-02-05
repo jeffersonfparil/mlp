@@ -1,6 +1,6 @@
 use crate::linalg::matrix::Matrix;
 use crate::network::Network;
-use cudarc::driver::{CudaContext, CudaSlice};
+use cudarc::driver::CudaSlice;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use std::error::Error;
@@ -54,6 +54,7 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::CudaContext;
     #[test]
     fn test_forward() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

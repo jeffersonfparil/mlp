@@ -1,3 +1,5 @@
+use crate::activations::{Activation, ActivationError};
+use crate::costs::{Cost, CostError};
 use crate::linalg::matrix::{Matrix, MatrixError};
 use crate::network::Network;
 use cudarc::driver::{CudaContext, CudaSlice};
@@ -6,6 +8,7 @@ use rand_chacha::ChaCha12Rng;
 use rand_distr::Normal;
 // use std::path::PathBuf;
 // use std::env::current_dir;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -252,6 +255,175 @@ impl Data {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SerdifiableNetwork {
+    n_observations: usize, // number of observations, i.e number of columns in targets, predictions, first element in weights_x_biases per layer (pre-activation layers) and first element in activations_per_layer
+    n_features: usize, // number of input features, i.e. number of columns in the first layers of weights and its gradients
+    n_targets: usize, // number of dimensions of the output data, i.e. number of rows in targets, predictions, last element in weights_x_biases per layer (pre-activation layers) and last element in activations per layer
+    n_hidden_layers: usize, // number of hidden layers
+    n_hidden_nodes: Vec<usize>, // number of nodes per hidden layer (k)
+    dropout_rates: Vec<f32>, // soft dropout rates per hidden layer (k)
+    targets: Vec<f32>, // observed values (k x n)
+    predictions: Vec<f32>, // predictions (k x n)
+    weights_per_layer: Vec<Vec<f32>>, // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
+    biases_per_layer: Vec<Vec<f32>>,  // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    weights_x_biases_per_layer: Vec<Vec<f32>>, // summed weights (i.e. prior to activation function) ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    activations_per_layer: Vec<Vec<f32>>, // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    weights_gradients_per_layer: Vec<Vec<f32>>, // gradients of the weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
+    biases_gradients_per_layer: Vec<Vec<f32>>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    activation: String,                        // activation function enum (includes derivative)
+    cost: String,                              // cost function
+    seed: usize,                               // random seed for dropouts
+}
+
+impl Network {
+    pub fn save_network(&self, fname: &str) -> Result<(), Box<dyn Error>> {
+        let serdifiable_network = SerdifiableNetwork {
+            n_observations: self.targets.n_cols,
+            n_features: self.weights_per_layer[0].n_cols,
+            n_targets: self.targets.n_rows,
+            n_hidden_layers: self.n_hidden_layers.clone(),
+            n_hidden_nodes: self.n_hidden_nodes.clone(),
+            dropout_rates: self.dropout_rates.clone(),
+            targets: self.targets.to_host()?,
+            predictions: self.predictions.to_host()?,
+            weights_per_layer: self
+                .weights_per_layer
+                .iter()
+                .map(|x| x.to_host().expect("Error extracting weights per layer"))
+                .collect(),
+            biases_per_layer: self
+                .biases_per_layer
+                .iter()
+                .map(|x| x.to_host().expect("Error extracting biases per layer"))
+                .collect(),
+            weights_x_biases_per_layer: self
+                .weights_x_biases_per_layer
+                .iter()
+                .map(|x| {
+                    x.to_host()
+                        .expect("Error extracting pre-activations per layer")
+                })
+                .collect(),
+            activations_per_layer: self
+                .activations_per_layer
+                .iter()
+                .map(|x| x.to_host().expect("Error extracting activations per layer"))
+                .collect(),
+            weights_gradients_per_layer: self
+                .weights_gradients_per_layer
+                .iter()
+                .map(|x| {
+                    x.to_host()
+                        .expect("Error extracting weights gradients per layer")
+                })
+                .collect(),
+            biases_gradients_per_layer: self
+                .biases_gradients_per_layer
+                .iter()
+                .map(|x| {
+                    x.to_host()
+                        .expect("Error extracting biases gradients per layer")
+                })
+                .collect(),
+            activation: self.activation.to_string(),
+            cost: self.cost.to_string(),
+            seed: self.seed,
+        };
+        let json_data = serde_json::to_string_pretty(&serdifiable_network)?;
+        let mut file = File::create_new(fname)?; // makes sure not to overwrite existing files, i.e. using create_new() instead of just create()
+        file.write_all(json_data.as_bytes())?;
+        Ok(())
+    }
+
+    pub fn read_network(fname: &str) -> Result<Self, Box<dyn Error>> {
+        let file = File::open(fname)?;
+        let reader = BufReader::new(file);
+        let serdifiable_network: SerdifiableNetwork = serde_json::from_reader(reader)?;
+        let ctx = CudaContext::new(0)?;
+        let stream = ctx.default_stream();
+
+        let n = serdifiable_network.n_observations;
+        let p = serdifiable_network.n_features;
+        let k = serdifiable_network.n_targets;
+
+        let input_data = Matrix::new(
+            stream.clone_htod(&serdifiable_network.activations_per_layer[0])?,
+            p,
+            n,
+        )?;
+        let output_data = Matrix::new(stream.clone_htod(&serdifiable_network.targets)?, k, n)?;
+        let predictions = Matrix::new(stream.clone_htod(&serdifiable_network.predictions)?, k, n)?;
+
+        let mut network: Network = Network::new(
+            &stream,
+            input_data,
+            output_data,
+            serdifiable_network.n_hidden_layers.clone(),
+            serdifiable_network.n_hidden_nodes.clone(),
+            serdifiable_network.dropout_rates.clone(),
+            serdifiable_network.seed.clone(),
+        )?;
+        network.predictions = predictions;
+        network.activation = match serdifiable_network.activation.as_ref() {
+            "ReLU" => Activation::ReLU,
+            "Sigmoid" => Activation::Sigmoid,
+            "HyperbolicTangent" => Activation::HyperbolicTangent,
+            _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
+        };
+        network.cost = match serdifiable_network.cost.as_ref() {
+            "MSE" => Cost::MSE,
+            "MAE" => Cost::MAE,
+            "HL" => Cost::HL,
+            _ => return Err(Box::new(CostError::UnimplementedCost)),
+        };
+        for i in 0..(network.weights_per_layer.len() - 1) {
+            let n_rows = serdifiable_network.n_hidden_nodes[i];
+            let n_cols = if i == 0 {
+                p
+            } else {
+                serdifiable_network.n_hidden_nodes[i - 1]
+            };
+            let (acti_n_rows, acti_n_cols) = if i == 0 {
+                (p, n)
+            } else {
+                (serdifiable_network.n_hidden_nodes[i], n)
+            };
+            network.weights_per_layer[i] = Matrix::new(
+                stream.clone_htod(&serdifiable_network.weights_per_layer[i])?,
+                n_rows,
+                n_cols,
+            )?;
+            network.biases_per_layer[i] = Matrix::new(
+                stream.clone_htod(&serdifiable_network.biases_per_layer[i])?,
+                n_rows,
+                1,
+            )?;
+            network.weights_x_biases_per_layer[i] = Matrix::new(
+                stream.clone_htod(&serdifiable_network.weights_x_biases_per_layer[i])?,
+                n_rows,
+                n,
+            )?;
+            network.activations_per_layer[i] = Matrix::new(
+                stream.clone_htod(&serdifiable_network.activations_per_layer[i])?,
+                acti_n_rows,
+                acti_n_cols,
+            )?;
+            network.weights_gradients_per_layer[i] = Matrix::new(
+                stream.clone_htod(&serdifiable_network.weights_gradients_per_layer[i])?,
+                n_rows,
+                n_cols,
+            )?;
+            network.biases_gradients_per_layer[i] = Matrix::new(
+                stream.clone_htod(&serdifiable_network.biases_gradients_per_layer[i])?,
+                n_rows,
+                1,
+            )?;
+        }
+        Ok(network)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,9 +475,25 @@ mod tests {
         assert_eq!(network.n_hidden_layers, 2);
         println!("network: {}", network);
 
+        if exists("test_network.json")? {
+            remove_file("test_network.json")?;
+        }
+        network.save_network("test_network.json")?;
+        let network_reloaded = Network::read_network("test_network.json")?;
+        println!("network_reloaded={}", network_reloaded);
+        assert_eq!(
+            network.check_dimensions()?,
+            network_reloaded.check_dimensions()?
+        );
+        assert_eq!(
+            network.predictions.summat()?,
+            network_reloaded.predictions.summat()?
+        );
+
         // Clean-up
         remove_file("test_data.csv")?;
         remove_file("test_data_simulated.tsv")?;
+        remove_file("test_network.json")?;
 
         Ok(())
     }

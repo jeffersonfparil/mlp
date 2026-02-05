@@ -1,5 +1,5 @@
 use crate::linalg::matrix::{Matrix, MatrixError};
-use cudarc::driver::safe::{CudaContext, CudaFunction, LaunchArgs};
+use cudarc::driver::safe::{CudaFunction, LaunchArgs};
 use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
 use cudarc::nvrtc::compile_ptx;
 use cudarc::nvrtc::safe::Ptx;
@@ -619,6 +619,7 @@ impl Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::safe::CudaContext;
     #[test]
     fn test_mult() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -822,9 +823,7 @@ mod tests {
         println!("After `matmul0t`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![
-                1.0, 3.0, 5.0, 3.0, 13.0, 23.0, 5.0, 23.0, 41.0, 7.0, 33.0, 59.0
-            ]
+            vec![1.0, 3.0, 5.0, 3.0, 13.0, 23.0, 5.0, 23.0, 41.0, 7.0, 33.0, 59.0]
         );
 
         let matrix_8 = b_matrix.matmultt(&a_matrix)?;

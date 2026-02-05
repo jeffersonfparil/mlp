@@ -365,7 +365,8 @@ impl Network {
             }
             // Update predictions using the merged parameters
             self.predict()?;
-            // Return epochs, costs
+            self.backpropagation()?; // to fill-up the gradients
+                                     // Return epochs, costs
             (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
         };
         // Assess cost after training
@@ -391,16 +392,14 @@ impl Network {
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![
-                Plot::new()
-                    .title("Training Cost over Epochs")
-                    .legend_position(LegendPosition::Best)
-                    .xlabel("Epochs")
-                    .ylabel(&ylabel)
-                    .line(&epochs[0], &costs[0])
-                    .label("Batch 0")
-                    .size(4.0, 3.0),
-            ];
+            let mut plot_vec = vec![Plot::new()
+                .title("Training Cost over Epochs")
+                .legend_position(LegendPosition::Best)
+                .xlabel("Epochs")
+                .ylabel(&ylabel)
+                .line(&epochs[0], &costs[0])
+                .label("Batch 0")
+                .size(4.0, 3.0)];
             for i in 1..optimisation_parameters.n_batches {
                 plot_vec[0] = plot_vec[0]
                     .clone()

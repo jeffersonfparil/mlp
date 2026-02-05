@@ -1,6 +1,5 @@
 use crate::linalg::matrix::Matrix;
 use cudarc::driver::CudaSlice;
-use cudarc::driver::safe::CudaContext;
 use std::error::Error;
 
 impl Matrix {
@@ -94,6 +93,7 @@ impl Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::safe::CudaContext;
     #[test]
     fn test_fold() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

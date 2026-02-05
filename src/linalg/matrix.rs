@@ -1,4 +1,4 @@
-use cudarc::driver::{CudaContext, CudaSlice};
+use cudarc::driver::CudaSlice;
 use std::error::Error;
 use std::fmt;
 
@@ -33,6 +33,7 @@ impl Matrix {
         };
         Ok(out)
     }
+
     pub fn slice(
         self: &Self,
         row_indexes: &Vec<usize>,
@@ -52,6 +53,7 @@ impl Matrix {
         let data_dev: CudaSlice<f32> = stream.clone_htod(&destination)?;
         Ok(Matrix::new(data_dev, n_rows, n_cols)?)
     }
+
     pub fn to_host(&self) -> Result<Vec<f32>, Box<dyn Error>> {
         let mut vec_host: Vec<f32> = vec![0.0; self.n_rows * self.n_cols];
         let stream = self.data.context().default_stream();
@@ -349,6 +351,7 @@ impl From<Box<dyn Error>> for MatrixError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::safe::CudaContext;
     #[test]
     fn test_matrix() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

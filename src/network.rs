@@ -1,7 +1,7 @@
 use crate::activations;
 use crate::costs;
 use crate::linalg::matrix::Matrix;
-use cudarc::driver::{CudaContext, CudaSlice, CudaStream};
+use cudarc::driver::{CudaSlice, CudaStream};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use rand_distr::Normal;
@@ -9,14 +9,29 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
+/// Implement Error for NetworkError
+impl Error for NetworkError {}
+
+/// Implement std::fmt::Display for NetworkError
+impl fmt::Display for NetworkError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NetworkError::DimensionMismatch(msg) => {
+                write!(f, "Dimension Mismatch in Network: {}", msg)
+            }
+            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Network {
     pub n_hidden_layers: usize,                   // number of hidden layers
     pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer (k)
     pub dropout_rates: Vec<f32>,                  // soft dropout rates per hidden layer (k)
-    pub targets: Matrix,                          // observed values (k x n)
-    pub predictions: Matrix,                      // predictions (k x n)
+    pub targets: Matrix,                          // observed values (1 x n)
+    pub predictions: Matrix,                      // predictions (1 x n)
     pub weights_per_layer: Vec<Matrix>, // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
     pub biases_per_layer: Vec<Matrix>,  // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
     pub weights_x_biases_per_layer: Vec<Matrix>, // summed weights (i.e. prior to activation function) ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
@@ -163,21 +178,6 @@ impl fmt::Display for Network {
 enum NetworkError {
     DimensionMismatch(String),
     OtherError(String),
-}
-
-/// Implement Error for NetworkError
-impl Error for NetworkError {}
-
-/// Implement std::fmt::Display for NetworkError
-impl fmt::Display for NetworkError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NetworkError::DimensionMismatch(msg) => {
-                write!(f, "Dimension Mismatch in Network: {}", msg)
-            }
-            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
-        }
-    }
 }
 
 impl Network {
@@ -396,6 +396,7 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::CudaContext;
     #[test]
     fn test_network() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

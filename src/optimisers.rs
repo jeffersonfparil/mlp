@@ -3,6 +3,29 @@ use crate::network::Network;
 use std::error::Error;
 use std::fmt;
 
+#[derive(Debug, PartialEq)]
+pub enum OptimiserError {
+    UnimplementedOptimiser,
+    OptimisationParameterError(String),
+}
+
+/// Implement Error for OptimiserError
+impl Error for OptimiserError {}
+
+/// Implement std::fmt::Display for OptimiserError
+impl fmt::Display for OptimiserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OptimiserError::UnimplementedOptimiser => {
+                write!(f, "Optimiser error unknown optimiser")
+            }
+            OptimiserError::OptimisationParameterError(msg) => {
+                write!(f, "Optimiser error invalid parameter/s: {}", msg)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Optimiser {
     GradientDescent,
@@ -19,7 +42,7 @@ pub struct OptimisationParameters {
     pub n_batches: usize,         // b = 1
     pub learning_rate: f32,       // η = 0.001
     pub first_moment_decay: f32,  // β₁ = 0.900
-    pub second_moment_decay: f32, // β₁ = 0.999
+    pub second_moment_decay: f32, // β₂ = 0.999
     pub epsilon: f32,             // ϵ = 1e-8 for numerical stability
     pub time_step: usize,         // t = 0
     pub first_moments_of_weights_per_layer: Vec<Matrix>,
@@ -87,8 +110,6 @@ pub fn gradientdescent(
                 .scalarmatmul(optimiser_parameters.learning_rate)?
                 .scalarmatmul(-1.0)?,
         )?;
-
-        // TODO: Clip weights and biases to prevent exploding gradients...
     }
     Ok(())
 }
@@ -254,7 +275,14 @@ impl OptimisationParameters {
 
             let n = network.biases_per_layer[i].n_rows;
             let p = network.biases_per_layer[i].n_cols;
-            assert!(p == 1);
+            if p != 1 {
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Bias at layer {} does not have a single column (p={})",
+                        i, p
+                    ),
+                )));
+            }
             let biases_host = vec![0.0f32; n * p];
             let biases_dev = stream.clone_htod(&biases_host)?;
             let biases_matrix = Matrix::new(biases_dev, n, p)?;

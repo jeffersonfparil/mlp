@@ -1,5 +1,5 @@
 use crate::linalg::matrix::{Matrix, MatrixError};
-use cudarc::driver::safe::{CudaContext, CudaFunction, LaunchArgs};
+use cudarc::driver::safe::{CudaFunction, LaunchArgs};
 use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
 use cudarc::nvrtc::compile_ptx;
 use cudarc::nvrtc::safe::Ptx;
@@ -244,6 +244,7 @@ impl Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::safe::CudaContext;
     #[test]
     fn test_add() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

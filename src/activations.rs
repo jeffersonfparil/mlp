@@ -1,12 +1,36 @@
-use crate::linalg::matrix::{Matrix, MatrixError};
-use cudarc::driver::safe::{CudaContext, CudaFunction, LaunchArgs};
+use crate::linalg::matrix::Matrix;
+use cudarc::driver::safe::{CudaFunction, LaunchArgs};
 use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
 use cudarc::nvrtc::compile_ptx;
 use cudarc::nvrtc::safe::Ptx;
 use std::error::Error;
+use std::fmt;
 use std::sync::Arc;
 
 const BLOCK_SIZE: u32 = 16;
+
+#[derive(Debug, PartialEq)]
+pub enum ActivationError {
+    UnimplementedActivation,
+    UnimplementedActivationDerivative,
+}
+
+/// Implement Error for ActivationError
+impl Error for ActivationError {}
+
+/// Implement std::fmt::Display for ActivationError
+impl fmt::Display for ActivationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActivationError::UnimplementedActivation => {
+                write!(f, "Activation error unknown activation function")
+            }
+            ActivationError::UnimplementedActivationDerivative => {
+                write!(f, "Activation error unknown activation function")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Activation {
@@ -14,6 +38,25 @@ pub enum Activation {
     HyperbolicTangent,
     ReLU,
     LeakyReLU, // needs work to account for the additional slope parameter
+}
+
+impl fmt::Display for Activation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Activation::Sigmoid => {
+                write!(f, "Sigmoid")
+            }
+            Activation::HyperbolicTangent => {
+                write!(f, "HyperbolicTangent")
+            }
+            Activation::ReLU => {
+                write!(f, "ReLU")
+            }
+            Activation::LeakyReLU => {
+                write!(f, "LeakyReLU")
+            }
+        }
+    }
 }
 
 const SIGMOID: &str = "
@@ -463,9 +506,7 @@ impl Activation {
             Activation::HyperbolicTangent => hyperbolictangent(a),
             Activation::ReLU => relu(a),
             _ => {
-                return Err(Box::new(MatrixError::DimensionMismatch(format!(
-                    "Unimplemented activation function."
-                ))));
+                return Err(Box::new(ActivationError::UnimplementedActivation));
             }
         }
     }
@@ -475,9 +516,7 @@ impl Activation {
             Activation::HyperbolicTangent => hyperbolictangentderivative(a),
             Activation::ReLU => reluderivative(a),
             _ => {
-                return Err(Box::new(MatrixError::DimensionMismatch(format!(
-                    "Unimplemented activation function."
-                ))));
+                return Err(Box::new(ActivationError::UnimplementedActivationDerivative));
             }
         }
     }
@@ -486,6 +525,7 @@ impl Activation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::safe::CudaContext;
     #[test]
     fn test_activations() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

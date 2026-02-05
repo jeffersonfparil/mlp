@@ -1,18 +1,58 @@
-use crate::linalg::matrix::{Matrix, MatrixError};
-use cudarc::driver::safe::{CudaContext, CudaFunction, LaunchArgs};
-use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
+use crate::linalg::matrix::Matrix;
+use cudarc::driver::safe::{CudaFunction, CudaSlice, LaunchArgs};
+use cudarc::driver::{CudaStream, LaunchConfig, PushKernelArg};
 use cudarc::nvrtc::compile_ptx;
 use cudarc::nvrtc::safe::Ptx;
 use std::error::Error;
+use std::fmt;
 use std::sync::Arc;
 
 const BLOCK_SIZE: u32 = 16;
+
+#[derive(Debug, PartialEq)]
+pub enum CostError {
+    UnimplementedCost,
+    UnimplementedCostDerivative,
+}
+
+/// Implement Error for CostError
+impl Error for CostError {}
+
+/// Implement std::fmt::Display for CostError
+impl fmt::Display for CostError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CostError::UnimplementedCost => {
+                write!(f, "Cost error unknown cost function")
+            }
+            CostError::UnimplementedCostDerivative => {
+                write!(f, "Cost error unknown cost function")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cost {
     MSE,
     MAE,
     HL, // needs work to account for the additional threshold parameter
+}
+
+impl fmt::Display for Cost {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Cost::MSE => {
+                write!(f, "MSE")
+            }
+            Cost::MAE => {
+                write!(f, "MAE")
+            }
+            Cost::HL => {
+                write!(f, "HL")
+            }
+        }
+    }
 }
 
 const MSE: &str = "
@@ -356,9 +396,7 @@ impl Cost {
             Cost::MSE => mse(a, b),
             Cost::MAE => mae(a, b),
             _ => {
-                return Err(Box::new(MatrixError::DimensionMismatch(format!(
-                    "Unimplemented cost function."
-                ))));
+                return Err(Box::new(CostError::UnimplementedCost));
             }
         }
     }
@@ -367,9 +405,7 @@ impl Cost {
             Cost::MSE => msederivative(a, b),
             Cost::MAE => maederivative(a, b),
             _ => {
-                return Err(Box::new(MatrixError::DimensionMismatch(format!(
-                    "Unimplemented cost function."
-                ))));
+                return Err(Box::new(CostError::UnimplementedCostDerivative));
             }
         }
     }
@@ -378,6 +414,7 @@ impl Cost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cudarc::driver::CudaContext;
     #[test]
     fn test_costs() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -414,9 +451,7 @@ mod tests {
         println!("After `mse`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![
-                72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0
-            ]
+            vec![72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0]
         );
 
         let matrix_2 = cost_1.derivative(&a_matrix, &b_matrix)?;
@@ -442,9 +477,7 @@ mod tests {
         println!("After `maederivative`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![
-                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0
-            ]
+            vec![-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
         );
 
         // Needs work because of the additional threshold parameter
@@ -453,9 +486,7 @@ mod tests {
         println!("After `hl`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![
-                11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5
-            ]
+            vec![11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5]
         );
 
         let matrix_6 = hlderivative(&a_matrix, &b_matrix, 1.0)?;
