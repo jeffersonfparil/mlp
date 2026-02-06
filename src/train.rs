@@ -260,11 +260,8 @@ impl Network {
             self.backpropagation()?;
             self.optimise(optimisation_parameters)?;
             self.predict()?;
-            let e: f64 = epoch as f64;
-            let c: f64 = (self.cost.cost(&self.predictions, &self.targets)?.summat()? as f64)
-                / (self.targets.n_cols as f64);
-            epochs.push(e);
-            costs.push(c);
+            epochs.push(epoch as f64);
+            costs.push(self.loss()? as f64);
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
                 // println!("Early stopping at epoch {}", epoch);
@@ -370,21 +367,20 @@ impl Network {
             (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
         };
         // Assess cost after training
-        let final_cost = self.cost.cost(&self.predictions, &self.targets)?;
-        let final_cost_value = final_cost.summat()? as f32 / self.targets.n_cols as f32;
+        let final_cost_value = self.loss()?;
         if verbose {
             // Plot loss curve
             let dir: PathBuf = current_dir()?;
             let fname_svg = &format!(
-                "{}/Loss_curve-{:?}-E{}-FPE{}-LR{}-NB{}-{:?}-N{}-Time{}.svg",
+                "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
                 dir.display(),
+                self.n_hidden_layers,
+                self.activation,
                 optimisation_parameters.optimiser,
                 optimisation_parameters.n_epochs,
                 optimisation_parameters.f_patient_epochs,
                 optimisation_parameters.n_batches,
                 optimisation_parameters.learning_rate,
-                self.activation,
-                self.n_hidden_layers,
                 Utc::now().format("%Y%m%d%H%M%S")
             );
             let mut ylabel = String::from("Cost");
@@ -409,14 +405,16 @@ impl Network {
             // plot_vec[0].clone().save(fname_png)?;
             plot_vec[0].clone().export_svg(fname_svg)?;
             // Messages
+            println!("===============================================");
             println!("Final cost after training: {}", final_cost_value);
             println!("Find the loss curve saved as: {}", fname_svg);
+            println!("===============================================");
         }
         Ok(final_cost_value)
     }
 
     pub fn hyperoptimise(
-        self: &mut Self,
+        self: &Self,
         range_hidden_layers: Option<(usize, usize, usize)>,
         range_hidden_layer_nodes: Option<(usize, usize, usize)>,
         range_dropout_rate: Option<(f32, f32, f32)>,
@@ -428,7 +426,7 @@ impl Network {
         selection_costs: Option<Vec<Cost>>,
         selection_optimisers: Option<Vec<Optimiser>>,
         verbose: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<Self, Box<dyn Error>> {
         self.check_dimensions()?;
         let param_combinations = prep_all_hyperparams(
             range_hidden_layers,
@@ -454,8 +452,12 @@ impl Network {
             Activation,
             Cost,
             Optimiser,
-            Result<f32, Box<dyn Error>>,
+            f32,
         )> = Vec::new();
+        let mut best_params = (f32::MAX, param_combinations[0].clone());
+
+        // TODO: think about sampling a small subset of the full dataset to speed up hyperparameter optimisation
+
         for p in param_combinations {
             let (
                 n_hidden_layers,
@@ -468,8 +470,8 @@ impl Network {
                 activation,
                 cost,
                 optimiser,
-            ) = p;
-            // Create a new instance of the network with the current hyper-parameters
+            ) = p.clone();
+            // Create a new instance of the network with the current hyperparameters
             let mut network = Network::new(
                 &self.activations_per_layer[0]
                     .data
@@ -490,8 +492,15 @@ impl Network {
             optimisation_parameters.f_patient_epochs = f_patient_epochs;
             optimisation_parameters.n_batches = n_batches;
             optimisation_parameters.optimiser = optimiser.clone();
-            // Train the network with the current hyper-parameters
-            let result = network.train(&optimisation_parameters, verbose);
+            // Train the network with the current hyperparameters
+            let loss = match network.train(&optimisation_parameters, verbose) {
+                Ok(x) => x,
+                Err(_) => f32::MAX,
+            };
+            // Check if loss is better
+            if loss < best_params.0 {
+                best_params = (loss, p.clone());
+            }
             // Store the result of the training
             results.push((
                 n_hidden_layers,
@@ -504,64 +513,104 @@ impl Network {
                 activation.clone(),
                 cost.clone(),
                 optimiser.clone(),
-                result,
+                loss,
             ));
         }
         // Print the results
-        println!("Hyper-parameter Optimisation Results:");
-        println!(
-            "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Batches | Activation | Cost | Optimiser | Final_Cost |"
-        );
-        for (
-            n_hidden_layers,
-            n_hidden_nodes,
-            dropout_rate,
-            learning_rate,
-            n_epochs,
-            f_patient_epochs,
-            n_batches,
-            activation,
-            cost,
-            optimiser,
-            result,
-        ) in results
-        {
-            match result {
-                Ok(final_cost) => {
-                    println!(
-                        "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
-                        n_hidden_layers,
-                        n_hidden_nodes,
-                        dropout_rate,
-                        learning_rate,
-                        n_epochs,
-                        f_patient_epochs,
-                        n_batches,
-                        activation,
-                        cost,
-                        optimiser,
-                        final_cost
-                    );
-                }
-                Err(e) => {
-                    println!(
-                        "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:14} | {:7} | {:?} | {:?} | {:?} | Error: {} |",
-                        n_hidden_layers,
-                        n_hidden_nodes,
-                        dropout_rate,
-                        learning_rate,
-                        n_epochs,
-                        f_patient_epochs,
-                        n_batches,
-                        activation,
-                        cost,
-                        optimiser,
-                        e
-                    );
-                }
+        if verbose {
+            println!("Hyper-parameter Optimisation Results:");
+            println!(
+                "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Batches | Activation | Cost | Optimiser | Final_Cost |"
+            );
+            for (
+                n_hidden_layers,
+                n_hidden_nodes,
+                dropout_rate,
+                learning_rate,
+                n_epochs,
+                f_patient_epochs,
+                n_batches,
+                activation,
+                cost,
+                optimiser,
+                loss,
+            ) in &results
+            {
+                println!(
+                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
+                    n_hidden_layers,
+                    n_hidden_nodes,
+                    dropout_rate,
+                    learning_rate,
+                    n_epochs,
+                    f_patient_epochs,
+                    n_batches,
+                    activation,
+                    cost,
+                    optimiser,
+                    loss,
+                );
             }
         }
-        Ok(())
+        // Build and train the network using the best hyperparameters
+        let (
+            loss_expected,
+            (
+                n_hidden_layers,
+                n_hidden_nodes,
+                dropout_rate,
+                learning_rate,
+                n_epochs,
+                f_patient_epochs,
+                n_batches,
+                activation,
+                cost,
+                optimiser,
+            ),
+        ) = best_params;
+        if verbose {
+            println!("Best parameter found:");
+            println!("\t- Hidden Layers: {}", n_hidden_layers);
+            println!("\t- Hidden Nodes: {}", n_hidden_nodes);
+            println!("\t- Dropout Rate: {}", dropout_rate);
+            println!("\t- Learning Rate: {}", learning_rate);
+            println!("\t- Epochs: {}", n_epochs);
+            println!("\t- Patient Epochs: {}", f_patient_epochs);
+            println!("\t- Batches: {}", n_batches);
+            println!("\t- Activation: {:?}", activation);
+            println!("\t- Cost: {:?}", cost);
+            println!("\t- Optimiser: {:?}", optimiser);
+            println!("\t- Mean Loss: {}", loss_expected);
+        }
+        let mut network = Network::new(
+            &self.activations_per_layer[0]
+                .data
+                .context()
+                .default_stream(),
+            self.activations_per_layer[0].clone(),
+            self.targets.clone(),
+            n_hidden_layers,
+            vec![n_hidden_nodes; n_hidden_layers],
+            vec![dropout_rate; n_hidden_layers],
+            self.seed,
+        )?;
+        network.activation = activation.clone();
+        network.cost = cost.clone();
+        let mut optimisation_parameters = OptimisationParameters::new(&network)?;
+        optimisation_parameters.learning_rate = learning_rate;
+        optimisation_parameters.n_epochs = n_epochs;
+        optimisation_parameters.f_patient_epochs = f_patient_epochs;
+        optimisation_parameters.n_batches = n_batches;
+        optimisation_parameters.optimiser = optimiser.clone();
+        // Train the network using the best hyperparameters
+        let loss = network.train(&optimisation_parameters, verbose)?;
+        if verbose {
+            println!(
+                "Expected loss = {} | Observed loss = {}",
+                loss_expected, loss
+            );
+        }
+        Ok(network)
     }
 }
 
@@ -661,7 +710,7 @@ mod tests {
         let selection_costs = Some(vec![Cost::MSE]);
         let selection_optimisers = Some(vec![Optimiser::Adam, Optimiser::GradientDescent]);
         let verbose = true;
-        network.hyperoptimise(
+        let network_hyper_optimised = network.hyperoptimise(
             range_hidden_layers,
             range_hidden_layer_nodes,
             range_dropout_rate,
@@ -674,6 +723,7 @@ mod tests {
             selection_optimisers,
             verbose,
         )?;
+        println!("network_hyper_optimised:\n{}", network_hyper_optimised);
 
         Ok(())
     }

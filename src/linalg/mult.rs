@@ -823,7 +823,9 @@ mod tests {
         println!("After `matmul0t`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![1.0, 3.0, 5.0, 3.0, 13.0, 23.0, 5.0, 23.0, 41.0, 7.0, 33.0, 59.0]
+            vec![
+                1.0, 3.0, 5.0, 3.0, 13.0, 23.0, 5.0, 23.0, 41.0, 7.0, 33.0, 59.0
+            ]
         );
 
         let matrix_8 = b_matrix.matmultt(&a_matrix)?;

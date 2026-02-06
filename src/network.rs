@@ -391,6 +391,13 @@ impl Network {
         network.check_dimensions()?;
         Ok(network)
     }
+
+    pub fn loss(self: &Self) -> Result<f32, Box<dyn Error>> {
+        Ok(
+            (self.cost.cost(&self.predictions, &self.targets)?.summat()?)
+                / (self.targets.n_cols as f32),
+        )
+    }
 }
 
 #[cfg(test)]

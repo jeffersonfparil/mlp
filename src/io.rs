@@ -274,6 +274,7 @@ pub struct SerdifiableNetwork {
     activation: String,                        // activation function enum (includes derivative)
     cost: String,                              // cost function
     seed: usize,                               // random seed for dropouts
+    loss: f32, // mean loss (additional field not part of the actual Network struct)
 }
 
 impl Network {
@@ -329,6 +330,7 @@ impl Network {
             activation: self.activation.to_string(),
             cost: self.cost.to_string(),
             seed: self.seed,
+            loss: self.loss()?,
         };
         let json_data = serde_json::to_string_pretty(&serdifiable_network)?;
         let mut file = File::create_new(fname)?; // makes sure not to overwrite existing files, i.e. using create_new() instead of just create()

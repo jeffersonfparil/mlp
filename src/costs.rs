@@ -451,7 +451,9 @@ mod tests {
         println!("After `mse`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0]
+            vec![
+                72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0, 72.0
+            ]
         );
 
         let matrix_2 = cost_1.derivative(&a_matrix, &b_matrix)?;
@@ -477,7 +479,9 @@ mod tests {
         println!("After `maederivative`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+            vec![
+                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0
+            ]
         );
 
         // Needs work because of the additional threshold parameter
@@ -486,7 +490,9 @@ mod tests {
         println!("After `hl`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5]
+            vec![
+                11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5, 11.5
+            ]
         );
 
         let matrix_6 = hlderivative(&a_matrix, &b_matrix, 1.0)?;
