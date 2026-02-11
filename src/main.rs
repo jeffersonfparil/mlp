@@ -28,19 +28,25 @@ use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
 )]
 struct Args {
     /// Input file name
-    #[arg(short, long)]
+    #[arg(short = 'f', long)]
     fname: Option<String>,
 
     /// Delimiter for the input data file
-    #[arg(short, long, default_value = "\t")]
+    #[arg(short = 'd', long, default_value = "\t")]
     delim: String,
 
     /// Vector of column indexes corresponding to the target values in the input data file
-    #[arg(short, long, value_parser, value_delimiter = ',', default_value = "0")]
+    #[arg(
+        short = 't',
+        long,
+        value_parser,
+        value_delimiter = ',',
+        default_value = "0"
+    )]
     column_indices_of_targets: Vec<usize>,
 
     /// Number of hidden layers
-    #[arg(short, long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1)]
     n_hidden_layers: usize,
 
     /// Number of nodes per hidden layer
@@ -104,7 +110,7 @@ struct Args {
     verbose: bool,
 
     ////////////////////////////////////////////////////////////////////////////////
-    // Hyperparameter optimisation
+    /// Hyperparameter optimisation
     #[arg(long, action)]
     hyperparameter_optimisation: bool,
 
@@ -169,7 +175,7 @@ struct Args {
     #[arg(long, value_parser, value_delimiter = ',', default_value = "MSE")]
     selection_costs: Vec<String>,
 
-    // /// Optimisers to test
+    /// Optimisers to test
     #[arg(
         long,
         value_parser,
@@ -177,19 +183,115 @@ struct Args {
         default_value = "GradientDescent,Adam"
     )]
     selection_optimisers: Vec<String>,
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Predict using a fitted network (fitted MLP model)
+    #[args(long, action)]
+    predict: bool
+
+    /// File name of the MLP model in JSON format
+    #[args(short='m', long)]
+    model: String
+    
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Simulate data only
+    #[arg(short = 's', long, action)]
+    simulate_data_only: bool,
+
+    /// Number of observations to simulate
+    #[arg(short = 'n', long, default_value_t = 100)]
+    simulation_n_observations: usize,
+
+    /// Number of features to simulate
+    #[arg(short = 'p', long, default_value_t = 10)]
+    simulation_n_features: usize,
+
+    /// Number of simulated output column
+    #[arg(short = 'k', long, default_value_t = 1)]
+    simulation_n_output_columns: usize,
+
+    /// Number of hidden layers to use to simulate the output data
+    #[arg(short = 'l', long, default_value_t = 2)]
+    simulation_n_hidden_layers: usize,
+
+    /// Two-parameter distribution from which the simulated weights will be sample from
+    /// Select from: "normal","lognormal","cauchy","weibull","gamma","beta"
+    #[arg(long, default_value = "normal")]
+    simulation_weights_distribution: String,
+
+    /// First parameter of the distribution from which the weights will be sampled from
+    #[arg(long, default_value_t = 0.0)]
+    simulation_weights_distribution_param_1: f64,
+
+    /// First parameter of the distribution from which the weights will be sampled from
+    #[arg(long, default_value_t = 1.0)]
+    simulation_weights_distribution_param_2: f64,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Parse arguments
     let args = Args::parse();
+    // Simulate data only
+    if args.simulate_data_only {
+        let data_simulated = Data::simulate(
+            args.simulation_n_observations,
+            args.simulation_n_features,
+            args.simulation_n_output_columns,
+            args.simulation_n_hidden_layers,
+            &args.simulation_weights_distribution,
+            args.simulation_weights_distribution_param_1,
+            args.simulation_weights_distribution_param_2,
+            args.seed,
+        )?;
+        let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
+        data_simulated.write_delimited(&fname_simulated, "\t")?;
+        println!("Please find simulated data: `{}`", fname_simulated);
+        return Ok(());
+    }
+
+    // Predict
+    if args.predict {
+        let network_fitted = Network::read_network(&args.model)?;
+        let data = Data::read_delimited(&fname, &args.delim, args.column_indices_of_targets)?;
+        let mut network = data.init_network(
+            args.n_hidden_layers,
+            args.n_hidden_nodes,
+            args.dropout_rates,
+            args.seed,
+        )?;
+        // TODO: update the weights and biases of network using the network and biases of network_fitted
+
+        // Predict
+        network.predict()?;
+        // Save only predictions so we may need to define a new method in io.rs
+
+        return Ok(())
+    }
+    
+
+
+
+
+    // Define output filename
     let fname_network_output = match args.fname_network_output {
         Some(x) => x,
         None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
     };
+    // Define input filename, simulate or use user-define input
     let fname = match args.fname {
         Some(x) => x,
         None => {
             println!("No input file provided. Simulating data...");
-            let data_simulated = Data::simulate(100, 10, 1, 2, 42)?;
+            let data_simulated = Data::simulate(
+                args.simulation_n_observations,
+                args.simulation_n_features,
+                args.simulation_n_output_columns,
+                args.simulation_n_hidden_layers,
+                &args.simulation_weights_distribution,
+                args.simulation_weights_distribution_param_1,
+                args.simulation_weights_distribution_param_2,
+                args.seed,
+            )?;
             let fname_simulated =
                 format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
             data_simulated.write_delimited(&fname_simulated, "\t")?;
@@ -237,7 +339,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         // let range_hidden_layers = match args.range_hidden_layers.len() != 3 {true => {return(Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of hidden layers for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_hidden_layers={:?})", args.range_hidden_layers)))));}, false => Some((args.range_hidden_layers[0],args.range_hidden_layers[1],args.range_hidden_layers[2]))};
         let range_hidden_layers = match args.range_hidden_layers.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of number of hidden layers for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_hidden_layers={:?})", args.range_hidden_layers))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of number of hidden layers for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_hidden_layers={:?})",
+                        args.range_hidden_layers
+                    ),
+                )));
             }
             false => Some((
                 args.range_hidden_layers[0],
@@ -247,7 +354,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let range_hidden_layer_nodes = match args.range_hidden_layer_nodes.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of number of nodes per hidden layer for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_hidden_layer_nodes={:?})", args.range_hidden_layer_nodes))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of number of nodes per hidden layer for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_hidden_layer_nodes={:?})",
+                        args.range_hidden_layer_nodes
+                    ),
+                )));
             }
             false => Some((
                 args.range_hidden_layer_nodes[0],
@@ -257,7 +369,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let range_dropout_rates = match args.range_dropout_rates.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of dropout rates per hidden layer for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_dropout_rates={:?})", args.range_dropout_rates))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of dropout rates per hidden layer for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_dropout_rates={:?})",
+                        args.range_dropout_rates
+                    ),
+                )));
             }
             false => Some((
                 args.range_dropout_rates[0],
@@ -267,7 +384,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let range_learning_rates = match args.range_learning_rates.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of learning rates for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_learning_rates={:?})", args.range_learning_rates))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of learning rates for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_learning_rates={:?})",
+                        args.range_learning_rates
+                    ),
+                )));
             }
             false => Some((
                 args.range_learning_rates[0],
@@ -277,7 +399,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let range_n_epochs = match args.range_n_epochs.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of maximum number of training epochs for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_n_epochs={:?})", args.range_n_epochs))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of maximum number of training epochs for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_n_epochs={:?})",
+                        args.range_n_epochs
+                    ),
+                )));
             }
             false => Some((
                 args.range_n_epochs[0],
@@ -287,7 +414,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let range_f_patient_epochs = match args.range_f_patient_epochs.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_f_patient_epochs={:?})", args.range_f_patient_epochs))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_f_patient_epochs={:?})",
+                        args.range_f_patient_epochs
+                    ),
+                )));
             }
             false => Some((
                 args.range_f_patient_epochs[0],
@@ -297,7 +429,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let range_n_batches = match args.range_n_batches.len() != 3 {
             true => {
-                return Err(Box::new(OptimiserError::OptimisationParameterError(format!("Range of number of batches to split the dataset for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_n_batches={:?})", args.range_n_batches))));
+                return Err(Box::new(OptimiserError::OptimisationParameterError(
+                    format!(
+                        "Range of number of batches to split the dataset for hyperparameter optimisation not equal to 3 (elements correspond to minimum, maximum and step size; range_n_batches={:?})",
+                        args.range_n_batches
+                    ),
+                )));
             }
             false => Some((
                 args.range_n_batches[0],
@@ -305,16 +442,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 args.range_n_batches[2],
             )),
         };
-
-        // let range_hidden_layer_nodes = Some((5, 5, 5));
-        // let range_dropout_rates = Some((0.0, 0.0, 0.1));
-        // let range_learning_rates = Some((0.0001, 0.0001, 0.0001));
-        // let range_n_epochs = Some((5, 10, 10));
-        // let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
-        // let range_n_batches = Some((1, 2, 1));
-        // let selection_activations = Some(vec![Activation::ReLU]);
-        // let selection_costs = Some(vec![Cost::MSE]);
-        // let selection_optimisers = Some(vec![Optimiser::Adam, Optimiser::GradientDescent]);
         let selection_activations: Option<Vec<Activation>> = {
             let mut v: Vec<Activation> = Vec::new();
             for x in args.selection_activations {

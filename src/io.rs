@@ -5,7 +5,7 @@ use crate::network::Network;
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
-use rand_distr::Normal;
+use rand_distr::{Beta, Cauchy, Gamma, LogNormal, Normal, Weibull};
 // use std::path::PathBuf;
 // use std::env::current_dir;
 use serde::{Deserialize, Serialize};
@@ -58,24 +58,119 @@ impl Data {
         p: usize,
         k: usize,
         d: usize,
+        dist: &str,
+        par1: f64,
+        par2: f64,
         seed: usize,
     ) -> Result<Self, Box<dyn Error>> {
         let mut data = Data::new(n, p, k)?;
         let stream = data.features.data.context().default_stream();
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
-        let normal = Normal::new(0.0, 1.0)?;
-        let features = {
-            let features_host: Vec<f32> = (&mut rng).sample_iter(normal).take(p * n).collect();
-            let features_dev: CudaSlice<f32> = stream.clone_htod(&features_host)?;
-            Matrix::new(features_dev, p, n)?
+        let (features_host, targets_host): (Vec<f32>, Vec<f32>) = match dist {
+            "normal" => {
+                let distribution = Normal::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
+            "lognormal" => {
+                let distribution = LogNormal::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
+            "cauchy" => {
+                let distribution = Cauchy::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
+            "weibull" => {
+                let distribution = Weibull::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
+            "gamma" => {
+                let distribution = Gamma::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
+            "beta" => {
+                let distribution = Beta::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
+            _ => {
+                // Use normal distribution by default
+                let distribution = Normal::new(par1, par2)?;
+                let features_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(p * n)
+                    .map(|x| x as f32)
+                    .collect();
+                let targets_host: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(k * n)
+                    .map(|x| x as f32)
+                    .collect();
+                (features_host, targets_host)
+            }
         };
-        let targets = {
-            let targets_host: Vec<f32> = (&mut rng).sample_iter(normal).take(k * n).collect();
-            let targets_dev: CudaSlice<f32> = stream.clone_htod(&targets_host)?;
-            Matrix::new(targets_dev, k, n)?
-        };
+        let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, p, n)?;
+        let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
         let n_hidden_layers: usize = d;
-        let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
+        let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
         let mut network = Network::new(
             &stream,
@@ -433,7 +528,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let data_simulated = Data::simulate(100, 10, 1, 2, 42)?;
+        let data_simulated = Data::simulate(100, 10, 1, 2, "normal", 0.0, 1.0, 42)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);
