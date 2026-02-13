@@ -17,6 +17,7 @@ mod train;
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::io::Data;
+use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
 
 /// Simple program to greet a person
@@ -186,13 +187,13 @@ struct Args {
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Predict using a fitted network (fitted MLP model)
-    #[args(long, action)]
-    predict: bool
+    #[arg(long, action)]
+    predict: bool,
 
     /// File name of the MLP model in JSON format
-    #[args(short='m', long)]
-    model: String
-    
+    #[arg(short = 'm', long, default_value = "missing-model.json")]
+    model: String,
+
     ////////////////////////////////////////////////////////////////////////////////
     /// Simulate data only
     #[arg(short = 's', long, action)]
@@ -245,38 +246,49 @@ fn main() -> Result<(), Box<dyn Error>> {
         )?;
         let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
         data_simulated.write_delimited(&fname_simulated, "\t")?;
-        println!("Please find simulated data: `{}`", fname_simulated);
+        println!(
+            "Please find simulated data: `{}/{}`",
+            current_dir()?.display(),
+            fname_simulated
+        );
         return Ok(());
     }
-
-    // Predict
-    if args.predict {
-        let network_fitted = Network::read_network(&args.model)?;
-        let data = Data::read_delimited(&fname, &args.delim, args.column_indices_of_targets)?;
-        let mut network = data.init_network(
-            args.n_hidden_layers,
-            args.n_hidden_nodes,
-            args.dropout_rates,
-            args.seed,
-        )?;
-        // TODO: update the weights and biases of network using the network and biases of network_fitted
-
-        // Predict
-        network.predict()?;
-        // Save only predictions so we may need to define a new method in io.rs
-
-        return Ok(())
-    }
-    
-
-
-
-
     // Define output filename
     let fname_network_output = match args.fname_network_output {
         Some(x) => x,
         None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
     };
+    // Predict
+    if args.predict {
+        let fname = match args.fname {
+            Some(x) => x,
+            None => {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "oh no!",
+                )));
+            }
+        };
+        let mut network = Network::read_input_and_model(
+            &fname,
+            &args.delim,
+            args.column_indices_of_targets,
+            &args.model,
+        )?;
+        // Predict
+        network.predict()?;
+        // Save the updated network containing the fitted weights and biases, targets from the input data, and predictions using the fitted weights and biases
+        network.save_network(&fname_network_output)?;
+        // File name of the updated network containing the fitted weights and biases, targets from the input data, and predictions using the fitted weights and biases
+        println!("Please find the output model (network)");
+        println!("\tcontaining the fitted weights and biases, targets from the input data, and");
+        println!(
+            "\tpredictions using the fitted weights and biases in json format:\n\t ==> {}/{}",
+            current_dir()?.display(),
+            fname_network_output
+        );
+        return Ok(());
+    }
     // Define input filename, simulate or use user-define input
     let fname = match args.fname {
         Some(x) => x,
@@ -478,7 +490,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Some(v)
         };
-
         let network_hyper_optimised = network.hyperoptimise(
             range_hidden_layers,
             range_hidden_layer_nodes,
@@ -500,13 +511,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Save the trained network
         network.save_network(&fname_network_output)?;
     }
-    // File name of the trained model
-    let dir: PathBuf = current_dir()?;
     println!(
         "Please find the output model (network) in json format: {}/{}",
-        dir.display(),
+        current_dir()?.display(),
         fname_network_output
     );
-
     Ok(())
 }
