@@ -249,7 +249,6 @@ impl Network {
         Ok(())
     }
 
-    // TODO: replace within batch cost calculation with cross-validation on some other subset of the data
     pub fn train_per_batch(
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
@@ -282,7 +281,7 @@ impl Network {
             network_validation.replace_model(&network_training)?;
             network_validation.predict()?;
             costs.push(network_validation.loss()? as f64);
-            // Update the network
+            // Update the network after training the training network
             self.replace_model(&network_training)?;
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
@@ -385,7 +384,7 @@ impl Network {
             // Update predictions using the merged parameters
             self.predict()?;
             self.backpropagation()?; // to fill-up the gradients
-                                     // Return epochs, costs
+            // Return epochs, costs
             (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
         };
         // Assess cost after training
@@ -410,14 +409,16 @@ impl Network {
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![Plot::new()
-                .title("Training Cost over Epochs")
-                .legend_position(LegendPosition::Best)
-                .xlabel("Epochs")
-                .ylabel(&ylabel)
-                .line(&epochs[0], &costs[0])
-                .label("Batch 0")
-                .size(4.0, 3.0)];
+            let mut plot_vec = vec![
+                Plot::new()
+                    .title("Training Cost over Epochs")
+                    .legend_position(LegendPosition::Best)
+                    .xlabel("Epochs")
+                    .ylabel(&ylabel)
+                    .line(&epochs[0], &costs[0])
+                    .label("Batch 0")
+                    .size(4.0, 3.0),
+            ];
             for i in 1..optimisation_parameters.n_batches {
                 plot_vec[0] = plot_vec[0]
                     .clone()

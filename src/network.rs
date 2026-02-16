@@ -407,11 +407,8 @@ impl Network {
         self.weights_per_layer = other.weights_per_layer.clone();
         self.biases_per_layer = other.biases_per_layer.clone();
         self.weights_x_biases_per_layer = other.weights_x_biases_per_layer.clone();
-        // Skip the first activation layer which is the input data (features)
+        // Skip the activation layers containing the input data (features)
         // Also we did not replace the targets and prediction matrices
-        for i in 1..self.activations_per_layer.len() {
-            self.activations_per_layer[i] = other.activations_per_layer.clone()[i].clone();
-        }
         self.weights_gradients_per_layer = other.weights_gradients_per_layer.clone();
         self.biases_gradients_per_layer = other.biases_gradients_per_layer.clone();
         self.activation = other.activation.clone();

@@ -107,7 +107,7 @@ struct Args {
     fname_network_output: Option<String>,
 
     /// Verbose
-    #[arg(long, action)]
+    #[arg(short = 'v', long, action)]
     verbose: bool,
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -258,7 +258,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(x) => x,
         None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
     };
-    // Predict
+    // Predict only (using pre-trained model, i.e. in json format)
     if args.predict {
         let fname = match args.fname {
             Some(x) => x,
