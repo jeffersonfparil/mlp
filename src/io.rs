@@ -256,7 +256,7 @@ impl Data {
     pub fn read_delimited(
         path: &str,
         delim: &str,
-        column_indices_of_targets: Vec<usize>,
+        column_indices_of_targets: &Vec<usize>,
     ) -> Result<Self, Box<dyn Error>> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -305,7 +305,7 @@ impl Data {
                         .to_string(),
                 )));
             }
-            for &idx in &column_indices_of_targets {
+            for &idx in column_indices_of_targets {
                 let value: f32 = values[idx].parse()?;
                 targets_data.push(value);
             }
@@ -523,7 +523,7 @@ impl Network {
     pub fn read_input_and_model(
         fname: &str,
         delim: &str,
-        column_indices_of_targets: Vec<usize>,
+        column_indices_of_targets: &Vec<usize>,
         model: &str,
     ) -> Result<Self, Box<dyn Error>> {
         // Load input data
@@ -571,9 +571,9 @@ mod tests {
         data.write_delimited("test_data.csv", ",")?;
         data_simulated.write_delimited("test_data_simulated.tsv", "\t")?;
 
-        let data_reloaded = Data::read_delimited("test_data.csv", ",", vec![0])?;
+        let data_reloaded = Data::read_delimited("test_data.csv", ",", &vec![0])?;
         let data_simulated_reloaded =
-            Data::read_delimited("test_data_simulated.tsv", "\t", vec![0])?;
+            Data::read_delimited("test_data_simulated.tsv", "\t", &vec![0])?;
 
         assert!(data.features.summat()? - data_reloaded.features.summat()? < 1e-5);
         assert!(
@@ -610,7 +610,7 @@ mod tests {
         );
 
         let network_with_data_and_model =
-            Network::read_input_and_model("test_data.csv", ",", vec![0], "test_network.json")?;
+            Network::read_input_and_model("test_data.csv", ",", &vec![0], "test_network.json")?;
         println!(
             "network_with_data_and_model={}",
             network_with_data_and_model
