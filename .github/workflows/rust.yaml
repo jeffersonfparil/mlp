@@ -22,4 +22,7 @@ jobs:
               run: cargo test
             - name: Tests on test data
               run: | 
-                cargo run -- -h
+                # cargo run -- -h
+                # This is a dummy test as I do not want to pay for a GPU runner.
+                # Note that I always make sure all the tests pass prior to pushing into main.
+                cargo fmt
