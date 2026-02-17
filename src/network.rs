@@ -398,6 +398,23 @@ impl Network {
                 / (self.targets.n_cols as f32),
         )
     }
+
+    pub fn replace_model(&mut self, other: &Network) -> Result<(), Box<dyn Error>> {
+        self.n_hidden_layers = other.n_hidden_layers.clone();
+        self.n_hidden_nodes = other.n_hidden_nodes.clone();
+        self.dropout_rates = other.dropout_rates.clone();
+        self.seed = other.seed.clone();
+        self.weights_per_layer = other.weights_per_layer.clone();
+        self.biases_per_layer = other.biases_per_layer.clone();
+        self.weights_x_biases_per_layer = other.weights_x_biases_per_layer.clone();
+        // Skip the activation layers containing the input data (features)
+        // Also we did not replace the targets and prediction matrices
+        self.weights_gradients_per_layer = other.weights_gradients_per_layer.clone();
+        self.biases_gradients_per_layer = other.biases_gradients_per_layer.clone();
+        self.activation = other.activation.clone();
+        self.cost = other.cost.clone();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -449,6 +466,8 @@ mod tests {
             col_indexes.len()
         );
         assert_eq!(sliced_network.targets.n_cols, col_indexes.len());
+
+        // TODO: test Network::replace_model(...)
 
         Ok(())
     }

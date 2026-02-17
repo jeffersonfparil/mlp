@@ -6,6 +6,7 @@ use crate::optimisers::{OptimisationParameters, Optimiser};
 use chrono::Utc;
 use cudarc::driver::CudaSlice;
 use rand::prelude::*;
+use rand::rng;
 use rand_chacha::ChaCha12Rng;
 use rayon::prelude::*;
 use ruviz::core::{Plot, PlottingError};
@@ -16,6 +17,8 @@ use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
+
+const FRAC_VALIDATION: f32 = 0.5;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -255,13 +258,31 @@ impl Network {
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
+        let n: usize = self.targets.n_cols;
+        let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
+            1
+        } else {
+            (n as f32 * FRAC_VALIDATION).floor() as usize
+        };
+        let mut rng = rng();
+        let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
+        let training_indexes: Vec<usize> = (0..n)
+            .filter(|&x| !validation_indexes.contains(&x))
+            .collect();
+        let mut network_validation = self.slice(&validation_indexes)?;
+        let mut network_training = self.slice(&training_indexes)?;
         for epoch in 0..optimisation_parameters.n_epochs {
-            self.forwardpass()?;
-            self.backpropagation()?;
-            self.optimise(optimisation_parameters)?;
-            self.predict()?;
+            network_training.forwardpass()?;
+            network_training.backpropagation()?;
+            network_training.optimise(optimisation_parameters)?;
+            network_training.predict()?;
             epochs.push(epoch as f64);
-            costs.push(self.loss()? as f64);
+            // Validate
+            network_validation.replace_model(&network_training)?;
+            network_validation.predict()?;
+            costs.push(network_validation.loss()? as f64);
+            // Update the network after training the training network
+            self.replace_model(&network_training)?;
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
                 // println!("Early stopping at epoch {}", epoch);
@@ -363,7 +384,7 @@ impl Network {
             // Update predictions using the merged parameters
             self.predict()?;
             self.backpropagation()?; // to fill-up the gradients
-            // Return epochs, costs
+                                     // Return epochs, costs
             (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
         };
         // Assess cost after training
@@ -388,16 +409,14 @@ impl Network {
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![
-                Plot::new()
-                    .title("Training Cost over Epochs")
-                    .legend_position(LegendPosition::Best)
-                    .xlabel("Epochs")
-                    .ylabel(&ylabel)
-                    .line(&epochs[0], &costs[0])
-                    .label("Batch 0")
-                    .size(4.0, 3.0),
-            ];
+            let mut plot_vec = vec![Plot::new()
+                .title("Training Cost over Epochs")
+                .legend_position(LegendPosition::Best)
+                .xlabel("Epochs")
+                .ylabel(&ylabel)
+                .line(&epochs[0], &costs[0])
+                .label("Batch 0")
+                .size(4.0, 3.0)];
             for i in 1..optimisation_parameters.n_batches {
                 plot_vec[0] = plot_vec[0]
                     .clone()
@@ -457,10 +476,20 @@ impl Network {
             f32,
         )> = Vec::new();
         let mut best_params = (f32::MAX, param_combinations[0].clone());
-
-        // TODO: think about sampling a small subset of the full dataset to speed up hyperparameter optimisation
-
-        for p in param_combinations {
+        if verbose {
+            println!(
+                "Hyperparameter optimisation ({} hyperparameter combinations to test):",
+                &param_combinations.len()
+            );
+        }
+        for p in &param_combinations {
+            if verbose {
+                println!(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n[ {} / {} ]",
+                    &results.len() + 1,
+                    &param_combinations.len(),
+                );
+            }
             let (
                 n_hidden_layers,
                 n_hidden_nodes,
