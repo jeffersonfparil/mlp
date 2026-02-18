@@ -258,37 +258,53 @@ impl Network {
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
-        let n: usize = self.targets.n_cols;
-        let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
-            1
-        } else {
-            (n as f32 * FRAC_VALIDATION).floor() as usize
-        };
-        let mut rng = rng();
-        let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
-        let training_indexes: Vec<usize> = (0..n)
-            .filter(|&x| !validation_indexes.contains(&x))
-            .collect();
-        let mut network_validation = self.slice(&validation_indexes)?;
-        let mut network_training = self.slice(&training_indexes)?;
+        // // With cross-validation
+        // let n: usize = self.targets.n_cols;
+        // let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
+        //     1
+        // } else {
+        //     (n as f32 * FRAC_VALIDATION).floor() as usize
+        // };
+        // let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
+        // let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
+        // let training_indexes: Vec<usize> = (0..n)
+        //     .filter(|&x| !validation_indexes.contains(&x))
+        //     .collect();
+        // let mut network_validation = self.slice(&validation_indexes)?;
+        // let mut network_training = self.slice(&training_indexes)?;
+        // for epoch in 0..optimisation_parameters.n_epochs {
+        //     network_training.forwardpass()?;
+        //     network_training.backpropagation()?;
+        //     network_training.optimise(optimisation_parameters)?;
+        //     network_training.predict()?;
+        //     epochs.push(epoch as f64);
+        //     // Validate
+        //     network_validation.replace_model(&network_training)?;
+        //     network_validation.predict()?;
+        //     costs.push(network_validation.loss()? as f64);
+        //     // Update the network after training the training network
+        //     self.replace_model(&network_training)?;
+        //     // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
+        //     if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
+        //         // println!("Early stopping at epoch {}", epoch);
+        //         break;
+        //     }
+        // }
+        // No cross-validation
         for epoch in 0..optimisation_parameters.n_epochs {
-            network_training.forwardpass()?;
-            network_training.backpropagation()?;
-            network_training.optimise(optimisation_parameters)?;
-            network_training.predict()?;
+            self.forwardpass()?;
+            self.backpropagation()?;
+            self.optimise(optimisation_parameters)?;
+            self.predict()?;
             epochs.push(epoch as f64);
-            // Validate
-            network_validation.replace_model(&network_training)?;
-            network_validation.predict()?;
-            costs.push(network_validation.loss()? as f64);
-            // Update the network after training the training network
-            self.replace_model(&network_training)?;
+            costs.push(self.loss()? as f64);
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
                 // println!("Early stopping at epoch {}", epoch);
                 break;
             }
         }
+        self.predict()?;
         Ok((epochs, costs))
     }
 
@@ -315,6 +331,7 @@ impl Network {
             // Only one batch, train on the whole dataset
             let mut params = optimisation_parameters.clone();
             let (epochs, costs) = self.train_per_batch(&mut params)?;
+            // self.predict()?;
             (vec![epochs], vec![costs])
         } else {
             // Multiple batches, split the dataset then average the parameters after training on each batch
@@ -384,7 +401,7 @@ impl Network {
             // Update predictions using the merged parameters
             self.predict()?;
             self.backpropagation()?; // to fill-up the gradients
-                                     // Return epochs, costs
+            // Return epochs, costs
             (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
         };
         // Assess cost after training
@@ -409,14 +426,16 @@ impl Network {
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![Plot::new()
-                .title("Training Cost over Epochs")
-                .legend_position(LegendPosition::Best)
-                .xlabel("Epochs")
-                .ylabel(&ylabel)
-                .line(&epochs[0], &costs[0])
-                .label("Batch 0")
-                .size(4.0, 3.0)];
+            let mut plot_vec = vec![
+                Plot::new()
+                    .title("Training Cost over Epochs")
+                    .legend_position(LegendPosition::Best)
+                    .xlabel("Epochs")
+                    .ylabel(&ylabel)
+                    .line(&epochs[0], &costs[0])
+                    .label("Batch 0")
+                    .size(4.0, 3.0),
+            ];
             for i in 1..optimisation_parameters.n_batches {
                 plot_vec[0] = plot_vec[0]
                     .clone()
@@ -606,7 +625,10 @@ impl Network {
             println!("\t- Dropout Rate: {}", dropout_rate);
             println!("\t- Learning Rate: {}", learning_rate);
             println!("\t- Epochs: {}", n_epochs);
-            println!("\t- Patient Epochs: {}", f_patient_epochs);
+            println!(
+                "\t- Patient Epochs: {}",
+                (f_patient_epochs * n_epochs as f32).ceil() as usize
+            );
             println!("\t- Batches: {}", n_batches);
             println!("\t- Activation: {:?}", activation);
             println!("\t- Cost: {:?}", cost);
