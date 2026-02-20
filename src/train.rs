@@ -4,9 +4,7 @@ use crate::linalg::matrix::Matrix;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser};
 use chrono::Utc;
-use cudarc::driver::CudaSlice;
 use rand::prelude::*;
-use rand::rng;
 use rand_chacha::ChaCha12Rng;
 use rayon::prelude::*;
 use ruviz::core::{Plot, PlottingError};
@@ -18,7 +16,7 @@ use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-const FRAC_VALIDATION: f32 = 0.5;
+// const FRAC_VALIDATION: f32 = 0.5;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -324,86 +322,54 @@ impl Network {
                 "Number of batches must be greater than zero.".to_string(),
             )));
         }
-        let stream = self.targets.data.context().default_stream();
-        let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = if optimisation_parameters.n_batches
-            == 1
-        {
-            // Only one batch, train on the whole dataset
-            let mut params = optimisation_parameters.clone();
-            let (epochs, costs) = self.train_per_batch(&mut params)?;
-            // self.predict()?;
-            (vec![epochs], vec![costs])
-        } else {
-            // Multiple batches, split the dataset then average the parameters after training on each batch
-            let col_indexes_per_batch: Vec<Vec<usize>> =
-                self.shufflesplit(optimisation_parameters.n_batches)?;
-            let mut networks_per_batch: Vec<Network> =
-                Vec::with_capacity(optimisation_parameters.n_batches);
-            for col_indexes in col_indexes_per_batch {
-                // indexes for each batch, i.e. for observations
-                let network = self.slice(&col_indexes)?;
-                networks_per_batch.push(network);
-            }
-            let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-            let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-            networks_per_batch
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(i, network)| {
-                    if verbose {
-                        println!(
-                            "Training on batch {} with {} observations.",
-                            i, network.targets.n_cols
-                        );
-                    }
-                    let mut params = optimisation_parameters.clone();
-                    let result = network.train_per_batch(&mut params);
-                    match result {
-                        Ok((epochs_batch, costs_batch)) => {
-                            epochs.lock().unwrap().push(epochs_batch);
-                            costs.lock().unwrap().push(costs_batch);
-                        }
-                        Err(e) => {
-                            // Skip the batch
-                            eprintln!("Error training on batch {}: {}", i, e);
-                        }
-                    }
-                });
-            // Merge the parameters from each batch network back into the original network via simple averaging with a better method
-            for i in 0..self.n_hidden_layers + 1 {
-                let zeros_weights_host: Vec<f32> =
-                    vec![0.0; self.weights_per_layer[i].n_rows * self.weights_per_layer[i].n_cols];
-                let zeros_biases_host: Vec<f32> =
-                    vec![0.0; self.biases_per_layer[i].n_rows * self.biases_per_layer[i].n_cols];
-                let zeros_weights_dev: CudaSlice<f32> = stream.clone_htod(&zeros_weights_host)?;
-                let zeros_biases_dev: CudaSlice<f32> = stream.clone_htod(&zeros_biases_host)?;
-                let mut summed_weights = Matrix::new(
-                    zeros_weights_dev,
-                    self.weights_per_layer[i].n_rows,
-                    self.weights_per_layer[i].n_cols,
-                )?;
-                let mut summed_biases = Matrix::new(
-                    zeros_biases_dev,
-                    self.biases_per_layer[i].n_rows,
-                    self.biases_per_layer[i].n_cols,
-                )?;
-                for network in &networks_per_batch {
-                    summed_weights =
-                        summed_weights.elementwisematadd(&network.weights_per_layer[i])?;
-                    summed_biases =
-                        summed_biases.elementwisematadd(&network.biases_per_layer[i])?;
+        let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) =
+            if optimisation_parameters.n_batches == 1 {
+                // Only one batch, train on the whole dataset
+                let mut params = optimisation_parameters.clone();
+                let (epochs, costs) = self.train_per_batch(&mut params)?;
+                // self.predict()?;
+                (vec![epochs], vec![costs])
+            } else {
+                // Multiple batches, split the dataset then average the parameters after training on each batch
+                let col_indexes_per_batch: Vec<Vec<usize>> =
+                    self.shufflesplit(optimisation_parameters.n_batches)?;
+                let mut networks_per_batch: Vec<Network> =
+                    Vec::with_capacity(optimisation_parameters.n_batches);
+                for col_indexes in col_indexes_per_batch {
+                    // indexes for each batch, i.e. for observations
+                    let network = self.slice(&col_indexes)?;
+                    networks_per_batch.push(network);
                 }
-                self.weights_per_layer[i] =
-                    summed_weights.scalarmatmul(1.00 / networks_per_batch.len() as f32)?;
-                self.biases_per_layer[i] =
-                    summed_biases.scalarmatmul(1.00 / networks_per_batch.len() as f32)?;
-            }
-            // Update predictions using the merged parameters
-            self.predict()?;
-            self.backpropagation()?; // to fill-up the gradients
-            // Return epochs, costs
-            (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
-        };
+                let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                networks_per_batch
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, network)| {
+                        if verbose {
+                            println!(
+                                "Training on batch {} with {} observations.",
+                                i, network.targets.n_cols
+                            );
+                        }
+                        let mut params = optimisation_parameters.clone();
+                        let result = network.train_per_batch(&mut params);
+                        match result {
+                            Ok((epochs_batch, costs_batch)) => {
+                                epochs.lock().unwrap().push(epochs_batch);
+                                costs.lock().unwrap().push(costs_batch);
+                            }
+                            Err(e) => {
+                                // Skip the batch
+                                eprintln!("Error training on batch {}: {}", i, e);
+                            }
+                        }
+                    });
+                // Merge the parameters from each batch network back into the original network via simple averaging with a better method
+                self.average_weights_biases(&networks_per_batch)?;
+                // Return epochs, costs
+                (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
+            };
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {
@@ -426,16 +392,14 @@ impl Network {
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![
-                Plot::new()
-                    .title("Training Cost over Epochs")
-                    .legend_position(LegendPosition::Best)
-                    .xlabel("Epochs")
-                    .ylabel(&ylabel)
-                    .line(&epochs[0], &costs[0])
-                    .label("Batch 0")
-                    .size(4.0, 3.0),
-            ];
+            let mut plot_vec = vec![Plot::new()
+                .title("Training Cost over Epochs")
+                .legend_position(LegendPosition::Best)
+                .xlabel("Epochs")
+                .ylabel(&ylabel)
+                .line(&epochs[0], &costs[0])
+                .label("Batch 0")
+                .size(4.0, 3.0)];
             for i in 1..optimisation_parameters.n_batches {
                 plot_vec[0] = plot_vec[0]
                     .clone()

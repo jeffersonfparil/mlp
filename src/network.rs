@@ -399,6 +399,44 @@ impl Network {
         )
     }
 
+    pub fn average_weights_biases(
+        self: &mut Self,
+        networks_per_batch: &Vec<Network>,
+    ) -> Result<(), Box<dyn Error>> {
+        let n = networks_per_batch.len();
+        let stream = self.targets.data.context().default_stream();
+        // Merge the parameters from each batch network back into the original network via simple averaging with a better method
+        for i in 0..self.n_hidden_layers + 1 {
+            let zeros_weights_host: Vec<f32> =
+                vec![0.0; self.weights_per_layer[i].n_rows * self.weights_per_layer[i].n_cols];
+            let zeros_biases_host: Vec<f32> =
+                vec![0.0; self.biases_per_layer[i].n_rows * self.biases_per_layer[i].n_cols];
+            let zeros_weights_dev: CudaSlice<f32> = stream.clone_htod(&zeros_weights_host)?;
+            let zeros_biases_dev: CudaSlice<f32> = stream.clone_htod(&zeros_biases_host)?;
+            let mut summed_weights = Matrix::new(
+                zeros_weights_dev,
+                self.weights_per_layer[i].n_rows,
+                self.weights_per_layer[i].n_cols,
+            )?;
+            let mut summed_biases = Matrix::new(
+                zeros_biases_dev,
+                self.biases_per_layer[i].n_rows,
+                self.biases_per_layer[i].n_cols,
+            )?;
+            for network in networks_per_batch {
+                summed_weights = summed_weights.elementwisematadd(&network.weights_per_layer[i])?;
+                summed_biases = summed_biases.elementwisematadd(&network.biases_per_layer[i])?;
+            }
+            self.weights_per_layer[i] = summed_weights.scalarmatmul(1.00 / n as f32)?;
+            self.biases_per_layer[i] = summed_biases.scalarmatmul(1.00 / n as f32)?;
+        }
+        // Update predictions using the merged parameters
+        self.predict()?;
+        self.backpropagation()?; // to fill-up the gradients
+
+        Ok(())
+    }
+
     pub fn replace_model(&mut self, other: &Network) -> Result<(), Box<dyn Error>> {
         self.n_hidden_layers = other.n_hidden_layers.clone();
         self.n_hidden_nodes = other.n_hidden_nodes.clone();
