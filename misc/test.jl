@@ -100,74 +100,33 @@ UnicodePlots.scatterplot(b̂_vec, b_vec)
 Ŵ = CuArray(rand(D, n, p))
 b̂ = CuArray(rand(D, n))
 ŷ = F.(Ŵ * a + b̂)
-c = C(ŷ, y)
-λ = 0.9
-t = c * λ
-θs = []
-Ms = []
-Us = []
-Vs = []
-n_epochs = 100_000
-n_burnin = 10
-θ = hcat(
+
+α = hcat(
     rand(Normal(0, 1), 4),
     rand(Uniform(0, 1), 4),
 )
-@time for i in 1:n_epochs
-    # i = 1
-    # println("i = $i")
-    M = begin
-        M = rand(Normal(θ[1, 1], θ[1, 2]), n, p)
-        if length(Ms) >= n_burnin
-            M + mean(Ms[(end-n_burnin+1):end]) ./ 2
-        else
-            M
-        end
-    end
+priors = begin
+    M = rand(Normal(α[1, 1], α[1, 2]), n, p)
     U = begin
-        u = rand(Normal(θ[2, 1], θ[2, 2]), n)
+        u = rand(Normal(α[2, 1], α[2, 2]), n)
         U = u * u'
         U[diagind(U)] .+= 1.00
-        if length(Us) >= n_burnin
-            U + mean(Us[(end-n_burnin+1):end]) ./ 2
-        else
-            U
-        end
+        U
     end
     V = begin
-        v = rand(Normal(θ[3, 1], θ[3, 2]), p)
+        v = rand(Normal(α[3, 1], α[3, 2]), p)
         V = v * v'
         V[diagind(V)] .+= 1.00
-        if length(Vs) >= n_burnin
-            V + mean(Vs[(end-n_burnin+1):end]) ./ 2
-        else
-            V
-        end
+        V
     end
-    Ŵ_candidate = CuArray(rand(MatrixNormal(M, U, V)))
-    b̂_candidate = CuArray(rand(Normal(θ[4, 1], θ[4, 2]), n))
-    ŷ = F.(Ŵ_candidate * a + b̂_candidate)
-    c = C(ŷ, y)
-    if c < t
-        println("t_old=$t; t_new=$(c * λ)")
-        t = c * λ
-        push!(θs, θ)
-        push!(Ms, M)
-        push!(Us, U)
-        push!(Vs, V)
-    end
+    Ŵ_prior = CuArray(rand(MatrixNormal(M, U, V)))
+    b̂_prior = CuArray(rand(Normal(α[4, 1], α[4, 2]), n))
+    (Ŵ_prior, b̂_prior)
 end
-M = mean(Ms[(end-Int64(ceil(0.1 * length(Ms)))):end])
-U = mean(Us[(end-Int64(ceil(0.1 * length(Us)))):end])
-V = mean(Vs[(end-Int64(ceil(0.1 * length(Vs)))):end])
-# M = mean(Ms[(end-1):end])
-# U = mean(Us[(end-1):end])
-# V = mean(Vs[(end-1):end])
+ŷ = F.(priors[1] * a + priors[2])
+likelihood = C(ŷ, y)
+posterior = likelihood .* priors
+hcat(reshape(priors[1], n * p, 1), reshape(posterior[1], n * p, 1))
+hcat(priors[2], posterior[2])
 
-
-Ŵ = CuArray(rand(MatrixNormal(M, U, V)))
-b̂ = CuArray(rand(Normal(θ[4, 1], θ[4, 2]), n))
-ŷ = F.(Ŵ * a + b̂)
-hcat(ŷ, y)
-cor(Array(ŷ), Array(y))
-c = C(ŷ, y)
+# TODO: continue working on the iterative Bayesian updates above
