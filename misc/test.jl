@@ -1,3 +1,5 @@
+# julia +1.12 --threads=23,1 --project=. --load test.jl 
+
 using Random, CUDA, LinearAlgebra, Distributions, StatsBase, UnicodePlots, ProgressMeter
 # # Activation function and its derivative
 # relu(x) = max(x, 0.0)
@@ -41,9 +43,6 @@ mutable struct Neuron
     end
 end
 
-###########################################################
-###########################################################
-###########################################################
 # Training via gradient descent
 function gd(;
     y::CuArray{Float64,1},
@@ -119,7 +118,7 @@ function gd(;
         N̂.W .-= learning_rate .* ∇W
         N̂.b .-= learning_rate .* ∇b
         # report loss (move to CPU for printing)
-        @show push!(c, sum(C.(N̂.y, y)))
+        push!(c, sum(C.(N̂.y, y)))
         # println("i=$i; c=$c")
         # UnicodePlots.scatterplot(t[1:i], c)
         # display(UnicodePlots.scatterplot(t[1:i], c[1:i]))
@@ -129,144 +128,189 @@ function gd(;
     end
     if verbose
         ProgressMeter.finish!(pb)
+        display(UnicodePlots.scatterplot(t, c, xlab="Epochs", ylab="Loss"))
     end
     N̂.y = F.(N̂.W * N̂.a .+ N̂.b)
     N̂
 end
 
-N = Neuron(seed=Int64(ceil(100 * rand())))
-# N̂ = Neuron(seed=Int64(ceil(100 * rand())))
-N̂ = gd(y=N.y, a=N.a, n_epochs=10, seed=Int64(ceil(100 * rand())), verbose=true)
-
-sum(C.(N̂.y, N.y))
-cor(Array(N̂.y), Array(N.y))
-UnicodePlots.scatterplot(Array(N̂.y), Array(N.y))
-
-if false
-    Ŵ_vec = reshape(Array(N̂.W), n * p, 1)[:, 1]
-    W_vec = reshape(Array(N.W), n * p, 1)[:, 1]
-    b̂_vec = Array(N̂.b)
-    b_vec = Array(N.b)
-    cor(W_vec, Ŵ_vec)
-    cor(b_vec, b̂_vec)
-    UnicodePlots.scatterplot(W_vec, Ŵ_vec)
-    UnicodePlots.scatterplot(b_vec, b̂_vec)
-end
-
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-# Bayesian-ish optimisation
-
-using CUDA, LinearAlgebra, Distributions, StatsBase, UnicodePlots, ProgressMeter
-# Simulate
-n = 20 # output nodes for this neuron
-p = 15 # input nodes for this neuron
-D = Normal(0.0, 1.0)
-W = CuArray(rand(D, n, p))
-a = CuArray(rand(D, p))
-b = CuArray(rand(D, n))
-# Activation function and its derivative
-F(x) = max(x, 0.0)
-δF(x) = x > 0.0 ? 1.0 : 0.0
-# F(x) = x
-# δF(x) = 1.0
-# Cost (loss) function and its gradient w.r.t. predicted output (mean over neurons)
-C(N̂.y, y) = mean(0.5 .* (N̂.y .- y) .^ 2)
-δC(N̂.y, y) = (N̂.y .- y) ./ length(y)   # dL/dŷ_i = (ŷ_i - y_i) / n
-# Simulate output
-v = W * a .+ b
-y = F.(v)
-# UnicodePlots.histogram(Array(v))
-# UnicodePlots.histogram(Array(y))
-
 # Hyperparameters for the priors
-α = Dict(
-    "W_μ" => rand(Normal(0.0, 1.0), p),
-    "W_Σ" => begin
-        W_Σ = rand(Wishart(p - 1,
-            begin
-                v = rand(Beta(2.0, 2.0), p)
-                V = v * v'
-                V[diagind(V)] .+= maximum(abs.(v))
-                V
-            end
-        ))
-        W_Σ[diagind(W_Σ)] .+= maximum(abs.(W_Σ))
-        W_Σ
-    end,
-    "b_μ" => 0.0,
-    "b_σ" => 1.0,
-)
+struct Hyperparameters
+    W_μ::Vector{Float64}
+    W_Σ::Matrix{Float64}
+    b_μ::Float64
+    b_σ::Float64
+    function Hyperparameters(
+        p::Int64;
+        θ_1::Float64=0.0,
+        θ_2::Float64=1.0,
+        θ_3::Float64=2.0,
+        θ_4::Float64=2.0,
+        θ_5::Float64=0.0,
+        θ_6::Float64=1.0,
+    )::Hyperparameters
+        W_μ = rand(Normal(θ_1, θ_2), p)
+        W_Σ = begin
+            W_Σ = rand(Wishart(p - 1,
+                begin
+                    v = rand(Beta(θ_3, θ_4), p)
+                    V = v * v'
+                    V[diagind(V)] .+= maximum(abs.(v))
+                    V
+                end
+            ))
+            W_Σ[diagind(W_Σ)] .+= maximum(abs.(W_Σ))
+            W_Σ
+        end
+        b_μ = θ_5
+        b_σ = θ_6
+        new(W_μ, W_Σ, b_μ, b_σ)
+    end
+end
 
 # Sample the priors using the hyperparameters above. For simplicity, we use Normal priors for all parameters, 
 # but you can choose different distributions as needed.
 # The key is to ensure that the priors are appropriately defined for the parameters they represent (e.g. positive variance for covariance matrices).
-function sample_priors(α)
-    N̂.W = CuArray(rand(MvNormal(α["W_μ"], α["W_Σ"]), n)')
-    N̂.b = CuArray(rand(Normal(α["b_μ"], α["b_σ"]), n))
-    Dict("N̂.W" => N̂.W, "N̂.b" => N̂.b)
+function sample_priors!(N̂::Neuron)::Nothing
+    # N̂ = Neuron()
+    n, p = size(N̂.W)
+    α = Hyperparameters(p)
+    N̂.W = CuArray(rand(MvNormal(α.W_μ, α.W_Σ), n)')
+    N̂.b = CuArray(rand(Normal(α.b_μ, α.b_σ), n))
+    nothing
 end
 
-function posterior_likelihood_ish(; N̂.W, N̂.b, y)
-    N̂.y = F.(N̂.W * a .+ N̂.b)
-    C(N̂.y, y)
+function posterior_likelihood_ish(N̂::Neuron, y::CuArray{Float64,1})::Float64
+    # N̂ = Neuron(); y = Neuron(seed=Int64(ceil(100 * rand()))).y
+    N̂.y = N̂.F.(N̂.W * N̂.a .+ N̂.b)
+    sum(N̂.C.(N̂.y, y))
 end
 
-proposal_scale = 0.01
-accepted = 0
+# Training by Bayesian MCMC
+function bm(;
+    y::CuArray{Float64,1},
+    a::CuArray{Float64,1},
+    n_iterations::Int64=1_000_000,
+    n_burins::Int64=100_000,
+    proposal_scale::Float64=0.01,
+    F::Union{Nothing,Function}=nothing,
+    δF::Union{Nothing,Function}=nothing,
+    C::Union{Nothing,Function}=nothing,
+    δC::Union{Nothing,Function}=nothing,
+    seed::Int64=42,
+    verbose::Bool=false,
+)::Neuron
+    # N = Neuron(seed=12345)
+    # y = N.y
+    # a = N.a
+    # n_iterations = 1_000_000
+    # n_burins = 100_000
+    # proposal_scale = 0.01
+    # F = nothing
+    # δF = nothing
+    # C = nothing
+    # δC = nothing
+    # seed = 42
+    # verbose = true
+    n = length(y)
+    p = length(a)
+    F = isnothing(F) ? x -> x : F
+    δF = isnothing(δF) ? x -> 1 : δF
+    C = isnothing(C) ? (a, b) -> mean(0.5 * (a - b)^2) : C
+    δC = isnothing(δC) ? (a, b) -> (a - b) / length(a) : δC
+    N̂ = begin
+        Random.seed!(seed)
+        seed = Int(ceil(100 * rand()))
+        N̂ = Neuron(n=n, p=p, F=F, δF=δF, C=C, δC=δC, seed=seed)
+        N̂.a = a
+        N̂
+    end
+    sample_priors!(N̂)
+    L = posterior_likelihood_ish(N̂, y)
+    # MCMC
+    accepted = 0
+    iterations = []
+    loss = []
+    W_trace = CuArray{Float64}[]
+    b_trace = CuArray{Float64}[]
+    proposal_N̂ = deepcopy(N̂)
+    if verbose
+        pb = ProgressMeter.Progress(n_iterations)
+    end
+    for t in 1:n_iterations
+        # t = 1
+        proposal_N̂.W = N̂.W .+ (proposal_scale .* CuArray(randn(n, p)))
+        proposal_N̂.b = N̂.b .+ (proposal_scale .* CuArray(randn(n)))
+        proposal_L = posterior_likelihood_ish(proposal_N̂, y)
 
-priors = sample_priors(α)
-N̂.W = priors["N̂.W"]
-N̂.b = priors["N̂.b"]
-L = posterior_likelihood_ish(N̂.W=N̂.W, N̂.b=N̂.b, y=y)
-
-N̂.W_trace = CuArray{Float64}[]
-N̂.b_trace = CuArray{Float64}[]
-
-n_iterations = 1_000_000
-n_burins = 100_000
-
-pb = ProgressMeter.Progress(n_iterations)
-for t in 1:n_iterations
-    proposal_N̂.W = N̂.W .+ (proposal_scale .* CuArray(randn(n, p)))
-    proposal_N̂.b = N̂.b .+ (proposal_scale .* CuArray(randn(n)))
-    proposal_L = posterior_likelihood_ish(N̂.W=proposal_N̂.W, N̂.b=proposal_N̂.b, y=y)
-
-    if (proposal_L - L) < rand(Uniform(0.0, 1.0))
-        N̂.W = proposal_N̂.W
-        N̂.b = proposal_N̂.b
-        L = proposal_L
-        accepted += 1
-        if t > n_burins
-            push!(N̂.W_trace, N̂.W)
-            push!(N̂.b_trace, N̂.b)
+        if (proposal_L - L) < rand(Uniform(0.0, 1.0))
+            N̂.W = proposal_N̂.W
+            N̂.b = proposal_N̂.b
+            L = proposal_L
+            accepted += 1
+            if t > n_burins
+                push!(W_trace, N̂.W)
+                push!(b_trace, N̂.b)
+            end
+        end
+        push!(iterations, t)
+        push!(loss, proposal_L)
+        if verbose
+            ProgressMeter.next!(pb)
         end
     end
-    ProgressMeter.next!(pb)
+    if verbose
+        ProgressMeter.finish!(pb)
+    end
+    N̂.W = mean(W_trace)
+    N̂.b = mean(b_trace)
+    N̂.y = F.(N̂.W * N̂.a .+ N̂.b)
+    push!(iterations, n_iterations + 1)
+    push!(loss, sum(N̂.C.(N̂.y, y)))
+    if verbose
+        println("Number of accepted proposals: $accepted")
+        display(UnicodePlots.scatterplot(iterations, loss, xlab="Iterations", ylab="Loss"))
+    end
+    N̂
 end
-ProgressMeter.finish!(pb)
-@show accepted
 
-N̂.W = mean(N̂.W_trace)
-N̂.b = mean(N̂.b_trace)
+# Simulate ground-truth data
+N = Neuron(seed=Int64(ceil(100 * rand())))
 
-N̂.y = F.(N̂.W * a .+ N̂.b)
-C(y, N̂.y)
-hcat(y, N̂.y)
-cor(Array(y), Array(N̂.y))
-UnicodePlots.scatterplot(Array(y), Array(N̂.y))
+# Gradient descent
+N̂_gd = gd(y=N.y, a=N.a, n_epochs=20, seed=Int64(ceil(100 * rand())), verbose=true)
+sum(N̂_gd.C.(N̂_gd.y, N.y))
+UnicodePlots.scatterplot(Array(N̂_gd.y), Array(N.y))
+@show cor(Array(N̂_gd.y), Array(N.y))
 
 if false
-    N̂.W_vec = reshape(Array(N̂.W), n * p, 1)[:, 1]
-    W_vec = reshape(Array(W), n * p, 1)[:, 1]
-    N̂.b_vec = Array(N̂.b)
-    b_vec = Array(b)
-    cor(N̂.W_vec, W_vec)
-    cor(N̂.b_vec, b_vec)
-    UnicodePlots.scatterplot(N̂.W_vec, W_vec)
-    UnicodePlots.scatterplot(N̂.b_vec, b_vec)
+    Ŵ_vec = reshape(Array(N̂_gd.W), n * p, 1)[:, 1]
+    W_vec = reshape(Array(N.W), n * p, 1)[:, 1]
+    b̂_vec = Array(N̂_gd.b)
+    b_vec = Array(N.b)
+    cor(Ŵ_vec, W_vec)
+    cor(b̂_vec, b_vec)
+    UnicodePlots.scatterplot(Ŵ_vec, W_vec)
+    UnicodePlots.scatterplot(b̂_vec, b_vec)
+end
+
+# Bayesian MCMC
+N̂_bayes = bm(y=N.y, a=N.a, seed=Int64(ceil(100 * rand())), verbose=true)
+N̂_bayes = bm(y=N.y, a=N.a, seed=Int64(ceil(100 * rand())), verbose=true, n_iterations=50_000, n_burins=10_000)
+sum(N̂_bayes.C.(N̂_bayes.y, N.y))
+UnicodePlots.scatterplot(Array(N̂_bayes.y), Array(N.y))
+@show cor(Array(N̂_bayes.y), Array(N.y))
+
+if false
+    n, p = size(N̂_bayes.W)
+    Ŵ_vec = reshape(Array(N̂_bayes.W), n * p, 1)[:, 1]
+    W_vec = reshape(Array(N.W), n * p, 1)[:, 1]
+    b̂_vec = Array(N̂_bayes.b)
+    b_vec = Array(N.b)
+    cor(Ŵ_vec, W_vec)
+    cor(b̂_vec, b_vec)
+    UnicodePlots.scatterplot(Ŵ_vec, W_vec)
+    UnicodePlots.scatterplot(b̂_vec, b_vec)
 end
 
 
