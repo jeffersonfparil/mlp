@@ -1,7 +1,9 @@
+use crate::linalg::matrix::Matrix;
+
 #[derive(Clone, Debug)]
 pub struct Neuron {
-    Y: Matrix,
-    W: Matrix,
-    A: Matrix,
-    B: Matrix,
+    outputs: Matrix,
+    weights: Matrix,
+    inputs: Matrix,
+    biases: Matrix,
 }

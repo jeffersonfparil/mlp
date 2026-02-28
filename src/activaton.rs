@@ -1,5 +1,6 @@
 use std::fmt;
 use std::error::Error;
+use crate::linalg::matrix::Matrix;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Activation {
