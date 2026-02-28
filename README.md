@@ -28,16 +28,20 @@ pixi init
 cd mlp
 pixi shell
 pixi add rust
-pixi add cuda-nvrtc==12.8.93
 which cargo
-ls -lhtr ${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib/libnvrtc*
 ```
 
-4. Before every build/test:
+4. Initialise the Rust project:
+
+```shell
+cd mlp
+cargo init
+```
+
+5. Before every build/test:
 
 ```shell
 cd mlp
 pixi shell
-# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo test -- --show-output
 ```

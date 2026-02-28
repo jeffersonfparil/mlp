@@ -1,5 +1,5 @@
 [workspace]
-authors = ["jeffersonfparil <jeffersonparil@gmail.com>"]
+authors = ["Jeff Paril <jeffersonparil@gmail.com>"]
 channels = ["conda-forge"]
 name = "mlp"
 platforms = ["linux-64"]
@@ -8,6 +8,4 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-rust = ">=1.92.0,<1.93"
-cuda-nvrtc = "==12.8.93"
-nvtop = ">=3.3.1,<4"
+rust = ">=1.93.1,<1.94"
