@@ -15,7 +15,7 @@ impl fmt::Display for Matrix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f, 
-            "Dimension: rows={}; cols={}\n⎡ {:.5} ... {:.5} ⎤\n⎢ ... ... ... ⎥\n⎣ {:.5} ... {:.5} ⎦\n",
+            "Dimension: rows={}; cols={}\n⎡\t{:.5} \t...\t{:.5} \t⎤\n⎢\t....... \t...\t....... \t⎥\n⎣\t{:.5} \t...\t {:.5}\t⎦\n",
             self.rows, self.cols, 
             self.data[0][0], self.data[0][self.cols - 1],
             self.data[self.rows - 1][0], self.data[self.rows - 1][self.cols - 1]
@@ -122,8 +122,30 @@ impl Matrix {
 mod tests {
     use super::*;
     #[test]
-    fn test_matrix() {
-        // TODO
-        assert_eq!(true, true);
+    fn test_matrix() -> Result<(), Box<dyn Error>> {
+        let (n, p): (usize, usize) = (2, 3);
+        let mat_nan = Matrix::new(n, p);
+        for i in 0..n {
+            for j in 0..p {
+                assert!(mat_nan.data[i][j].is_nan());
+            }
+        }
+        let mat_zero = Matrix::zeros(n, p);
+        assert_eq!(mat_zero.data, vec![vec![0.0; p]; n]);
+        let mat_one = Matrix::ones(n, p);
+        assert_eq!(mat_one.data, vec![vec![1.0; p]; n]);
+        let mat_id = Matrix::identity(n);
+        assert_eq!(mat_id.data, vec![vec![1.0, 0.0], vec![0.0, 1.0]]);
+        let mat_random = Matrix::random(n, p, 42)?;
+        println!("Random matrix:\n{}", mat_random);
+        let mat_transpose = mat_random.transpose();
+        assert_eq!(mat_transpose.rows, mat_random.cols);
+        assert_eq!(mat_transpose.cols, mat_random.rows);
+        let mat_re_transpose = mat_transpose.transpose();
+        assert_eq!(mat_re_transpose, mat_random);
+        let mat_slice = mat_random.slice(vec![0], vec![0, 2]);
+        assert_eq!(mat_slice.rows, 1);
+        assert_eq!(mat_slice.cols, 2);
+        Ok(())
     }
 }
