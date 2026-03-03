@@ -41,3 +41,17 @@ pixi shell
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo test -- --show-output
 ```
+
+5. Build and test (Note: successful build and tests on NVIDIA H100 and V100 but fails on T4)
+
+```shell
+cd mlp
+pixi shell
+cargo build --release
+target/release/mlp -h
+target/release/mlp -s
+target/release/mlp
+
+# Testing binaries across different GPUs
+mv target/ target-$(hostname)/
+```

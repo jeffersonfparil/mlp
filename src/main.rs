@@ -19,7 +19,6 @@ use crate::io::Data;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(
     version,
