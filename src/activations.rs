@@ -48,33 +48,33 @@ impl fmt::Display for ActivationError {
     }
 }
 
-pub fn sigmoid(a: &Matrix) -> Result<Matrix, ActivationError> {
-    let out: Matrix = Matrix::zeros(a.rows, a.cols)?;
-    for i in 0...a.rows {
+pub fn sigmoid(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let mut out: Matrix = Matrix::zeros(a.rows, a.cols)?;
+    for i in 0..a.rows {
         for j in 0..a.cols {
             out.data[i][j] = 1.00 / (1.00 + a.data[i][j].exp());
         }
     }
     Ok(out)
 }
-pub fn sigmoidderivative(a: &Matrix) -> Result<Matrix, ActivationError> {
+pub fn sigmoidderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     unimplemented!()
 }
-pub fn hyperbolictangent(a: &Matrix) -> Result<Matrix, ActivationError> {
+pub fn hyperbolictangent(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     unimplemented!()
 }
-pub fn hyperbolictangentderivative(a: &Matrix) -> Result<Matrix, ActivationError> {
+pub fn hyperbolictangentderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     unimplemented!()
 }
-pub fn relu(a: &Matrix) -> Result<Matrix, ActivationError> {
+pub fn relu(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     unimplemented!()
 }
-pub fn reluderivative(a: &Matrix) -> Result<Matrix, ActivationError> {
+pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     unimplemented!()
 }
 
 impl Activation {
-    pub fn activate(&self, a: &Matrix) -> Result<Matrix, ActivationError> {
+    pub fn activate(&self, a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
         match self {
             Activation::Sigmoid => sigmoid(a),
             Activation::HyperbolicTangent => hyperbolictangent(a),
@@ -84,7 +84,7 @@ impl Activation {
             // }
         }
     }
-    pub fn derivative(&self, a: &Matrix) -> Result<Matrix, ActivationError> {
+    pub fn derivative(&self, a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
         match self {
             Activation::Sigmoid => sigmoidderivative(a),
             Activation::HyperbolicTangent => hyperbolictangentderivative(a),
