@@ -1,6 +1,5 @@
 use crate::activations::Activation;
 use crate::costs::Cost;
-use crate::linalg::matrix::Matrix;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser};
 use chrono::Utc;
@@ -15,8 +14,6 @@ use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
-
-// const FRAC_VALIDATION: f32 = 0.5;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -228,25 +225,6 @@ impl Network {
         Ok(col_indexes_per_batch)
     }
 
-    pub fn predict(self: &mut Self) -> Result<(), Box<dyn Error>> {
-        // Different from forwardpass in that it does not apply dropout.
-        let n = self.n_hidden_layers;
-        for i in 0..n {
-            let weights_x_activations =
-                self.weights_per_layer[i].matmul(&self.activations_per_layer[i])?;
-            self.weights_x_biases_per_layer[i] =
-                weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
-            self.activations_per_layer[i + 1] = self
-                .activation
-                .activate(&self.weights_x_biases_per_layer[i])?;
-        }
-        let weights_x_dropout = self.weights_per_layer[n].matmul(&self.activations_per_layer[n])?;
-        self.weights_x_biases_per_layer[n] =
-            weights_x_dropout.rowmatadd(&self.biases_per_layer[n])?;
-        self.predictions = self.weights_x_biases_per_layer[n].clone();
-        Ok(())
-    }
-
     pub fn train_per_batch(
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
@@ -256,10 +234,15 @@ impl Network {
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
+        
+        // ///////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////
         // // With cross-validation
+        // const FRAC_VALIDATION: f32 = 0.05;
         // let n: usize = self.targets.n_cols;
         // let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
-        //     1
+        //     3
         // } else {
         //     (n as f32 * FRAC_VALIDATION).floor() as usize
         // };
@@ -288,6 +271,12 @@ impl Network {
         //         break;
         //     }
         // }
+        // ///////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////
+
+
+
         // No cross-validation
         for epoch in 0..optimisation_parameters.n_epochs {
             self.forwardpass()?;
@@ -337,7 +326,7 @@ impl Network {
                     Vec::with_capacity(optimisation_parameters.n_batches);
                 for col_indexes in col_indexes_per_batch {
                     // indexes for each batch, i.e. for observations
-                    let network = self.slice(&col_indexes)?;
+                    let network: Network = self.slice(&col_indexes)?;
                     networks_per_batch.push(network);
                 }
                 let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
@@ -375,7 +364,7 @@ impl Network {
         if verbose {
             // Plot loss curve
             let dir: PathBuf = current_dir()?;
-            let fname_svg = &format!(
+            let fname_loss_svg = &format!(
                 "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
                 dir.display(),
                 self.n_hidden_layers,
@@ -387,6 +376,7 @@ impl Network {
                 optimisation_parameters.learning_rate,
                 Utc::now().format("%Y%m%d%H%M%S")
             );
+            let fname_scatter_svg = &fname_loss_svg.replace("Loss_curve-", "Observed_vs_predicted-");
             let mut ylabel = String::from("Cost");
             ylabel.push_str(&format!(
                 " ({:?}; {:?})",
@@ -400,7 +390,7 @@ impl Network {
                     .ylabel(&ylabel)
                     .line(&epochs[0], &costs[0])
                     .label("Batch 0")
-                    .size(4.0, 3.0),
+                    .size(4.0, 3.0),                
             ];
             for i in 1..optimisation_parameters.n_batches {
                 plot_vec[0] = plot_vec[0]
@@ -408,12 +398,28 @@ impl Network {
                     .line(&epochs[i], &costs[i])
                     .label(&format!("Batch {}", i));
             }
+            ;
             // plot_vec[0].clone().save(fname_png)?;
-            plot_vec[0].clone().export_svg(fname_svg)?;
+            plot_vec[0].clone().export_svg(fname_loss_svg)?;
+            // Scatter plot of observed vs predicted values
+            let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
+            let y_predicted: Vec<f64> = self.predictions.to_host()?.iter().map(|&x| x as f64).collect();
+            Plot::new()
+                .title("Observed vs Predicted Values")
+                .legend_position(LegendPosition::Best)
+                .xlabel("Observed")
+                .ylabel("Predicted")
+                .scatter(&y_observed, &y_predicted)
+                .size(4.0, 3.0)
+                .export_svg(fname_scatter_svg)?;
+        
+            // TODO: add regression line and correlation value?
+
             // Messages
             println!("===============================================");
             println!("Final cost after training: {}", final_cost_value);
-            println!("Find the loss curve saved as: {}", fname_svg);
+            println!("Find the loss curve saved as: {}", fname_loss_svg);
+            println!("Find the observed vs predicted scatterplot saved as: {}", fname_scatter_svg);
             println!("===============================================");
         }
         Ok(final_cost_value)
@@ -637,6 +643,7 @@ impl Network {
 mod tests {
     use super::*;
     use cudarc::driver::{CudaContext, CudaSlice};
+    use crate::linalg::matrix::Matrix;
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -672,8 +679,6 @@ mod tests {
         // optimisation_parameters.optimiser = Optimiser::GradientDescent;
         optimisation_parameters.optimiser = Optimiser::Adam;
         // optimisation_parameters.optimiser = Optimiser::AdamMax;
-
-        // Tests
 
         let indexes: Vec<Vec<usize>> = network.shufflesplit(5)?;
         // println!("indexes: {:?}", indexes);

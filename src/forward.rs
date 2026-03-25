@@ -18,8 +18,8 @@ impl Network {
         //  1. weights_x_biases_per_layer, and
         //  2. activations_per_layer. Predictions are not updated here as they are only
         //     updated in the predict() method (no dropout there).
-        let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
         for i in 0..self.n_hidden_layers {
+            let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
             let n_nodes = self.n_hidden_nodes[i];
             let n_dropped_nodes =
                 (self.dropout_rates[i] * self.n_hidden_nodes[i] as f32).round() as usize;
@@ -47,6 +47,25 @@ impl Network {
                 .activation
                 .activate(&self.weights_x_biases_per_layer[i])?;
         }
+        Ok(())
+    }
+
+    pub fn predict(self: &mut Self) -> Result<(), Box<dyn Error>> {
+        // Different from forwardpass in that it does not apply dropout.
+        let n = self.n_hidden_layers;
+        for i in 0..n {
+            let weights_x_activations =
+                self.weights_per_layer[i].matmul(&self.activations_per_layer[i])?;
+            self.weights_x_biases_per_layer[i] =
+                weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
+            self.activations_per_layer[i + 1] = self
+                .activation
+                .activate(&self.weights_x_biases_per_layer[i])?;
+        }
+        let weights_x_dropout = self.weights_per_layer[n].matmul(&self.activations_per_layer[n])?;
+        self.weights_x_biases_per_layer[n] =
+            weights_x_dropout.rowmatadd(&self.biases_per_layer[n])?;
+        self.predictions = self.weights_x_biases_per_layer[n].clone();
         Ok(())
     }
 }
@@ -114,6 +133,15 @@ mod tests {
         let sum_2: f32 = network.activations_per_layer[i].summat()?;
         // We expect the sum of activations using weights between 0 and 1 is lower the that using weights all set to 1.
         assert!(sum_1 < sum_2);
+        // Predict
+        let sum_3: f32 = network.predictions.summat()?;
+        println!("network.predictions: {}", network.predictions);
+        network.predict()?;
+        let sum_4: f32 = network.predictions.summat()?;
+        assert!(network.targets.n_cols == network.predictions.n_cols);
+        println!("network.predictions: {}", network.predictions);
+        assert!((sum_3 == 0.0) & (sum_4 != 0.0));
         Ok(())
     }
+
 }

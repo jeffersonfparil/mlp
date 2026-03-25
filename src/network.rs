@@ -32,15 +32,15 @@ pub struct Network {
     pub dropout_rates: Vec<f32>,                  // soft dropout rates per hidden layer (k)
     pub targets: Matrix,                          // observed values (1 x n)
     pub predictions: Matrix,                      // predictions (1 x n)
-    pub weights_per_layer: Vec<Matrix>, // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
-    pub biases_per_layer: Vec<Matrix>,  // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub weights_x_biases_per_layer: Vec<Matrix>, // summed weights (i.e. prior to activation function) ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub activations_per_layer: Vec<Matrix>, // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    pub weights_per_layer: Vec<Matrix>,           // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
+    pub biases_per_layer: Vec<Matrix>,            // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    pub weights_x_biases_per_layer: Vec<Matrix>,  // summed weights (i.e. prior to activation function) ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    pub activations_per_layer: Vec<Matrix>,       // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
     pub weights_gradients_per_layer: Vec<Matrix>, // gradients of the weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
-    pub biases_gradients_per_layer: Vec<Matrix>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub activation: activations::Activation,     // activation function enum (includes derivative)
-    pub cost: costs::Cost,                       // cost function
-    pub seed: usize,                             // random seed for dropouts
+    pub biases_gradients_per_layer: Vec<Matrix>,  // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    pub activation: activations::Activation,      // activation function enum (includes derivative)
+    pub cost: costs::Cost,                        // cost function
+    pub seed: usize,                              // random seed for dropouts
 }
 
 impl fmt::Display for Network {
@@ -297,19 +297,15 @@ impl Network {
                 dropout_rates.len(),
             ))));
         }
-        // Number of nodes for all layers, i.e. input node, hiddent-
+        // Number of nodes for all layers including the input layer
         let mut n_nodes: Vec<usize> = vec![n_input_nodes];
         for i in 0..n_hidden_layers {
             n_nodes.push(n_hidden_nodes[i]);
         }
         n_nodes.push(n_output_nodes);
-        let predictions_host: Vec<f32> = {
-            let mut tmp = vec![0f32; n_observations * n_output_nodes];
-            rand::fill(&mut tmp[..]);
-            tmp
-        };
-        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
+        let predictions_host: Vec<f32> = vec![0f32; n_observations * n_output_nodes];
         // let normal = Normal::new(0.0, 1.0)?;
+        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         let normal = Normal::new(0.0, 2.0 / (n_input_nodes as f32))?;
         let predictions_dev: CudaSlice<f32> = stream.clone_htod(&predictions_host)?;
         let predictions: Matrix = Matrix::new(predictions_dev, n_output_nodes, n_observations)?;
@@ -377,9 +373,9 @@ impl Network {
     ) -> Result<Self, Box<dyn Error>> {
         let input_row_indexes: Vec<usize> = (0..self.activations_per_layer[0].n_rows).collect();
         let output_row_indexes: Vec<usize> = (0..self.targets.n_rows).collect();
-        let input_data = self.activations_per_layer[0].slice(&input_row_indexes, col_indexes)?;
-        let output_data = self.targets.slice(&output_row_indexes, col_indexes)?;
-        let network = Network::new(
+        let input_data: Matrix = self.activations_per_layer[0].slice(&input_row_indexes, col_indexes)?;
+        let output_data: Matrix = self.targets.slice(&output_row_indexes, col_indexes)?;
+        let network: Network = Network::new(
             &self.targets.data.context().default_stream(),
             input_data,
             output_data,

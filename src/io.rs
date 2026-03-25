@@ -181,7 +181,7 @@ impl Data {
             dropout_rates,
             seed,
         )?;
-        network.forwardpass()?;
+        network.predict()?;
         data.features = network.activations_per_layer[0].clone();
         data.targets = network.predictions.clone();
         Ok(data)
