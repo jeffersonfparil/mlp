@@ -14,6 +14,9 @@ use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use cudarc::driver::CudaSlice;
+use crate::linalg::matrix::Matrix;
+use std::cmp::Ordering;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -234,7 +237,6 @@ impl Network {
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
-        
         // ///////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////
@@ -274,9 +276,6 @@ impl Network {
         // ///////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////
-
-
-
         // No cross-validation
         for epoch in 0..optimisation_parameters.n_epochs {
             self.forwardpass()?;
@@ -382,7 +381,7 @@ impl Network {
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![
+            let mut plot_loss = vec![
                 Plot::new()
                     .title("Training Cost over Epochs")
                     .legend_position(LegendPosition::Best)
@@ -393,27 +392,74 @@ impl Network {
                     .size(4.0, 3.0),                
             ];
             for i in 1..optimisation_parameters.n_batches {
-                plot_vec[0] = plot_vec[0]
+                plot_loss[0] = plot_loss[0]
                     .clone()
                     .line(&epochs[i], &costs[i])
                     .label(&format!("Batch {}", i));
             }
             ;
-            // plot_vec[0].clone().save(fname_png)?;
-            plot_vec[0].clone().export_svg(fname_loss_svg)?;
+            // plot_loss[0].clone().save(fname_png)?;
+            plot_loss[0].clone().export_svg(fname_loss_svg)?;
             // Scatter plot of observed vs predicted values
             let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
             let y_predicted: Vec<f64> = self.predictions.to_host()?.iter().map(|&x| x as f64).collect();
+            // OLS
+            let epsilon: f64 = 1e-7;
+            let n: f64 = y_observed.len() as f64;
+            let u_observed: f64 = y_observed.iter().fold(0.0, |sum, x| sum + x) / n;
+            let u_predicted: f64 = y_predicted.iter().fold(0.0, |sum, x| sum + x) / n;
+            let cov_xy: f64 = y_observed
+                .iter()
+                .zip(y_predicted.iter())
+                .fold(0.0, |a, (x, y)| a + (x - u_observed) * (y - u_predicted));
+            let var_x: f64 = y_observed
+                .iter()
+                .fold(0.0, |a, x| a + (x - u_observed).powi(2));
+            let var_y: f64 = y_predicted
+                .iter()
+                .fold(0.0, |a, x| a + (x - u_predicted).powi(2));
+            let b: f64 = cov_xy / (var_x + epsilon);
+            let a: f64 = u_predicted - (b * u_observed);
+            let error2: f64 = y_predicted
+                .iter()
+                .zip(y_observed.iter())
+                .fold(0.0, |a, (y_p, y_t)| a + (y_p - y_t).powi(2));
+            let mse: f64 = error2 / n;
+            let r2: f64 = 1.00 - (error2 / (var_x + epsilon));
+            let cor: f64 = cov_xy / ((var_x.sqrt() * var_y.sqrt()) + epsilon);
+            let x_min: f64 = match y_observed
+                .iter()
+                .min_by(|a, b| {
+                    a.partial_cmp(b).unwrap_or(Ordering::Less)
+                }) {
+                    Some(x) => *x,
+                    None => y_observed[0],
+                };
+            let x_max: f64 = match y_observed
+                .iter()
+                .max_by(|a, b| {
+                    a.partial_cmp(b).unwrap_or(Ordering::Greater)
+                }) {
+                    Some(x) => *x,
+                    None => y_observed[0],
+                };
+            let mut x_for_plotting: Vec<f64> = Vec::with_capacity(100);
+            let mut y_for_plotting: Vec<f64> = Vec::with_capacity(100);
+            let step: f64 = (x_max - x_min) / 99.0;
+            for i in 0..100 {
+                let x: f64 = x_min + (i as f64 * step);
+                let y: f64 = a + x*b;
+                x_for_plotting.push(x);
+                y_for_plotting.push(y);
+            }
+            let title = format!("Observed vs Predicted Values\n(n={}; MSE={:.2}; R2={:.2}; cor={:.2})", n, mse, r2, cor);
             Plot::new()
-                .title("Observed vs Predicted Values")
-                .legend_position(LegendPosition::Best)
+                .title(title.as_str())
                 .xlabel("Observed")
                 .ylabel("Predicted")
                 .scatter(&y_observed, &y_predicted)
-                .size(4.0, 3.0)
+                .line(&x_for_plotting, &y_for_plotting)
                 .export_svg(fname_scatter_svg)?;
-        
-            // TODO: add regression line and correlation value?
 
             // Messages
             println!("===============================================");
@@ -643,7 +689,6 @@ impl Network {
 mod tests {
     use super::*;
     use cudarc::driver::{CudaContext, CudaSlice};
-    use crate::linalg::matrix::Matrix;
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;

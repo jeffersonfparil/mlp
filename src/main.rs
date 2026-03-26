@@ -310,10 +310,24 @@ fn prepare_network_for_training(args: &Args) -> Result<Network, Box<dyn Error>> 
         }
     };
     let data = Data::read_delimited(&fname, &args.delim, &args.column_indices_of_targets)?;
+
+    // Simplifying the number of nodes and dropout rates is a single value was entered or left at default
+    let n_hidden_layers: usize = args.n_hidden_layers;
+    let n_hidden_nodes: Vec<usize> = if (n_hidden_layers > 1) & (args.n_hidden_nodes.len() == 1) {
+        vec![args.n_hidden_nodes[0]; n_hidden_layers]
+    } else {
+        args.n_hidden_nodes.clone()
+    };
+    let dropout_rates: Vec<f32> = if (n_hidden_layers > 1) & (args.dropout_rates.len() == 1) {
+        vec![args.dropout_rates[0]; n_hidden_layers]
+    } else {
+        args.dropout_rates.clone()
+    };
+    // Return the network with the input data
     data.init_network(
-        args.n_hidden_layers,
-        args.n_hidden_nodes.clone(),
-        args.dropout_rates.clone(),
+        n_hidden_layers,
+        n_hidden_nodes,
+        dropout_rates,
         args.seed,
     )
 }
