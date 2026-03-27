@@ -17,6 +17,7 @@ use std::sync::Mutex;
 use cudarc::driver::CudaSlice;
 use crate::linalg::matrix::Matrix;
 use std::cmp::Ordering;
+use std::io::{self, Write};
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -228,9 +229,11 @@ impl Network {
         Ok(col_indexes_per_batch)
     }
 
+    // TODO: maybe add a progress meter here not just in train() because each batch can take a loooong time...
     pub fn train_per_batch(
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
+        batch_id: &str,
     ) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
         let mut epochs: Vec<f64> = Vec::new();
         let mut costs: Vec<f64> = Vec::new();
@@ -278,6 +281,12 @@ impl Network {
         // ///////////////////////////////////////////////////////////////////////////
         // No cross-validation
         for epoch in 0..optimisation_parameters.n_epochs {
+            let perc: f64 = (1_00_00.0 * (epoch as f64 + 1.00)/(optimisation_parameters.n_epochs as f64)).round() / 100.0;
+            let n_progress: usize = (100.0 * ((epoch+1) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
+            let progress_text: String = (0..n_progress).map(|_| "█").collect();
+            let no_progress_text: String = (0..(100-n_progress)).map(|_| " ").collect();
+            print!("\rTraining batch {} | {:.2}% | {}{} |", batch_id, perc, progress_text, no_progress_text);
+            io::stdout().flush().expect("Failed to flush stdout");
             self.forwardpass()?;
             self.backpropagation()?;
             self.optimise(optimisation_parameters)?;
@@ -290,6 +299,7 @@ impl Network {
                 break;
             }
         }
+        println!("");
         self.predict()?;
         Ok((epochs, costs))
     }
@@ -314,7 +324,7 @@ impl Network {
             if optimisation_parameters.n_batches == 1 {
                 // Only one batch, train on the whole dataset
                 let mut params = optimisation_parameters.clone();
-                let (epochs, costs) = self.train_per_batch(&mut params)?;
+                let (epochs, costs) = self.train_per_batch(&mut params, "1/1")?;
                 // self.predict()?;
                 (vec![epochs], vec![costs])
             } else {
@@ -341,7 +351,7 @@ impl Network {
                             );
                         }
                         let mut params = optimisation_parameters.clone();
-                        let result = network.train_per_batch(&mut params);
+                        let result = network.train_per_batch(&mut params, &format!("{} / {}", i+1, optimisation_parameters.n_batches));
                         match result {
                             Ok((epochs_batch, costs_batch)) => {
                                 epochs.lock().unwrap().push(epochs_batch);
@@ -349,7 +359,7 @@ impl Network {
                             }
                             Err(e) => {
                                 // Skip the batch
-                                eprintln!("Error training on batch {}: {}", i, e);
+                                eprintln!("Error training on batch {}: {}", i+1, e);
                             }
                         }
                     });
@@ -395,7 +405,7 @@ impl Network {
                 plot_loss[0] = plot_loss[0]
                     .clone()
                     .line(&epochs[i], &costs[i])
-                    .label(&format!("Batch {}", i));
+                    .label(&format!("Batch {}", i+1));
             }
             ;
             // plot_loss[0].clone().save(fname_png)?;
@@ -762,7 +772,7 @@ mod tests {
             a_host[2],
             a_host[a_host.len() - 1]
         );
-        network.train_per_batch(&mut optimisation_parameters)?;
+        network.train_per_batch(&mut optimisation_parameters, "1")?;
         optimisation_parameters.n_epochs = 5;
         optimisation_parameters.n_batches = 2;
         network.train(&mut optimisation_parameters, true)?;

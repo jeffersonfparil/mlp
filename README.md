@@ -33,11 +33,19 @@ which cargo
 ls -lhtr ${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib/libnvrtc*
 ```
 
-4. Before every build/test:
+## Unit testing
 
 ```shell
 cd mlp
 pixi shell
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo test -- --show-output
+```
+
+## Tests on empirical data
+
+```shell
+curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
+
+
 ```
