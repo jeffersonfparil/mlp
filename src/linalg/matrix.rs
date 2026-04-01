@@ -19,7 +19,7 @@ impl Matrix {
         let n = data.len();
         if n != n_rows * n_cols {
             return Err(MatrixError::DimensionMismatch(format!(
-                "initialising matrix: Data length {} does not match matrix dimensions {}x{}={}",
+                "Initialising matrix: Data length {} does not match matrix dimensions {}x{}={}",
                 n,
                 n_rows,
                 n_cols,
