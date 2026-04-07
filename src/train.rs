@@ -698,14 +698,23 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io::Data;
     use cudarc::driver::{CudaContext, CudaSlice};
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
+        
+        // TODO: use simulation methods in io.rs
+
+        // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
+        let data = Data::simulate(100, 10, 1, 2, "normal", 0.0, 1.0, 42)?;
+        let network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+
+
         let ctx = CudaContext::new(0)?;
         let stream = ctx.default_stream();
         let n: usize = 12_345; // number of observations
-        let p: usize = 12; // number of input features
-        let k: usize = 2; // number of output features
+        let p: usize = 3; // number of input features
+        let k: usize = 1; // number of output features
         let n_hidden_layers: usize = 2;
         let n_hidden_layer_nodes: usize = 5;
         let mut input_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
@@ -803,7 +812,13 @@ mod tests {
             verbose,
         )?;
         println!("network_hyper_optimised:\n{}", network_hyper_optimised);
-
+        // // Clean-up
+        // for f in std::fs::read_dir(".")? {
+        //     let f = f?.path();
+        //     if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+        //         std::fs::remove_file(&f)?;
+        //     }
+        // }
         Ok(())
     }
 }

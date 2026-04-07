@@ -777,12 +777,9 @@ mod tests {
         assert!(data_simulated.targets.summat()? != 0.0);
         assert!(data.features.summat()? == 0.0);
         assert!(data_simulated.features.summat()? != 0.0);
-
         assert_eq!(data.check_dimensions(), Ok(()));
-
         println!("data: {}", data);
         println!("data_simulated: {}", data_simulated);
-
         if exists("test_data.csv")? {
             remove_file("test_data.csv")?;
         }
@@ -791,23 +788,21 @@ mod tests {
         }
         data.write_delimited("test_data.csv", ",")?;
         data_simulated.write_delimited("test_data_simulated.tsv", "\t")?;
-
         let data_reloaded = Data::read_delimited("test_data.csv", ",", &vec![0])?;
         let data_simulated_reloaded =
             Data::read_delimited("test_data_simulated.tsv", "\t", &vec![0])?;
-
-        // TODO: check full contents: test_data_simulated.tsv and test_data_simulated_rewritten.tsv they should be identical
+        // Check full contents: test_data_simulated.tsv and test_data_simulated_rewritten.tsv they should be identical
         data_simulated_reloaded.write_delimited("test_data_simulated_rewritten.tsv", "\t")?;
-
-
+        assert_eq!(
+            std::fs::read_to_string("test_data_simulated.tsv")?,
+            std::fs::read_to_string("test_data_simulated_rewritten.tsv")?
+        );
         assert!(data.features.summat()? - data_reloaded.features.summat()? < 1e-5);
         assert!(
             data_simulated.features.summat()? - data_simulated_reloaded.features.summat()? < 1e-5
         );
-
         println!("data_reloaded: {}", data_reloaded);
         println!("data_simulated_reloaded: {}", data_simulated_reloaded);
-
         // Initialise the network from reloaded data
         let network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
@@ -818,7 +813,6 @@ mod tests {
         );
         assert_eq!(network.n_hidden_layers, 2);
         println!("network: {}", network);
-
         if exists("test_network.json")? {
             remove_file("test_network.json")?;
         }
@@ -833,16 +827,12 @@ mod tests {
             network.predictions.summat()?,
             network_reloaded.predictions.summat()?
         );
-
         let network_with_data_and_model =
             Network::read_input_and_model("test_data.csv", ",", &vec![0], "test_network.json")?;
         println!(
             "network_with_data_and_model={}",
             network_with_data_and_model
         );
-
-        
-
         // Data with non-numerics
         let fname_non_numerics: String = "test_non_numerics.csv".to_owned();
         {
@@ -863,10 +853,13 @@ mod tests {
         let data_reloaded = Data::read_delimited(&fname_non_numerics.as_str(), ",", &vec![0])?;
         data_reloaded.write_delimited("test_non_numerics_rewritten.csv", ",")?;
         let data_rewritten = Data::read_delimited("test_non_numerics_rewritten.csv", ",", &vec![0])?;
-
+        // Check full contents: re-written non-numerics should match our expectations
         println!("data_reloaded: {}", data_reloaded);
         println!("data_rewritten: {}", data_rewritten);
-
+        assert_eq!(
+            std::fs::read_to_string("test_non_numerics_rewritten.csv")?,
+            "target_0-A,target_0-B,target_0-C,target_0-D,target_1,feature_0-X,feature_0-Y,feature_0-Z,feature_0-A,feature_0-B,feature_0-C,feature_1-A1,feature_1-A2,feature_1-A3,feature_1-A4,feature_2,feature_3\n1,0,0,0,0.002356832,1,0,0,0,0,0,1,0,0,0,0.26257637,-0.22530088\n0,1,0,0,0.009485791,0,1,0,0,0,0,0,1,0,0,-0.40898767,-0.6339346\n0,0,1,0,0.009100225,0,0,1,0,0,0,0,0,1,0,0.012834634,-2.0523884\n0,0,1,0,0.004334052,0,0,1,0,0,0,0,0,0,1,1.0629518,2.0183794\n0,0,1,0,0.015800802,0,0,1,0,0,0,0,0,0,1,-0.13212654,-1.7721263\n0,0,1,0,0.002177081,0,0,1,0,0,0,0,0,0,1,0.39454332,-0.8285658\n0,0,1,0,0.021280818,0,0,1,0,0,0,0,0,0,1,-0.15998206,0.07512082\n0,0,1,0,0.02473503,0,0,0,1,0,0,0,0,1,0,1.6373256,0.27236217\n0,0,1,0,0.019157464,0,0,0,0,1,0,0,1,0,0,-0.6462233,0.92315364\n0,0,0,1,0.016854811,0,0,0,0,0,1,1,0,0,0,0.34480542,0.534274\n".to_owned(),
+        );
         // Clean-up
         remove_file("test_data.csv")?;
         remove_file("test_data_simulated.tsv")?;
@@ -874,8 +867,6 @@ mod tests {
         remove_file("test_network.json")?;
         remove_file("test_non_numerics.csv")?;
         remove_file("test_non_numerics_rewritten.csv")?;
-
-
         Ok(())
     }
 }
