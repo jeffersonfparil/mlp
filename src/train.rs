@@ -229,7 +229,6 @@ impl Network {
         Ok(col_indexes_per_batch)
     }
 
-    // TODO: maybe add a progress meter here not just in train() because each batch can take a loooong time...
     pub fn train_per_batch(
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
@@ -704,38 +703,14 @@ mod tests {
     fn test_train() -> Result<(), Box<dyn Error>> {
         
         // TODO: use simulation methods in io.rs
-
-        // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(100, 10, 1, 2, "normal", 0.0, 1.0, 42)?;
-        let network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
-
-
-        let ctx = CudaContext::new(0)?;
-        let stream = ctx.default_stream();
         let n: usize = 12_345; // number of observations
-        let p: usize = 3; // number of input features
+        let p: usize = 17; // number of input features
         let k: usize = 1; // number of output features
         let n_hidden_layers: usize = 2;
-        let n_hidden_layer_nodes: usize = 5;
-        let mut input_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
-        let mut output_host: Vec<f32> = vec![0.0f32; k * n]; // k x n
-        rand::fill(&mut input_host[..]);
-        rand::fill(&mut output_host[..]);
-        let input_dev: CudaSlice<f32> = stream.clone_htod(&input_host)?;
-        let output_dev: CudaSlice<f32> = stream.clone_htod(&output_host)?;
-        let input_matrix = Matrix::new(input_dev, p, n)?; // p x n matrix
-        println!("input_matrix: {}", input_matrix);
-        let output_matrix = Matrix::new(output_dev, k, n)?; // k x n matrix
-        println!("output_matrix: {}", output_matrix);
-        let mut network: Network = Network::new(
-            &stream,
-            input_matrix,
-            output_matrix,
-            n_hidden_layers,
-            vec![n_hidden_layer_nodes; n_hidden_layers],
-            vec![0.0f32; n_hidden_layers],
-            42,
-        )?;
+        // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
+        // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
+        let data = Data::simulate(n, p, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         println!("Network:\n{}\n\n", network);
         println!("Optimisation Parameters:\n{}\n\n", optimisation_parameters);
@@ -743,7 +718,7 @@ mod tests {
         // optimisation_parameters.optimiser = Optimiser::GradientDescent;
         optimisation_parameters.optimiser = Optimiser::Adam;
         // optimisation_parameters.optimiser = Optimiser::AdamMax;
-
+        // Test shufflesplit
         let indexes: Vec<Vec<usize>> = network.shufflesplit(5)?;
         // println!("indexes: {:?}", indexes);
         println!("Number of batches: {:?}", indexes.len());
@@ -761,30 +736,35 @@ mod tests {
         }
         println!("Total length: {:?}", total_len);
         assert!(total_len == network.targets.n_cols);
-
-        let stream = network.targets.data.context().default_stream();
-        let mut a_host = vec![0.0f32; network.targets.n_rows * network.targets.n_cols];
-        stream.memcpy_dtoh(&network.targets.data, &mut a_host)?;
-        println!(
-            "targets: [{}, {}, {}, ..., {}]",
-            a_host[0],
-            a_host[1],
-            a_host[2],
-            a_host[a_host.len() - 1]
-        );
-
-        stream.memcpy_dtoh(&network.predictions.data, &mut a_host)?;
-        println!(
-            "predictions (before predict()): [{}, {}, {}, ..., {}]",
-            a_host[0],
-            a_host[1],
-            a_host[2],
-            a_host[a_host.len() - 1]
-        );
+        // Test train_per_batch
+        let cost_prior_to_training: f32 = network.loss()?;
+        println!("cost prior to training = {}", cost_prior_to_training);
+        println!("predictions before training: {}", network.targets);
         network.train_per_batch(&mut optimisation_parameters, "1")?;
-        optimisation_parameters.n_epochs = 5;
-        optimisation_parameters.n_batches = 2;
-        network.train(&mut optimisation_parameters, true)?;
+        println!("cost after training = {}", network.loss()?);
+        println!("predictions after training: {}", network.targets);
+        assert!(cost_prior_to_training > network.loss()?);
+
+        let mut network_epochs_10 = network.clone();
+        let mut network_epochs_20 = network.clone();
+        let mut network_epochs_50 = network.clone();
+        let mut network_epochs_100 = network.clone();
+        optimisation_parameters.n_batches = 1;
+        optimisation_parameters.n_epochs = 10;
+        network_epochs_10.train(&mut optimisation_parameters, true)?;
+        optimisation_parameters.n_epochs = 20;
+        network_epochs_20.train(&mut optimisation_parameters, true)?;
+        optimisation_parameters.n_epochs = 50;
+        network_epochs_50.train(&mut optimisation_parameters, true)?;
+        optimisation_parameters.n_epochs = 100;
+        network_epochs_100.train(&mut optimisation_parameters, true)?;
+        println!("cost after training for 10 epochs = {}", network_epochs_10.loss()?);
+        println!("cost after training for 20 epochs = {}", network_epochs_20.loss()?);
+        println!("cost after training for 50 epochs = {}", network_epochs_50.loss()?);
+        println!("cost after training for 100 epochs = {}", network_epochs_100.loss()?);
+        assert!(network_epochs_10.loss()? > network_epochs_20.loss()?);
+        assert!(network_epochs_20.loss()? > network_epochs_50.loss()?);
+        assert!(network_epochs_50.loss()? > network_epochs_100.loss()?);
 
         // Hyper-parameter optimisations
         let range_hidden_layers = Some((1, 2, 1));
