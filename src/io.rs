@@ -745,7 +745,7 @@ impl Network {
         delim: &str,
         column_indices_targets: &Vec<usize>,
         model: &str,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<(Self, Vec<String>, Vec<String>), Box<dyn Error>> {
         // Load input data
         // let data = Data::read_delimited(fname, delim, column_indices_targets)?;
         let data = Data::read_delimited(fname, delim, column_indices_targets)?;
@@ -760,7 +760,7 @@ impl Network {
         )?;
         network.replace_model(&network_fitted)?;
         // Note that the target and prediction data are unchanged from the input data
-        Ok(network)
+        Ok((network, data.feature_names, data.target_names))
     }
 }
 
@@ -827,7 +827,7 @@ mod tests {
             network.predictions.summat()?,
             network_reloaded.predictions.summat()?
         );
-        let network_with_data_and_model =
+        let (network_with_data_and_model, feature_names, target_names) =
             Network::read_input_and_model("test_data.csv", ",", &vec![0], "test_network.json")?;
         println!(
             "network_with_data_and_model={}",

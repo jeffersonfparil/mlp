@@ -42,11 +42,50 @@ pixi shell
 time cargo test -- --show-output
 ```
 
+## Compile for release
+
+```shell
+cd mlp
+cargo build --release
+./target/release/mlp -h
+```
+
 ## Tests on empirical data
 
 ```shell
+cd mlp/misc
+mkdir agridat/
+cd agridat/
 curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
 
+
+awk -v OFS="\t" '{print $5,$1,$2,$3,$4}' australia.soybean.txt > test.tsv
+if [ $(head -n1 test.tsv | sed -z 's/\t/\n/g' | grep -n -i "year" | wc -l) -gt 0 ]
+then
+    echo "There is/are field/s with the string 'year' in them which may need to be converted into strings!"
+    for idx in $(head -n1 test.tsv | sed -z 's/\t/\n/g' | grep -n -i "year" | cut -d: -f1)
+    do
+        echo $idx
+        for year in $(tail -n+2 test.tsv | cut -f$idx - | sort | uniq)
+        do
+            year=$(tail -n+2 test.tsv | cut -f$idx - | sort | uniq | head -n1)
+            sed -i "s/$year/YEAR-${year}/g" test.tsv
+        done
+    done
+else
+    echo "Nothing to convert into strings here!"
+fi
+bat test.tsv
+
+
+../../target/release/mlp -h
+time ../../target/release/mlp \
+    -f "test.tsv" \
+    -t 0 \
+    -v \
+    --n-batches 1 \
+    --n-hidden-layers 3 \
+    --n-epochs 100
 
 ```
 

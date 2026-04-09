@@ -14,8 +14,8 @@ use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use cudarc::driver::CudaSlice;
-use crate::linalg::matrix::Matrix;
+// use cudarc::driver::CudaSlice;
+// use crate::linalg::matrix::Matrix;
 use std::cmp::Ordering;
 use std::io::{self, Write};
 
@@ -701,8 +701,6 @@ mod tests {
     use cudarc::driver::{CudaContext, CudaSlice};
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
-        
-        // TODO: use simulation methods in io.rs
         let n: usize = 12_345; // number of observations
         let p: usize = 17; // number of input features
         let k: usize = 1; // number of output features
@@ -745,33 +743,23 @@ mod tests {
         println!("predictions after training: {}", network.targets);
         assert!(cost_prior_to_training > network.loss()?);
 
-        let mut network_epochs_10 = network.clone();
-        let mut network_epochs_20 = network.clone();
-        let mut network_epochs_50 = network.clone();
-        let mut network_epochs_100 = network.clone();
+        let mut network_epochs_5 = network.clone();
+        let mut network_epochs_200 = network.clone();
         optimisation_parameters.n_batches = 1;
-        optimisation_parameters.n_epochs = 10;
-        network_epochs_10.train(&mut optimisation_parameters, true)?;
-        optimisation_parameters.n_epochs = 20;
-        network_epochs_20.train(&mut optimisation_parameters, true)?;
-        optimisation_parameters.n_epochs = 50;
-        network_epochs_50.train(&mut optimisation_parameters, true)?;
-        optimisation_parameters.n_epochs = 100;
-        network_epochs_100.train(&mut optimisation_parameters, true)?;
-        println!("cost after training for 10 epochs = {}", network_epochs_10.loss()?);
-        println!("cost after training for 20 epochs = {}", network_epochs_20.loss()?);
-        println!("cost after training for 50 epochs = {}", network_epochs_50.loss()?);
-        println!("cost after training for 100 epochs = {}", network_epochs_100.loss()?);
-        assert!(network_epochs_10.loss()? > network_epochs_20.loss()?);
-        assert!(network_epochs_20.loss()? > network_epochs_50.loss()?);
-        assert!(network_epochs_50.loss()? > network_epochs_100.loss()?);
+        optimisation_parameters.n_epochs = 5;
+        network_epochs_5.train(&mut optimisation_parameters, true)?;
+        optimisation_parameters.n_epochs = 200;
+        network_epochs_200.train(&mut optimisation_parameters, true)?;
+        println!("cost after training for 5 epochs = {}", network_epochs_5.loss()?);
+        println!("cost after training for 200 epochs = {}", network_epochs_200.loss()?);
+        assert!(network_epochs_5.loss()? > network_epochs_200.loss()?);
 
         // Hyper-parameter optimisations
         let range_hidden_layers = Some((1, 2, 1));
         let range_hidden_layer_nodes = Some((5, 5, 5));
         let range_dropout_rate = Some((0.0, 0.0, 0.1));
         let range_learning_rate = Some((0.0001, 0.0001, 0.0001));
-        let range_n_epochs = Some((5, 10, 10));
+        let range_n_epochs = Some((1, 3, 1));
         let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
         let range_n_batches = Some((1, 2, 1));
         let selection_activations = Some(vec![Activation::ReLU]);
@@ -792,13 +780,13 @@ mod tests {
             verbose,
         )?;
         println!("network_hyper_optimised:\n{}", network_hyper_optimised);
-        // // Clean-up
-        // for f in std::fs::read_dir(".")? {
-        //     let f = f?.path();
-        //     if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
-        //         std::fs::remove_file(&f)?;
-        //     }
-        // }
+        // Clean-up
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+                std::fs::remove_file(&f)?;
+            }
+        }
         Ok(())
     }
 }

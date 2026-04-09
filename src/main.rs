@@ -12,6 +12,7 @@ mod linalg;
 mod network;
 mod optimisers;
 mod train;
+mod marginal;
 
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
@@ -189,6 +190,20 @@ struct Args {
     model: String,
 
     ////////////////////////////////////////////////////////////////////////////////
+    /// Extract marginals only, i.e. after training the model
+    #[arg(long, action)]
+    marginals: bool,
+
+    // /// File name of the MLP model in JSON format
+    // #[arg(short = 'm', long, default_value = "missing-model.json")]
+    // model: String,
+
+    /// Number of input values across the observed range per feature (or input node) to use in predictions
+    /// i.e. number of values for interpolate between mininimum and maximum values observed in each feature or input node
+    #[arg(long, default_value_t = 10)]
+    n_interpolate_min_max: usize,
+
+    ////////////////////////////////////////////////////////////////////////////////
     /// Simulate data only
     #[arg(short = 's', long, action)]
     simulate_data_only: bool,
@@ -263,7 +278,7 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
         }
         x => x,
     };
-    let mut network = Network::read_input_and_model(
+    let (mut network, _feature_names, _target_names) = Network::read_input_and_model(
         &fname,
         &args.delim,
         &args.column_indices_of_targets,
@@ -286,6 +301,43 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
         fname_network_output
     );
     return Ok(());
+}
+
+fn explain_only(args: &Args) -> Result<(), Box<dyn Error>> {
+    let fname = match &args.fname {
+        Some(x) => x.to_owned(),
+        None => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Please provide the input data used to train the model so that we can extract the feature names.",
+            )));
+        }
+    };
+    let model = match args.model.as_ref() {
+        "missing-model.json" => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Please provide the trained model for prediction (Note that the filename should never be `missing-model.json`).",
+            )));
+        }
+        x => x,
+    };
+    let (mut network, feature_names, _target_names) = Network::read_input_and_model(
+        &fname,
+        &args.delim,
+        &args.column_indices_of_targets,
+        &model,
+    )?;
+    // Extract marginal effects
+    
+    // TODO: extract interaction effects up to the number-of-hidden-layer-degree
+    let effects = network.marginals(args.n_interpolate_min_max, args.verbose)?;
+
+    // TODO: save as table with feature names singly and in combinations with their corresponding effects
+    println!("feature_names={:?}", feature_names);
+    println!("effects={:?}", effects);
+
+    Ok(())
 }
 
 fn prepare_network_for_training(args: &Args) -> Result<Network, Box<dyn Error>> {
@@ -562,7 +614,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         return predict_only(&args);
     }
     // Load the data including targets and features and output the network for training
-    let mut network = prepare_network_for_training(&args)?;
+    // TODO: use the target_names and feature_names to contextualise the marginals!
+    let mut network = prepare_network_for_training(&args)?; 
     // Network training
     if args.hyperparameter_optimisation {
         // Perform hyperparameter optimisation then use the best hyperparameters to train the network
