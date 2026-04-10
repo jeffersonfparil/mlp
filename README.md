@@ -98,3 +98,9 @@ time ../../target/release/mlp \
 ![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E50-FPE0.25-B1-LR0.001-T20260408053111.svg)
 
 ![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E100-FPE0.25-B1-LR0.001-T20260408053517.svg)
+
+## Special characters
+
+- Used in progress bar: `█`
+- Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
+- Used as delimiters in marginals' combinations: `▓`

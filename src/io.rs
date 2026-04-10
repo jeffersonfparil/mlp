@@ -2,6 +2,7 @@ use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::linalg::matrix::{Matrix, MatrixError};
 use crate::network::Network;
+use crate::marginal::Marginals;
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -517,7 +518,7 @@ impl Data {
                 target_names.push(name);
             } else {
                 for j in 0..targets_levels[i].len() {
-                    let new_name = format!("{}-{}", name, targets_levels[i][j].to_owned());
+                    let new_name = format!("{}➵{}", name, targets_levels[i][j].to_owned());
                     target_names.push(new_name);
                 }
             }
@@ -528,7 +529,7 @@ impl Data {
                 feature_names.push(name);
             } else {
                 for j in 0..features_levels[i].len() {
-                    let new_name = format!("{}-{}", name, features_levels[i][j].to_owned());
+                    let new_name = format!("{}➵{}", name, features_levels[i][j].to_owned());
                     feature_names.push(new_name);
                 }
             }
@@ -764,6 +765,23 @@ impl Network {
     }
 }
 
+impl Marginals {
+    pub fn write_delimited(&self, path: &str, delim: &str) -> Result<(), Box<dyn Error>> {
+        self.check_dimensions()?;
+        let file = File::create_new(path)?; // makes sure not to overwrite existing files, i.e. using create_new() instead of just create()
+        let mut writer = BufWriter::new(file);
+        let n = self.ids.len();
+        // Write header
+        writeln!(writer, "{}", vec!["ids", "effects"].join(delim))?;
+        // Write data
+        for i in 0..n {
+            let row: Vec<String> = vec![self.ids[i].to_owned(), self.effects[i].to_string()];
+            writeln!(writer, "{}", row.join(delim))?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -858,8 +876,17 @@ mod tests {
         println!("data_rewritten: {}", data_rewritten);
         assert_eq!(
             std::fs::read_to_string("test_non_numerics_rewritten.csv")?,
-            "target_0-A,target_0-B,target_0-C,target_0-D,target_1,feature_0-X,feature_0-Y,feature_0-Z,feature_0-A,feature_0-B,feature_0-C,feature_1-A1,feature_1-A2,feature_1-A3,feature_1-A4,feature_2,feature_3\n1,0,0,0,0.002356832,1,0,0,0,0,0,1,0,0,0,0.26257637,-0.22530088\n0,1,0,0,0.009485791,0,1,0,0,0,0,0,1,0,0,-0.40898767,-0.6339346\n0,0,1,0,0.009100225,0,0,1,0,0,0,0,0,1,0,0.012834634,-2.0523884\n0,0,1,0,0.004334052,0,0,1,0,0,0,0,0,0,1,1.0629518,2.0183794\n0,0,1,0,0.015800802,0,0,1,0,0,0,0,0,0,1,-0.13212654,-1.7721263\n0,0,1,0,0.002177081,0,0,1,0,0,0,0,0,0,1,0.39454332,-0.8285658\n0,0,1,0,0.021280818,0,0,1,0,0,0,0,0,0,1,-0.15998206,0.07512082\n0,0,1,0,0.02473503,0,0,0,1,0,0,0,0,1,0,1.6373256,0.27236217\n0,0,1,0,0.019157464,0,0,0,0,1,0,0,1,0,0,-0.6462233,0.92315364\n0,0,0,1,0.016854811,0,0,0,0,0,1,1,0,0,0,0.34480542,0.534274\n".to_owned(),
+            "target_0➵A,target_0➵B,target_0➵C,target_0➵D,target_1,feature_0➵X,feature_0➵Y,feature_0➵Z,feature_0➵A,feature_0➵B,feature_0➵C,feature_1➵A1,feature_1➵A2,feature_1➵A3,feature_1➵A4,feature_2,feature_3\n1,0,0,0,0.002356832,1,0,0,0,0,0,1,0,0,0,0.26257637,-0.22530088\n0,1,0,0,0.009485791,0,1,0,0,0,0,0,1,0,0,-0.40898767,-0.6339346\n0,0,1,0,0.009100225,0,0,1,0,0,0,0,0,1,0,0.012834634,-2.0523884\n0,0,1,0,0.004334052,0,0,1,0,0,0,0,0,0,1,1.0629518,2.0183794\n0,0,1,0,0.015800802,0,0,1,0,0,0,0,0,0,1,-0.13212654,-1.7721263\n0,0,1,0,0.002177081,0,0,1,0,0,0,0,0,0,1,0.39454332,-0.8285658\n0,0,1,0,0.021280818,0,0,1,0,0,0,0,0,0,1,-0.15998206,0.07512082\n0,0,1,0,0.02473503,0,0,0,1,0,0,0,0,1,0,1.6373256,0.27236217\n0,0,1,0,0.019157464,0,0,0,0,1,0,0,1,0,0,-0.6462233,0.92315364\n0,0,0,1,0.016854811,0,0,0,0,0,1,1,0,0,0,0.34480542,0.534274\n".to_owned(),
         );
+        // Marginals
+        let feature_names: Vec<String> = vec!["feature_0".to_owned(), "feature_1".to_owned(),"feature_A".to_owned(),"feature_B".to_owned()];
+        let marginals_order_1 = Marginals::new(feature_names.clone(), 1)?;
+        println!("marginals_order_1: {:?}", marginals_order_1);
+        let marginals_order_2 = Marginals::new(feature_names.clone(), 2)?;
+        println!("marginals_order_2: {:?}", marginals_order_2);
+        let marginals_order_3 = Marginals::new(feature_names.clone(), 3)?;
+        println!("marginals_order_3: {:?}", marginals_order_3);
+
         // Clean-up
         remove_file("test_data.csv")?;
         remove_file("test_data_simulated.tsv")?;

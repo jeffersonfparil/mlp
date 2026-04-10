@@ -303,42 +303,42 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     return Ok(());
 }
 
-fn explain_only(args: &Args) -> Result<(), Box<dyn Error>> {
-    let fname = match &args.fname {
-        Some(x) => x.to_owned(),
-        None => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Please provide the input data used to train the model so that we can extract the feature names.",
-            )));
-        }
-    };
-    let model = match args.model.as_ref() {
-        "missing-model.json" => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Please provide the trained model for prediction (Note that the filename should never be `missing-model.json`).",
-            )));
-        }
-        x => x,
-    };
-    let (mut network, feature_names, _target_names) = Network::read_input_and_model(
-        &fname,
-        &args.delim,
-        &args.column_indices_of_targets,
-        &model,
-    )?;
-    // Extract marginal effects
+// fn explain_only(args: &Args) -> Result<(), Box<dyn Error>> {
+//     let fname = match &args.fname {
+//         Some(x) => x.to_owned(),
+//         None => {
+//             return Err(Box::new(std::io::Error::new(
+//                 std::io::ErrorKind::Other,
+//                 "Please provide the input data used to train the model so that we can extract the feature names.",
+//             )));
+//         }
+//     };
+//     let model = match args.model.as_ref() {
+//         "missing-model.json" => {
+//             return Err(Box::new(std::io::Error::new(
+//                 std::io::ErrorKind::Other,
+//                 "Please provide the trained model for prediction (Note that the filename should never be `missing-model.json`).",
+//             )));
+//         }
+//         x => x,
+//     };
+//     let (mut network, feature_names, _target_names) = Network::read_input_and_model(
+//         &fname,
+//         &args.delim,
+//         &args.column_indices_of_targets,
+//         &model,
+//     )?;
+//     // Extract marginal effects
     
-    // TODO: extract interaction effects up to the number-of-hidden-layer-degree
-    let effects = network.marginals(args.n_interpolate_min_max, args.verbose)?;
+//     // TODO: extract interaction effects up to the number-of-hidden-layer-degree
+//     let effects = network.marginals(args.n_interpolate_min_max, args.verbose)?;
 
-    // TODO: save as table with feature names singly and in combinations with their corresponding effects
-    println!("feature_names={:?}", feature_names);
-    println!("effects={:?}", effects);
+//     // TODO: save as table with feature names singly and in combinations with their corresponding effects
+//     println!("feature_names={:?}", feature_names);
+//     println!("effects={:?}", effects);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn prepare_network_for_training(args: &Args) -> Result<Network, Box<dyn Error>> {
     let fname = match &args.fname {
