@@ -9,21 +9,6 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
-/// Implement Error for NetworkError
-impl Error for NetworkError {}
-
-/// Implement std::fmt::Display for NetworkError
-impl fmt::Display for NetworkError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NetworkError::DimensionMismatch(msg) => {
-                write!(f, "Dimension Mismatch in Network: {}", msg)
-            }
-            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Network {
@@ -448,6 +433,21 @@ impl Network {
         self.activation = other.activation.clone();
         self.cost = other.cost.clone();
         Ok(())
+    }
+}
+
+/// Implement Error for NetworkError
+impl Error for NetworkError {}
+
+/// Implement std::fmt::Display for NetworkError
+impl fmt::Display for NetworkError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NetworkError::DimensionMismatch(msg) => {
+                write!(f, "Dimension Mismatch in Network: {}", msg)
+            }
+            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
+        }
     }
 }
 

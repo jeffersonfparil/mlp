@@ -1,10 +1,33 @@
-use crate::{linalg::matrix::MatrixError, network::Network};
+use crate::network::Network;
 use std::error::Error;
 use ruviz::core::{Plot, PlottingError};
 use ruviz::prelude::LegendPosition;
 use std::cmp::Ordering;
 use itertools::Itertools;
+use std::fmt;
 
+#[derive(Debug, PartialEq)]
+pub enum MarginalError {
+    DimensionMismatch(String),
+    NameMismatch(String),
+    OtherError(String),
+}
+
+impl Error for MarginalError {}
+
+impl fmt::Display for MarginalError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MarginalError::DimensionMismatch(msg) => {
+                write!(f, "Dimension Mismatch in Marginals: {}", msg)
+            }
+            MarginalError::NameMismatch(msg) => {
+                write!(f, "Name Mismatch in Marginals: {}", msg)
+            }
+            MarginalError::OtherError(msg) => write!(f, "Other Error in Marginals: {}", msg),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Marginals {
@@ -15,15 +38,11 @@ pub struct Marginals {
 impl Marginals {
     pub fn new(feature_names: Vec<String>, order: usize) -> Result<Self, Box<dyn Error>> {
         let n = feature_names.len();
-        let mut p = 0;
-        for i in 1..=order {
-            p += n.pow(i as u32);
-        }
         let mut ids: Vec<String> = vec![];
         for i in 1..=order {
             'combi: for combination in (0..n).into_iter().combinations(i) {
-                // Skip we have duplicate features in a combination
-                // Skip if we have non-numeric features if they are the same feature just different levels
+                // Skip we have duplicate features in a combination (which we should not have because `combinations(i)` yield all possible i-combinations where order does not matter), and 
+                //      if we have non-numeric features if they are the same feature just different levels
                 let m = combination.len();
                 if m > 1 {
                     for j in 0..(m-1) {
@@ -58,6 +77,7 @@ impl Marginals {
                 }
             }
         }
+        let p = ids.len();
         let marginals  = Marginals {
             ids,
             effects: vec![f32::NAN; p],
@@ -65,9 +85,9 @@ impl Marginals {
         Ok(marginals)
     }
 
-    pub fn check_dimensions(&self) -> Result<(), MatrixError> {
+    pub fn check_dimensions(&self) -> Result<(), MarginalError> {
         if self.ids.len() != self.effects.len() {
-            return Err(MatrixError::DimensionMismatch(format!(
+            return Err(MarginalError::DimensionMismatch(format!(
                 "Number of ids ({}) does not match number of effects ({}).",
                 self.ids.len(), self.effects.len()
             )));
@@ -77,9 +97,11 @@ impl Marginals {
 
     pub fn estimate_effects(self: &mut Self, network: &mut Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
 
+        self.check_dimensions()?;
+
         // Find the range of values for each input node
-        println!("number of activation layers: {}", network.activations_per_layer.len());
-        println!("input_layer: {}", network.activations_per_layer[0]);
+        // println!("number of activation layers: {}", network.activations_per_layer.len());
+        // println!("input_layer: {}", network.activations_per_layer[0]);
 
         let n: usize = network.activations_per_layer[0].n_cols;
         let p: usize = network.activations_per_layer[0].n_rows;
@@ -98,10 +120,10 @@ impl Marginals {
                 feature_names.push(id);
             }
         }
-
         // Emit custom MarginalError here
-        assert_eq!(p, feature_names.len());
-
+        if p != feature_names.len() {
+            return Err(Box::new(MarginalError::DimensionMismatch(format!("The Network has {} features but the Marginals struct has {} features (i.e. {:?}).", p, feature_names.len(),feature_names))));
+        }
         // Define the ranges for each of the features
         let mut ranges: Vec<Vec<f32>> = vec![];
         for j in 0..p {
@@ -109,7 +131,7 @@ impl Marginals {
             let fin: usize = (j + 1) * n;
             let old_values = match input_matrix.get(ini..fin) {
                 Some(x) => x.to_owned(),
-                None => return Err(Box::new(MatrixError::DimensionMismatch(format!("Inappropriate slicing index from {} to {}.", ini, fin)))),
+                None => return Err(Box::new(MarginalError::DimensionMismatch(format!("Inappropriate slicing index from {} to {}.", ini, fin)))),
             };
             // println!("old_values[0]={}, old_values[1]={}, old_values[2]={}, old_values[3]={}", old_values[0], old_values[1], old_values[2], old_values[3]);
             let min = match old_values.iter().filter(|&a| !a.is_nan()).min_by(|&a, &b| a.total_cmp(b)) {
@@ -124,12 +146,13 @@ impl Marginals {
             let new_values_to_iterate: Vec<f32> = (0..m).map(|x| min+(step_size*(x as f32))).collect();
             ranges.push(new_values_to_iterate);
         }
-        println!("ranges: {:?}", ranges);
+        // println!("ranges: {:?}", ranges);
         
 
         for i in 0..self.ids.len() {
             let id = self.ids[i].to_owned();
             let id_split = id.split("▓").into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+            // Find the index of the feature name for each id which may contain a single or a combination of 2 or more feature names
             let mut idx_split: Vec<usize> = vec![];
             for j in 0..id_split.len() {
                 let x = id_split[j].to_owned();
@@ -140,33 +163,103 @@ impl Marginals {
                     .map(|(k, _)| k)
                     .collect::<Vec<usize>>();
                 if y.len() != 1 {
-                    return Err(Box::new(MatrixError::OtherError(format!("Unrecognised feature name: `{}`", id_split[j].to_owned()))))
+                    return Err(Box::new(MarginalError::NameMismatch(format!("Unrecognised feature name: `{}`", id_split[j].to_owned()))))
                 }
                 idx_split.push(y[0]);
             }
-            println!("idx_split: {:?}", idx_split);
+            // println!("idx_split: {:?}", idx_split);
 
-            if idx_split.len() == 1 {
+            // if idx_split.len() == 1 {
 
-                // Let's first do for no interactions
+            //     ////////////////////////////////////////
+            //     ////////////////////////////////////////
+            //     // Let's first do for no interactions //
+            //     ////////////////////////////////////////
+            //     ////////////////////////////////////////
 
-                let idx = idx_split[0];
-                let ini: usize = idx * n;
-                let fin: usize = (idx + 1) * n;
+            //     let idx = idx_split[0];
+            //     let ini: usize = idx * n;
+            //     let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
+            //     let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
+            //     for (j, x_i) in ranges[idx].clone().into_iter().enumerate() {
+            //         for k in 0..n {
+            //             input_matrix[ini+k] = x_i;
+            //         }
+            //         network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
+            //         network.predict()?;
+            //         let predictions = network.predictions.to_host()?;
+            //         for k in 0..n {
+            //             x[(j*n)+k] = x_i as f64;
+            //             y[(j*n)+k] = predictions[k] as f64;
+            //         }
+            //         // Reset input_matrix
+            //         for k in 0..n {
+            //             input_matrix[ini+k] = input_matrix_orig[ini+k];
+            //         }
+            //     }
+            //     let b: f64 = {
+            //         let epsilon: f64 = 1e-7;
+            //         let n: f64 = x.len() as f64;
+            //         let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
+            //         let u_y: f64 = y.iter().fold(0.0, |sum, x| sum + x) / n;
+            //         let cov_xy: f64 = x
+            //             .iter()
+            //             .zip(y.iter())
+            //             .fold(0.0, |a, (x, y)| a + (x - u_x) * (y - u_y));
+            //         let var_x: f64 = x
+            //             .iter()
+            //             .fold(0.0, |a, x| a + (x - u_x).powi(2));
+            //         cov_xy / (var_x + epsilon)
+            //     };
+            //     self.effects[i] = b as f32;
+
+            //     // println!("Non-higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
+                
+            // } else {
+
+                ////////////////////////////////////////
+                ////////////////////////////////////////
+                // Estimate up to higher order marginal effects
+                //  where we simplistically assume increase in interaction effects to be along the same order for now
+                ////////////////////////////////////////
+                ////////////////////////////////////////
+                
                 let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
                 let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
-                for (j, x_i) in ranges[idx].clone().into_iter().enumerate() {
-                    for k in 0..n {
-                        input_matrix[ini+k] = x_i;
+                // For each value in the new x-range we predict
+                for j in 0..m {
+                    // First we need to define the new x-values for all the features
+                    for idx in idx_split.clone() {
+                        let x_j = ranges[idx][j];
+                        let ini: usize = idx * n;
+                        for k in 0..n {
+                            input_matrix[ini+k] = x_j;
+                            x[(j*n)+k] = if x[(j*n)+k].is_nan() {
+                                x_j as f64
+                            } else {
+                                x[(j*n)+k] * (x_j as f64)
+                            };
+                        }
                     }
+                    // Predict at the current x-values combination
                     network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
                     network.predict()?;
                     let predictions = network.predictions.to_host()?;
                     for k in 0..n {
-                        x[(j*n)+k] = x_i as f64;
                         y[(j*n)+k] = predictions[k] as f64;
                     }
+                    // Reset input_matrix
+                    for idx in idx_split.clone() {
+                        let ini: usize = idx * n;
+                        for k in 0..n {
+                            input_matrix[ini+k] = input_matrix_orig[ini+k];
+                        }
+                    }
                 }
+
+                // println!("x = {:?}", x);
+                // println!("y = {:?}", y);
+
                 let b: f64 = {
                     let epsilon: f64 = 1e-7;
                     let n: f64 = x.len() as f64;
@@ -179,127 +272,19 @@ impl Marginals {
                     let var_x: f64 = x
                         .iter()
                         .fold(0.0, |a, x| a + (x - u_x).powi(2));
-                    let var_y: f64 = y
-                        .iter()
-                        .fold(0.0, |a, x| a + (x - u_y).powi(2));
                     cov_xy / (var_x + epsilon)
                 };
                 self.effects[i] = b as f32;
-                // Reset the network to previous state
-                network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
-                network.predict()?;
 
-            } else {
-
-                // TODO: estimate the marginal effects where we simplistically assume increase in interaction effects to be along the same order for now
-
-            }
-
-
-            // for j in idx_split {
-            //     let ini: usize = j * n;
-            //     let fin: usize = (j + 1) * n;
-            //     let old_values = match input_matrix.get(ini..fin) {
-            //         Some(x) => x.to_owned(),
-            //         None => return Err(Box::new(MatrixError::DimensionMismatch(format!("Inappropriate slicing index from {} to {}.", ini, fin)))),
-            //     };
-            //     // println!("old_values[0]={}, old_values[1]={}, old_values[2]={}, old_values[3]={}", old_values[0], old_values[1], old_values[2], old_values[3]);
-            //     let min = match old_values.iter().filter(|&a| !a.is_nan()).min_by(|&a, &b| a.total_cmp(b)) {
-            //         Some(&a) => a,
-            //         None => f32::NAN,
-            //     };
-            //     let max = match old_values.iter().filter(|&a| !a.is_nan()).max_by(|&a, &b| a.total_cmp(b)) {
-            //         Some(&a) => a,
-            //         None => f32::NAN,
-            //     };
-            //     let step_size = (max - min) / ((m-1) as f32);
-            //     let new_values_to_iterate: Vec<f32> = (0..m).map(|x| min+(step_size*(x as f32))).collect();
-            //     let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
-            //     let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
-
-            //     println!("min={}; max={}; step_size={}; new_values_to_iterate={:?}, m={}; n={}; m*n={}", min, max, step_size, new_values_to_iterate, m, n, m*n);
-
-            //     for k in 0..m {
-            //         let v = new_values_to_iterate[k];
-            //         for k in 0..n {
-            //             input_matrix[ini+k] = v;
-            //         }
-            //         network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
-            //         network.predict()?;
-            //         let predictions = network.predictions.to_host()?;
-            //         for l in 0..n {
-            //             x[(k*n)+l] = v as f64;
-            //             y[(k*n)+l] = predictions[l] as f64;
-            //         }
-            //     }
-            //     // println!("x[0]={}, x[1]={}, x[2]={}, x[3]={}", x[0], x[1], x[2], x[3]);
-            //     // println!("y[0]={}, y[1]={}, y[2]={}, y[3]={}", y[0], y[1], y[2], y[3]);
-            //     let epsilon: f64 = 1e-7;
-            //     let n: f64 = x.len() as f64;
-            //     let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
-            //     let u_y: f64 = y.iter().fold(0.0, |sum, x| sum + x) / n;
-            //     let cov_xy: f64 = x
-            //         .iter()
-            //         .zip(y.iter())
-            //         .fold(0.0, |a, (x, y)| a + (x - u_x) * (y - u_y));
-            //     let var_x: f64 = x
-            //         .iter()
-            //         .fold(0.0, |a, x| a + (x - u_x).powi(2));
-            //     let var_y: f64 = y
-            //         .iter()
-            //         .fold(0.0, |a, x| a + (x - u_y).powi(2));
-            //     let b: f64 = cov_xy / (var_x + epsilon);
-            //     let a: f64 = u_y - (b * u_x);
-            //     if verbose {
-            //         let error2: f64 = y
-            //             .iter()
-            //             .zip(x.iter())
-            //             .fold(0.0, |a, (y_p, y_t)| a + (y_p - y_t).powi(2));
-            //         let r2: f64 = 1.00 - (error2 / (var_x + epsilon));
-            //         let cor: f64 = cov_xy / ((var_x.sqrt() * var_y.sqrt()) + epsilon);
-            //         let x_min: f64 = match x
-            //             .iter()
-            //             .min_by(|a, b| {
-            //                 a.partial_cmp(b).unwrap_or(Ordering::Less)
-            //             }) {
-            //                 Some(x) => *x,
-            //                 None => x[0],
-            //             };
-            //         let x_max: f64 = match x
-            //             .iter()
-            //             .max_by(|a, b| {
-            //                 a.partial_cmp(b).unwrap_or(Ordering::Greater)
-            //             }) {
-            //                 Some(x) => *x,
-            //                 None => x[0],
-            //             };
-            //         let mut x_for_plotting: Vec<f64> = Vec::with_capacity(100);
-            //         let mut y_for_plotting: Vec<f64> = Vec::with_capacity(100);
-            //         let step: f64 = (x_max - x_min) / 99.0;
-            //         for k in 0..100 {
-            //             let x: f64 = x_min + (k as f64 * step);
-            //             let y: f64 = a + x*b;
-            //             x_for_plotting.push(x);
-            //             y_for_plotting.push(y);
-            //         }
-            //         let title = format!("Sensitivity values vs Predicted Values\n(b={}; R2={:.2}; cor={:.2})", b, r2, cor);
-            //         Plot::new()
-            //             .title(title.as_str())
-            //             .xlabel("x")
-            //             .ylabel("y")
-            //             .scatter(&x, &y)
-            //             .line(&x_for_plotting, &y_for_plotting)
-            //             .export_svg(format!("test-{}.svg", j))?;
-            //     }
-            //     self.effects[j] = b as f32;
-            //     // Reset the network to previous state
-            //     network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
-            //     network.predict()?;
+                // println!("Higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
+                // // Reset the network to previous state
+                // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
+                // network.predict()?;
             // }
         }
-        // // Reset the network to previous state
-        // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
-        // network.predict()?;
+        // Reset the network to previous state
+        network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
+        network.predict()?;
         Ok(())
     }
 }
@@ -331,11 +316,35 @@ mod tests {
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         network.train(&mut optimisation_parameters, true)?;
         
+        // Order: 1
         let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
         marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
-        println!("marginals: {:?}", marginals);
+        println!("Order 1 marginals: {:?}", marginals);
+        assert_eq!(marginals.ids, vec!["feature_0", "feature_1", "feature_2", "feature_3", "feature_4", "feature_5", "feature_6"]);
+        assert_eq!(marginals.effects, vec![-0.0018198125, 0.0016437222, 0.006603645, 0.00040480707, 0.0055924207, 0.005106901, 0.0018019312]);
+        
+        // Order: 2
+        let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
+        let number_of_values_for_interpolate_between_min_and_max: usize = 10;
+        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        println!("Order 2 marginals: {:?}", marginals);
+        assert_eq!(marginals.ids.len(), 28);
 
+        // Order: 3
+        let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
+        let number_of_values_for_interpolate_between_min_and_max: usize = 10;
+        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        println!("Order 3 marginals: {:?}", marginals);
+        assert_eq!(marginals.ids.len(), 63);
+
+        // Clean-up
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+                std::fs::remove_file(&f)?;
+            }
+        }
 
         Ok(())
     }
