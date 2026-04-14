@@ -5,6 +5,8 @@ use ruviz::prelude::LegendPosition;
 use std::cmp::Ordering;
 use itertools::Itertools;
 use std::fmt;
+use std::io::{self, Write};
+use std::time::Instant;
 
 #[derive(Debug, PartialEq)]
 pub enum MarginalError {
@@ -149,7 +151,16 @@ impl Marginals {
         // println!("ranges: {:?}", ranges);
         
 
+        let start_time = Instant::now();
         for i in 0..self.ids.len() {
+            if verbose {
+                let perc: f64 = (1_00_00.0 * (i as f64 + 1.00)/(self.ids.len() as f64)).round() / 100.0;
+                let n_progress: usize = (100.0 * ((i+1) as f64) / (self.ids.len() as f64)).round() as usize;
+                let progress_text: String = (0..n_progress).map(|_| "█").collect();
+                let no_progress_text: String = (0..(100-n_progress)).map(|_| " ").collect();
+                print!("\rEstimating {} marginal effects | {:.2}% | {}{} |", self.ids.len(), perc, progress_text, no_progress_text);
+                io::stdout().flush().expect("Failed to flush stdout");
+            }
             let id = self.ids[i].to_owned();
             let id_split = id.split("▓").into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
             // Find the index of the feature name for each id which may contain a single or a combination of 2 or more feature names
@@ -281,6 +292,9 @@ impl Marginals {
                 // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
                 // network.predict()?;
             // }
+        }
+        if verbose {
+            println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
         }
         // Reset the network to previous state
         network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;

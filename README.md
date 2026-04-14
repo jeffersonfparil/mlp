@@ -42,6 +42,35 @@ pixi shell
 time cargo test -- --show-output
 ```
 
+## More testing
+
+```shell
+cd mlp
+pixi shell
+# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
+time cargo run -- -h
+time cargo run -- -s --verbose
+INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
+head $INPUT
+time cargo run -- -f $INPUT -v --n-batches=1 --n-epochs=100
+MODEL=$(ls -t1 | grep "output.*.json" | head -n1)
+MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
+head $MODEL
+head $MARGINALS
+time cargo run -- -f $INPUT -v -m $MODEL --predict
+PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
+head $PREDICTED
+mv $MARGINALS marginal_main.tsv
+time cargo run -- -f $INPUT -v -m $MODEL --marginals --marginals-higher-order
+MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
+
+head marginal_main.tsv
+head $MARGINALS
+
+
+
+```
+
 ## Compile for release
 
 ```shell
@@ -75,7 +104,7 @@ then
 else
     echo "Nothing to convert into strings here!"
 fi
-bat test.tsv
+# bat test.tsv
 
 
 ../../target/release/mlp -h
@@ -101,6 +130,6 @@ time ../../target/release/mlp \
 
 ## Special characters
 
-- Used in progress bar: `█`
+- Used in progress bars: `█`
 - Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
 - Used as delimiters in marginals' combinations: `▓`

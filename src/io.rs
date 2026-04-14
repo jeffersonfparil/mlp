@@ -361,7 +361,7 @@ impl Data {
                 };
             }
         }
-        println!("targets_levels: {:?}", targets_levels);
+        // println!("targets_levels: {:?}", targets_levels);
         // Features levels
         let mut features_levels: Vec<Vec<String>> = Vec::with_capacity(p);
         for j in 0..p {
@@ -385,7 +385,7 @@ impl Data {
                 };
             }
         }
-        println!("features_levels: {:?}", features_levels);
+        // println!("features_levels: {:?}", features_levels);
         // Build the one-hot encodings of the targets and/or features
         // Targets values
         let m = targets_levels
@@ -695,8 +695,12 @@ impl Network {
             "HL" => Cost::HL,
             _ => return Err(Box::new(CostError::UnimplementedCost)),
         };
-        for i in 0..(network.weights_per_layer.len() - 1) {
-            let n_rows = serdifiable_network.n_hidden_nodes[i];
+        for i in 0..network.weights_per_layer.len() {
+            let n_rows = if i == (network.weights_per_layer.len() - 1) {
+                k
+            } else {
+                serdifiable_network.n_hidden_nodes[i]
+            };
             let n_cols = if i == 0 {
                 p
             } else {
@@ -705,7 +709,7 @@ impl Network {
             let (acti_n_rows, acti_n_cols) = if i == 0 {
                 (p, n)
             } else {
-                (serdifiable_network.n_hidden_nodes[i], n)
+                (serdifiable_network.n_hidden_nodes[i-1], n)
             };
             network.weights_per_layer[i] = Matrix::new(
                 stream.clone_htod(&serdifiable_network.weights_per_layer[i])?,
@@ -739,29 +743,6 @@ impl Network {
             )?;
         }
         Ok(network)
-    }
-
-    pub fn read_input_and_model(
-        fname: &str,
-        delim: &str,
-        column_indices_targets: &Vec<usize>,
-        model: &str,
-    ) -> Result<(Self, Vec<String>, Vec<String>), Box<dyn Error>> {
-        // Load input data
-        // let data = Data::read_delimited(fname, delim, column_indices_targets)?;
-        let data = Data::read_delimited(fname, delim, column_indices_targets)?;
-        // Load the fitted network in JSON format
-        let network_fitted = Network::read_network(model)?;
-        // Initialise the network containing the input data and fitted model
-        let mut network = data.init_network(
-            network_fitted.n_hidden_layers,
-            network_fitted.n_hidden_nodes.clone(),
-            network_fitted.dropout_rates.clone(),
-            network_fitted.seed,
-        )?;
-        network.replace_model(&network_fitted)?;
-        // Note that the target and prediction data are unchanged from the input data
-        Ok((network, data.feature_names, data.target_names))
     }
 }
 
@@ -844,12 +825,6 @@ mod tests {
         assert_eq!(
             network.predictions.summat()?,
             network_reloaded.predictions.summat()?
-        );
-        let (network_with_data_and_model, feature_names, target_names) =
-            Network::read_input_and_model("test_data.csv", ",", &vec![0], "test_network.json")?;
-        println!(
-            "network_with_data_and_model={}",
-            network_with_data_and_model
         );
         // Data with non-numerics
         let fname_non_numerics: String = "test_non_numerics.csv".to_owned();

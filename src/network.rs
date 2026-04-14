@@ -9,23 +9,25 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
+// TODO: revise comments also add docs to make sure we know how each field correspond to each other including their dimensions, i.e. activations is the odd-one-out as it includes the input layer plus all hidden layers and the output layer
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Network {
-    pub n_hidden_layers: usize,                   // number of hidden layers
-    pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer (k)
-    pub dropout_rates: Vec<f32>,                  // soft dropout rates per hidden layer (k)
-    pub targets: Matrix,                          // observed values (1 x n)
-    pub predictions: Matrix,                      // predictions (1 x n)
-    pub weights_per_layer: Vec<Matrix>,           // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
-    pub biases_per_layer: Vec<Matrix>,            // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub weights_x_biases_per_layer: Vec<Matrix>,  // summed weights (i.e. prior to activation function) ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub activations_per_layer: Vec<Matrix>,       // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub weights_gradients_per_layer: Vec<Matrix>, // gradients of the weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
-    pub biases_gradients_per_layer: Vec<Matrix>,  // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
+    pub n_hidden_layers: usize,                   // number of hidden layers (k)
+    pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer
+    pub dropout_rates: Vec<f32>,                  // dropout rates per hidden layer
+    pub targets: Matrix,                          // observed values (n_output_nodes x n_observations)
+    pub predictions: Matrix,                      // predictions (n_output_nodes x n_observations)
+    pub weights_per_layer: Vec<Matrix>,           // weights (n_nodes[i+1] x n_nodes[i]) for each layer
+    pub biases_per_layer: Vec<Matrix>,            // biases (n_nodes[i+1] x 1) for each layer
+    pub weights_x_biases_per_layer: Vec<Matrix>,  // pre-activation sums (n_nodes[i+1] x n_observations) for each layer
+    pub activations_per_layer: Vec<Matrix>,       // activations (n_nodes[i] x n_observations) for each layer, includes input as first element
+    pub weights_gradients_per_layer: Vec<Matrix>, // weight gradients (n_nodes[i+1] x n_nodes[i]) for each layer
+    pub biases_gradients_per_layer: Vec<Matrix>,  // bias gradients (n_nodes[i+1] x 1) for each layer
     pub activation: activations::Activation,      // activation function enum (includes derivative)
     pub cost: costs::Cost,                        // cost function
-    pub seed: usize,                              // random seed for dropouts
+    pub seed: usize,                              // random seed for reproducibility
 }
 
 impl fmt::Display for Network {

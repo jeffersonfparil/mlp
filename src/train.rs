@@ -18,6 +18,7 @@ use std::sync::Mutex;
 // use crate::linalg::matrix::Matrix;
 use std::cmp::Ordering;
 use std::io::{self, Write};
+use std::time::Instant;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -279,6 +280,7 @@ impl Network {
         // ///////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////
         // No cross-validation
+        let start_time = Instant::now();
         for epoch in 0..optimisation_parameters.n_epochs {
             let perc: f64 = (1_00_00.0 * (epoch as f64 + 1.00)/(optimisation_parameters.n_epochs as f64)).round() / 100.0;
             let n_progress: usize = (100.0 * ((epoch+1) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
@@ -298,7 +300,7 @@ impl Network {
                 break;
             }
         }
-        println!("");
+        println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
         self.predict()?;
         Ok((epochs, costs))
     }
