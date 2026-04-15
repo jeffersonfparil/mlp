@@ -196,9 +196,13 @@ struct Args {
     #[arg(short = 'M', long, action)]
     marginals: bool,
     
-    /// Marginal effects estimation: include interaction effects or high-order effects if number of of hidden layers > 1
-    #[arg(long, action)]
-    marginals_higher_order: bool,
+    // /// Marginal effects estimation: include interaction effects or high-order effects if number of of hidden layers > 1
+    // #[arg(long, action)]
+    // marginals_higher_order: bool,
+    
+    /// Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on
+    #[arg(long, default_value_t = 1)]
+    marginals_order: usize,
     
     /// Number of input values across the observed range per feature (or input node) to use in predictions
     /// i.e. number of values for interpolate between minimum and maximum values observed in each feature or input node
@@ -404,6 +408,15 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
         }
         _ => (),
     };
+    match args.marginals_order < 1 {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Maximum interaction effects level/order cannot be less than 1.",
+            )));
+        },
+        false => (),
+    };
     let fname_marginals = args.model.replace(".json", "-marginal_effects.tsv");
     match fs::File::create_new(&fname_marginals) {
         Ok(_) => {std::fs::remove_file(&fname_marginals)?},
@@ -411,18 +424,21 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     }
     // Load the data including targets and features
     let data = read_data(&args)?;
+    match args.marginals_order > data.feature_names.len() {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Maximum interaction effects level/order greater than the number of features ({}).", data.feature_names.len()),
+            )));
+        },
+        false => (),
+    };
     // Prepare the network
     let mut network = Network::read_network(&args.model)?;
-
-    println!("network after saving and reloading: {}", network);
-
+    // println!("network after saving and reloading: {}", network);
     // Extract the marginal effects and save
     // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
-    let mut marginals = if args.marginals_higher_order {
-        Marginals::new(data.feature_names.clone(), network.n_hidden_layers + 1)?
-    } else {
-        Marginals::new(data.feature_names.clone(), 1)?
-    };
+    let mut marginals = Marginals::new(data.feature_names.clone(), args.marginals_order)?;
     marginals.estimate_effects(&mut network, args.n_interpolate_min_max, args.verbose)?;
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
@@ -662,13 +678,27 @@ fn marginals_after_training(
         Ok(_) => {std::fs::remove_file(&fname_marginals)?},
         Err(_) => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Marginal effects file '{}' exists!", fname_marginals)))),
     }
+    match args.marginals_order < 1 {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Maximum interaction effects level/order cannot be less than 1.",
+            )));
+        },
+        false => (),
+    };
+    match args.marginals_order > data.feature_names.len() {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Maximum interaction effects level/order greater than the number of features ({}).", data.feature_names.len()),
+            )));
+        },
+        false => (),
+    };
     // Extract the marginal effects and save
     // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
-    let mut marginals = if args.marginals_higher_order {
-        Marginals::new(data.feature_names.clone(), network.n_hidden_layers + 1)?
-    } else {
-        Marginals::new(data.feature_names.clone(), 1)?
-    };
+    let mut marginals = Marginals::new(data.feature_names.clone(), args.marginals_order)?;
     marginals.estimate_effects(network, args.n_interpolate_min_max, args.verbose)?;
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
@@ -706,10 +736,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Train the network using the supplied and/or default hyperparameters
         train_with_fixed_hyperparameters(&args, &mut network)?
     };
-
-
-    println!("network before saving and reloading: {}", network);
-
+    // println!("network before saving and reloading: {}", network);
     // Estimate marginal effects after training
     marginals_after_training(&args, &data, &mut network, fname_network_output)?;
     Ok(())

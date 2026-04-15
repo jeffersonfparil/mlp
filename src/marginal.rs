@@ -1,4 +1,4 @@
-use crate::network::Network;
+use crate::network::{self, Network};
 use std::error::Error;
 use ruviz::core::{Plot, PlottingError};
 use ruviz::prelude::LegendPosition;
@@ -7,6 +7,10 @@ use itertools::Itertools;
 use std::fmt;
 use std::io::{self, Write};
 use std::time::Instant;
+use rayon::prelude::*;
+use std::sync::Mutex;
+use std::sync::atomic;
+use std::sync::Arc;
 
 #[derive(Debug, PartialEq)]
 pub enum MarginalError {
@@ -97,22 +101,22 @@ impl Marginals {
         Ok(())
     }
 
-    pub fn estimate_effects(self: &mut Self, network: &mut Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
+    pub fn estimate_effects(self: &mut Self, network_orig: &mut Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
 
         self.check_dimensions()?;
 
         // Find the range of values for each input node
-        // println!("number of activation layers: {}", network.activations_per_layer.len());
-        // println!("input_layer: {}", network.activations_per_layer[0]);
+        // println!("number of activation layers: {}", network_orig.activations_per_layer.len());
+        // println!("input_layer: {}", network_orig.activations_per_layer[0]);
 
-        let n: usize = network.activations_per_layer[0].n_cols;
-        let p: usize = network.activations_per_layer[0].n_rows;
+        let n: usize = network_orig.activations_per_layer[0].n_cols;
+        let p: usize = network_orig.activations_per_layer[0].n_rows;
 
         // let mut minima: Vec<f32> = vec![f32::NAN; p];
         // let mut maxima: Vec<f32> = vec![f32::NAN; p];
-        let input_matrix_orig = network.activations_per_layer[0].to_host()?;
-        let mut input_matrix = input_matrix_orig.clone();
-        let stream = network.activations_per_layer[0].data.context().default_stream();
+        let input_matrix_orig = network_orig.activations_per_layer[0].to_host()?;
+        // let mut input_matrix = input_matrix_orig.clone();
+        // let stream = network_orig.activations_per_layer[0].data.context().default_stream();
         
         let mut feature_names: Vec<String> = vec![];
         for i in 0..self.ids.len() {
@@ -131,7 +135,7 @@ impl Marginals {
         for j in 0..p {
             let ini: usize = j * n;
             let fin: usize = (j + 1) * n;
-            let old_values = match input_matrix.get(ini..fin) {
+            let old_values = match input_matrix_orig.get(ini..fin) {
                 Some(x) => x.to_owned(),
                 None => return Err(Box::new(MarginalError::DimensionMismatch(format!("Inappropriate slicing index from {} to {}.", ini, fin)))),
             };
@@ -152,16 +156,26 @@ impl Marginals {
         
 
         let start_time = Instant::now();
-        for i in 0..self.ids.len() {
+        let effects: Mutex<Vec<f32>> = Mutex::new(vec![f32::NAN; self.ids.len()]);
+        let counter = Arc::new(atomic::AtomicUsize::new(0));
+        // self.ids
+        //     .par_iter()
+        //     .enumerate()
+        //     .for_each(|(i, id)| {
+        let ids = self.ids.clone();
+        for (i, id) in ids.into_iter().enumerate() {
             if verbose {
-                let perc: f64 = (1_00_00.0 * (i as f64 + 1.00)/(self.ids.len() as f64)).round() / 100.0;
-                let n_progress: usize = (100.0 * ((i+1) as f64) / (self.ids.len() as f64)).round() as usize;
+                // Atomically increment counter
+                let x = counter.load(atomic::Ordering::Relaxed);
+                let perc: f64 = (1_00_00.0 * ((x+1) as f64)/(self.ids.len() as f64)).round() / 100.0;
+                let n_progress: usize = (100.0 * ((x+1) as f64) / (self.ids.len() as f64)).round() as usize;
                 let progress_text: String = (0..n_progress).map(|_| "█").collect();
                 let no_progress_text: String = (0..(100-n_progress)).map(|_| " ").collect();
                 print!("\rEstimating {} marginal effects | {:.2}% | {}{} |", self.ids.len(), perc, progress_text, no_progress_text);
                 io::stdout().flush().expect("Failed to flush stdout");
+                counter.fetch_add(1, atomic::Ordering::Relaxed);
             }
-            let id = self.ids[i].to_owned();
+            // let id = self.ids[i].to_owned();
             let id_split = id.split("▓").into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
             // Find the index of the feature name for each id which may contain a single or a combination of 2 or more feature names
             let mut idx_split: Vec<usize> = vec![];
@@ -174,131 +188,103 @@ impl Marginals {
                     .map(|(k, _)| k)
                     .collect::<Vec<usize>>();
                 if y.len() != 1 {
-                    return Err(Box::new(MarginalError::NameMismatch(format!("Unrecognised feature name: `{}`", id_split[j].to_owned()))))
+                    // return Err(Box::new(MarginalError::NameMismatch(format!("Unrecognised feature name: `{}`", id_split[j].to_owned()))))
+                    eprintln!("Unrecognised feature name: `{}`", id_split[j].to_owned());
                 }
                 idx_split.push(y[0]);
             }
-            // println!("idx_split: {:?}", idx_split);
-
-            // if idx_split.len() == 1 {
-
-            //     ////////////////////////////////////////
-            //     ////////////////////////////////////////
-            //     // Let's first do for no interactions //
-            //     ////////////////////////////////////////
-            //     ////////////////////////////////////////
-
-            //     let idx = idx_split[0];
-            //     let ini: usize = idx * n;
-            //     let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
-            //     let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
-            //     for (j, x_i) in ranges[idx].clone().into_iter().enumerate() {
-            //         for k in 0..n {
-            //             input_matrix[ini+k] = x_i;
-            //         }
-            //         network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
-            //         network.predict()?;
-            //         let predictions = network.predictions.to_host()?;
-            //         for k in 0..n {
-            //             x[(j*n)+k] = x_i as f64;
-            //             y[(j*n)+k] = predictions[k] as f64;
-            //         }
-            //         // Reset input_matrix
-            //         for k in 0..n {
-            //             input_matrix[ini+k] = input_matrix_orig[ini+k];
-            //         }
-            //     }
-            //     let b: f64 = {
-            //         let epsilon: f64 = 1e-7;
-            //         let n: f64 = x.len() as f64;
-            //         let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
-            //         let u_y: f64 = y.iter().fold(0.0, |sum, x| sum + x) / n;
-            //         let cov_xy: f64 = x
-            //             .iter()
-            //             .zip(y.iter())
-            //             .fold(0.0, |a, (x, y)| a + (x - u_x) * (y - u_y));
-            //         let var_x: f64 = x
-            //             .iter()
-            //             .fold(0.0, |a, x| a + (x - u_x).powi(2));
-            //         cov_xy / (var_x + epsilon)
-            //     };
-            //     self.effects[i] = b as f32;
-
-            //     // println!("Non-higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
-                
-            // } else {
-
-                ////////////////////////////////////////
-                ////////////////////////////////////////
-                // Estimate up to higher order marginal effects
-                //  where we simplistically assume increase in interaction effects to be along the same order for now
-                ////////////////////////////////////////
-                ////////////////////////////////////////
-                
-                let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
-                let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
-                // For each value in the new x-range we predict
-                for j in 0..m {
-                    // First we need to define the new x-values for all the features
-                    for idx in idx_split.clone() {
-                        let x_j = ranges[idx][j];
-                        let ini: usize = idx * n;
-                        for k in 0..n {
-                            input_matrix[ini+k] = x_j;
-                            x[(j*n)+k] = if x[(j*n)+k].is_nan() {
-                                x_j as f64
-                            } else {
-                                x[(j*n)+k] * (x_j as f64)
-                            };
-                        }
-                    }
-                    // Predict at the current x-values combination
-                    network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
-                    network.predict()?;
-                    let predictions = network.predictions.to_host()?;
+            ////////////////////////////////////////
+            ////////////////////////////////////////
+            // Estimate up to higher order marginal effects
+            //  where we simplistically assume increase in interaction effects to be along the same order for now
+            ////////////////////////////////////////
+            ////////////////////////////////////////
+            let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
+            let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
+            let mut network = network_orig.clone();
+            let mut input_matrix = input_matrix_orig.clone();
+            let stream = network.activations_per_layer[0].data.context().default_stream();
+            // For each value in the new x-range we predict
+            for j in 0..m {
+                // First we need to define the new x-values for all the features
+                for idx in idx_split.clone() {
+                    let x_j = ranges[idx][j];
+                    let ini: usize = idx * n;
                     for k in 0..n {
-                        y[(j*n)+k] = predictions[k] as f64;
-                    }
-                    // Reset input_matrix
-                    for idx in idx_split.clone() {
-                        let ini: usize = idx * n;
-                        for k in 0..n {
-                            input_matrix[ini+k] = input_matrix_orig[ini+k];
-                        }
+                        input_matrix[ini+k] = x_j;
+                        x[(j*n)+k] = if x[(j*n)+k].is_nan() {
+                            x_j as f64
+                        } else {
+                            x[(j*n)+k] * (x_j as f64)
+                        };
                     }
                 }
-
-                // println!("x = {:?}", x);
-                // println!("y = {:?}", y);
-
-                let b: f64 = {
-                    let epsilon: f64 = 1e-7;
-                    let n: f64 = x.len() as f64;
-                    let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
-                    let u_y: f64 = y.iter().fold(0.0, |sum, x| sum + x) / n;
-                    let cov_xy: f64 = x
-                        .iter()
-                        .zip(y.iter())
-                        .fold(0.0, |a, (x, y)| a + (x - u_x) * (y - u_y));
-                    let var_x: f64 = x
-                        .iter()
-                        .fold(0.0, |a, x| a + (x - u_x).powi(2));
-                    cov_xy / (var_x + epsilon)
-                };
-                self.effects[i] = b as f32;
-
-                // println!("Higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
-                // // Reset the network to previous state
-                // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
-                // network.predict()?;
-            // }
+                // Predict at the current x-values combination
+                network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
+                // network.activations_per_layer[0].data = match stream.clone_htod(&input_matrix) {
+                //     Ok(x) => x,
+                //     Err(_) => return eprintln!("Error cloning input matrix into the first layer of the activations.")
+                // };
+                network.predict()?;
+                // match network.predict() {
+                //     Ok(_) => (),
+                //     Err(_) => return eprintln!("Error in prediction.")
+                // };
+                let predictions = network.predictions.to_host()?;
+                // let predictions = match network.predictions.to_host() {
+                //     Ok(x) => x,
+                //     Err(_) => return eprintln!("Error extracting the predictions.")
+                // };
+                for k in 0..n {
+                    y[(j*n)+k] = predictions[k] as f64;
+                }
+                // Reset input_matrix
+                for idx in idx_split.clone() {
+                    let ini: usize = idx * n;
+                    for k in 0..n {
+                        input_matrix[ini+k] = input_matrix_orig[ini+k];
+                    }
+                }
+            }
+            // println!("x = {:?}", x);
+            // println!("y = {:?}", y);
+            let b: f64 = {
+                let epsilon: f64 = 1e-7;
+                let n: f64 = x.len() as f64;
+                let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
+                let u_y: f64 = y.iter().fold(0.0, |sum, x| sum + x) / n;
+                let cov_xy: f64 = x
+                    .iter()
+                    .zip(y.iter())
+                    .fold(0.0, |a, (x, y)| a + (x - u_x) * (y - u_y));
+                let var_x: f64 = x
+                    .iter()
+                    .fold(0.0, |a, x| a + (x - u_x).powi(2));
+                cov_xy / (var_x + epsilon)
+            };
+            // self.effects[i] = b as f32;
+            // Lock the mutexes to get access
+            let mut locked_effects = effects.lock().unwrap();
+            // Replace the ith element safely
+            if let Some(x) = locked_effects.get_mut(i) {
+                *x = b as f32;
+            }
+            // println!("Higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
+            // // Reset the network to previous state
+            // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
+            // network.predict()?;
+        // });
         }
+        self.effects = effects.into_inner().unwrap();
         if verbose {
+            let progress_text: String = (0..100).map(|_| "█").collect();
+            print!("\rEstimating {} marginal effects | 100.00% | {} |", self.ids.len(), progress_text);
+            io::stdout().flush().expect("Failed to flush stdout");
             println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
         }
-        // Reset the network to previous state
-        network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
-        network.predict()?;
+        // // Reset the network to previous state
+        // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
+        // network.predict()?;
         Ok(())
     }
 }

@@ -233,16 +233,16 @@ impl Network {
     pub fn train_per_batch(
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
-        batch_id: &str,
+        n_batches: &str,
     ) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
         let mut epochs: Vec<f64> = Vec::new();
         let mut costs: Vec<f64> = Vec::new();
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
-        // ///////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
         // // With cross-validation
         // const FRAC_VALIDATION: f32 = 0.05;
         // let n: usize = self.targets.n_cols;
@@ -276,17 +276,17 @@ impl Network {
         //         break;
         //     }
         // }
-        // ///////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
         // No cross-validation
         let start_time = Instant::now();
         for epoch in 0..optimisation_parameters.n_epochs {
-            let perc: f64 = (1_00_00.0 * (epoch as f64 + 1.00)/(optimisation_parameters.n_epochs as f64)).round() / 100.0;
+            let perc: f64 = (1_00_00.0 * ((epoch+1) as f64)/(optimisation_parameters.n_epochs as f64)).round() / 100.0;
             let n_progress: usize = (100.0 * ((epoch+1) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
             let progress_text: String = (0..n_progress).map(|_| "█").collect();
             let no_progress_text: String = (0..(100-n_progress)).map(|_| " ").collect();
-            print!("\rTraining batch {} | {:.2}% | {}{} |", batch_id, perc, progress_text, no_progress_text);
+            print!("\rTraining {} batches | {:.2}% | {}{} |", n_batches, perc, progress_text, no_progress_text);
             io::stdout().flush().expect("Failed to flush stdout");
             self.forwardpass()?;
             self.backpropagation()?;
@@ -300,6 +300,10 @@ impl Network {
                 break;
             }
         }
+        let perc: f64 = 1_00_00.0 / 100.0;
+        let progress_text: String = (0..100).map(|_| "█").collect();
+        print!("\rTraining {} batches | 100.00% | {} |", n_batches, progress_text);
+        io::stdout().flush().expect("Failed to flush stdout");
         println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
         self.predict()?;
         Ok((epochs, costs))
@@ -325,7 +329,7 @@ impl Network {
             if optimisation_parameters.n_batches == 1 {
                 // Only one batch, train on the whole dataset
                 let mut params = optimisation_parameters.clone();
-                let (epochs, costs) = self.train_per_batch(&mut params, "1/1")?;
+                let (epochs, costs) = self.train_per_batch(&mut params, "1")?;
                 // self.predict()?;
                 (vec![epochs], vec![costs])
             } else {
@@ -339,8 +343,11 @@ impl Network {
                     let network: Network = self.slice(&col_indexes)?;
                     networks_per_batch.push(network);
                 }
-                let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-                let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                // let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                // let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                let n = networks_per_batch.len();
+                let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
+                let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
                 networks_per_batch
                     .par_iter_mut()
                     .enumerate()
@@ -352,11 +359,21 @@ impl Network {
                             );
                         }
                         let mut params = optimisation_parameters.clone();
-                        let result = network.train_per_batch(&mut params, &format!("{} / {}", i+1, optimisation_parameters.n_batches));
+                        let result = network.train_per_batch(&mut params, &format!("{}", n));
                         match result {
                             Ok((epochs_batch, costs_batch)) => {
-                                epochs.lock().unwrap().push(epochs_batch);
-                                costs.lock().unwrap().push(costs_batch);
+                                // epochs.lock().unwrap().push(epochs_batch);
+                                // costs.lock().unwrap().push(costs_batch);
+                                // Lock the mutexes to get access
+                                let mut locked_epochs = epochs.lock().unwrap();
+                                let mut locked_costs = costs.lock().unwrap();
+                                // Replace the ith element safely
+                                if let Some(x) = locked_epochs.get_mut(i) {
+                                    *x = epochs_batch;
+                                }
+                                if let Some(x) = locked_costs.get_mut(i) {
+                                    *x = costs_batch;
+                                }
                             }
                             Err(e) => {
                                 // Skip the batch
@@ -372,7 +389,9 @@ impl Network {
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {
-            // Plot loss curve
+            ///////////////////////////////////////////////
+            // Plot filenames
+            ///////////////////////////////////////////////
             let dir: PathBuf = current_dir()?;
             let fname_loss_svg = &format!(
                 "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
@@ -387,6 +406,9 @@ impl Network {
                 Utc::now().format("%Y%m%d%H%M%S")
             );
             let fname_scatter_svg = &fname_loss_svg.replace("Loss_curve-", "Observed_vs_predicted-");
+            ///////////////////////////////////////////////
+            // Plot loss curve
+            ///////////////////////////////////////////////
             let mut ylabel = String::from("Cost");
             ylabel.push_str(&format!(
                 " ({:?}; {:?})",
@@ -411,7 +433,9 @@ impl Network {
             ;
             // plot_loss[0].clone().save(fname_png)?;
             plot_loss[0].clone().export_svg(fname_loss_svg)?;
+            ///////////////////////////////////////////////
             // Scatter plot of observed vs predicted values
+            ///////////////////////////////////////////////
             let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
             let y_predicted: Vec<f64> = self.predictions.to_host()?.iter().map(|&x| x as f64).collect();
             // OLS
