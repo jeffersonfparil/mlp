@@ -81,6 +81,9 @@ impl fmt::Display for Matrix {
         } else if (self.n_rows >= 4) & (self.n_cols >= 4) {
             let idx_rows: Vec<usize> = vec![0, 1, 2, self.n_rows - 1];
             let idx_cols: Vec<usize> = vec![0, 1, 2, self.n_cols - 1];
+
+            // TODO: try to circumvent exporting the full matrix from GPU into CPU below
+
             let for_printing: Matrix = match self.slice(&idx_rows, &idx_cols) {
                 Ok(mat) => mat,
                 Err(_) => return write!(f, "Matrix data could not be sliced for display."),
