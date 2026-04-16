@@ -14,6 +14,7 @@ mod network;
 mod optimisers;
 mod train;
 mod marginal;
+mod progress_bar;
 
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};

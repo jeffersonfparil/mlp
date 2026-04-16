@@ -1,17 +1,13 @@
 use crate::network::Network;
+use crate::progress_bar::ProgressBar;
 use std::error::Error;
-use ruviz::core::{Plot, PlottingError};
-use ruviz::prelude::LegendPosition;
-use std::cmp::Ordering;
 use itertools::Itertools;
 use std::fmt;
-use std::io::{self, Write};
-use std::time::Instant;
 use rayon::prelude::*;
 use std::sync::Mutex;
-use std::sync::atomic;
 use std::sync::Arc;
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum MarginalError {
     DimensionMismatch(String),
@@ -155,9 +151,11 @@ impl Marginals {
         // println!("ranges: {:?}", ranges);
         
 
-        let start_time = Instant::now();
+        // let start_time = Instant::now();
+        // let progress_width: usize = 50;
+        // let counter = Arc::new(atomic::AtomicUsize::new(0));
+        let pb = Arc::new(Mutex::new(ProgressBar::new(self.ids.len(), 50, format!("Estimating {} marginal effects", self.ids.len()))));
         let effects: Mutex<Vec<f32>> = Mutex::new(vec![f32::NAN; self.ids.len()]);
-        let counter = Arc::new(atomic::AtomicUsize::new(0));
         self.ids
             .par_iter()
             .enumerate()
@@ -166,14 +164,22 @@ impl Marginals {
         // for (i, id) in ids.into_iter().enumerate() {
             if verbose {
                 // Atomically increment counter
-                let x = counter.load(atomic::Ordering::Relaxed);
-                let perc: f64 = (1_00_00.0 * ((x+1) as f64)/(self.ids.len() as f64)).round() / 100.0;
-                let n_progress: usize = (100.0 * ((x+1) as f64) / (self.ids.len() as f64)).round() as usize;
-                let progress_text: String = (0..n_progress).map(|_| "█").collect();
-                let no_progress_text: String = (0..(100-n_progress)).map(|_| " ").collect();
-                print!("\rEstimating {} marginal effects | {:.2}% | {}{} |", self.ids.len(), perc, progress_text, no_progress_text);
-                io::stdout().flush().expect("Failed to flush stdout");
-                counter.fetch_add(1, atomic::Ordering::Relaxed);
+                // let x = counter.load(atomic::Ordering::Relaxed);
+                // let perc: f64 = (((progress_width * 100 * (x+1)) as f64)/(self.ids.len() as f64)).round() / (progress_width as f64);
+                // let n_progress: usize = (((progress_width * (x+1)) as f64) / (self.ids.len() as f64)).round() as usize;
+                // let progress_text: String = (0..n_progress).map(|_| "█").collect();
+                // let no_progress_text: String = (0..(progress_width-n_progress)).map(|_| " ").collect();
+                // let t_remaining: f64 = {
+                //     let dp: f64 = n_progress as f64;
+                //     let dt: f64 = start_time.elapsed().as_millis() as f64 / 60_000.0;
+                //     let v: f64 = dp/dt;
+                //     let t_total: f64 = (progress_width as f64) / v;
+                //     t_total - dt
+                // };
+                // print!("\rEstimating {} marginal effects | {:.2}% | {}{} | {:.2} minutes remaining | ", self.ids.len(), perc, progress_text, no_progress_text, t_remaining);
+                // io::stdout().flush().expect("Failed to flush stdout");
+                // counter.fetch_add(1, atomic::Ordering::Relaxed);
+                pb.lock().unwrap().next();
             }
             // let id = self.ids[i].to_owned();
             let id_split = id.split("▓").into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
@@ -184,7 +190,7 @@ impl Marginals {
                 let y = feature_names
                     .iter()
                     .enumerate()
-                    .filter(move |&(j, z)| &x == z)
+                    .filter(move |&(_j, z)| &x == z)
                     .map(|(k, _)| k)
                     .collect::<Vec<usize>>();
                 if y.len() != 1 {
@@ -277,10 +283,12 @@ impl Marginals {
         // }
         self.effects = effects.into_inner().unwrap();
         if verbose {
-            let progress_text: String = (0..100).map(|_| "█").collect();
-            print!("\rEstimating {} marginal effects | 100.00% | {} |", self.ids.len(), progress_text);
-            io::stdout().flush().expect("Failed to flush stdout");
-            println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
+            // let progress_text: String = (0..progress_width).map(|_| "█").collect();
+            // print!("\rEstimating {} marginal effects | 100.00% | {} |", self.ids.len(), progress_text);
+            // io::stdout().flush().expect("Failed to flush stdout");
+            // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
+            pb.lock().unwrap().finish();
+
         }
         // // Reset the network to previous state
         // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;

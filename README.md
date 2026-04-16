@@ -90,11 +90,13 @@ curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip
 
 
 FILE=australia.soybean.txt
+# FILE=baena.bean.uniformity.txt
 
 FILE_INPUT=${FILE%.txt*}.tsv
 FILE_OUTPUT=${FILE%.txt*}.json
 
-awk -v OFS="\t" '{print $5,$1,$2,$3,$4}' $FILE > $FILE_INPUT
+awk -v OFS="\t" '{print $5,$1,$2,$3,$4}' $FILE > $FILE_INPUT # specific to australia.soybean.txt
+
 if [ $(head -n1 $FILE_INPUT | sed -z 's/\t/\n/g' | grep -n -i "year" | wc -l) -gt 0 ]
 then
     echo "There is/are field/s with the string 'year' in them which may need to be converted into strings!"
@@ -111,6 +113,9 @@ else
     echo "Nothing to convert into strings here!"
 fi
 # bat $FILE_INPUT
+head $FILE_INPUT
+tail $FILE_INPUT
+wc -l $FILE_INPUT
 
 
 ../../target/release/mlp -h

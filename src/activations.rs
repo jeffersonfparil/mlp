@@ -32,6 +32,7 @@ impl fmt::Display for ActivationError {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Activation {
     Sigmoid,

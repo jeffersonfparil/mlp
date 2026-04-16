@@ -2,6 +2,7 @@ use crate::activations::Activation;
 use crate::costs::Cost;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser};
+use crate::progress_bar::ProgressBar;
 use chrono::Utc;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -14,11 +15,7 @@ use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
-// use cudarc::driver::CudaSlice;
-// use crate::linalg::matrix::Matrix;
 use std::cmp::Ordering;
-use std::io::{self, Write};
-use std::time::Instant;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -280,14 +277,24 @@ impl Network {
         // ///////////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////////
         // No cross-validation
-        let start_time = Instant::now();
+        // let start_time = Instant::now();
+        // let progress_width: usize = 50;
+        let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches", n_batches));
         for epoch in 0..optimisation_parameters.n_epochs {
-            let perc: f64 = (1_00_00.0 * ((epoch+1) as f64)/(optimisation_parameters.n_epochs as f64)).round() / 100.0;
-            let n_progress: usize = (100.0 * ((epoch+1) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
-            let progress_text: String = (0..n_progress).map(|_| "█").collect();
-            let no_progress_text: String = (0..(100-n_progress)).map(|_| " ").collect();
-            print!("\rTraining {} batches | {:.2}% | {}{} |", n_batches, perc, progress_text, no_progress_text);
-            io::stdout().flush().expect("Failed to flush stdout");
+            // let perc: f64 = (((progress_width * 100 * (epoch+1)) as f64)/(optimisation_parameters.n_epochs as f64)).round() / (progress_width as f64);
+            // let n_progress: usize = (((progress_width * (epoch+1)) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
+            // let progress_text: String = (0..n_progress).map(|_| "█").collect();
+            // let no_progress_text: String = (0..(progress_width-n_progress)).map(|_| " ").collect();
+            // let t_remaining: f64 = {
+            //     let dp: f64 = n_progress as f64;
+            //     let dt: f64 = start_time.elapsed().as_millis() as f64 / 60_000.0;
+            //     let v: f64 = dp/dt;
+            //     let t_total: f64 = (progress_width as f64) / v;
+            //     t_total - dt
+            // };
+            // print!("\rTraining {} batches | {:.2}% | {}{} | {:.2} minutes remaining | ", n_batches, perc, progress_text, no_progress_text, t_remaining);
+            // io::stdout().flush().expect("Failed to flush stdout");
+            pb.next();
             self.forwardpass()?;
             self.backpropagation()?;
             self.optimise(optimisation_parameters)?;
@@ -300,11 +307,11 @@ impl Network {
                 break;
             }
         }
-        let perc: f64 = 1_00_00.0 / 100.0;
-        let progress_text: String = (0..100).map(|_| "█").collect();
-        print!("\rTraining {} batches | 100.00% | {} |", n_batches, progress_text);
-        io::stdout().flush().expect("Failed to flush stdout");
-        println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
+        // let progress_text: String = (0..progress_width).map(|_| "█").collect();
+        // print!("\rTraining {} batches | 100.00% | {} |", n_batches, progress_text);
+        // io::stdout().flush().expect("Failed to flush stdout");
+        // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
+        pb.finish();
         self.predict()?;
         Ok((epochs, costs))
     }
