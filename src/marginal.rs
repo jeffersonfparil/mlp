@@ -1,0 +1,359 @@
+use crate::network::Network;
+use crate::progress_bar::ProgressBar;
+use std::error::Error;
+use itertools::Itertools;
+use std::fmt;
+use rayon::prelude::*;
+use std::sync::Mutex;
+use std::sync::Arc;
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
+pub enum MarginalError {
+    DimensionMismatch(String),
+    NameMismatch(String),
+    OtherError(String),
+}
+
+impl Error for MarginalError {}
+
+impl fmt::Display for MarginalError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MarginalError::DimensionMismatch(msg) => {
+                write!(f, "Dimension Mismatch in Marginals: {}", msg)
+            }
+            MarginalError::NameMismatch(msg) => {
+                write!(f, "Name Mismatch in Marginals: {}", msg)
+            }
+            MarginalError::OtherError(msg) => write!(f, "Other Error in Marginals: {}", msg),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Marginals {
+    pub ids: Vec<String>,
+    pub effects: Vec<f32>,
+}
+
+impl Marginals {
+    pub fn new(feature_names: Vec<String>, order: usize) -> Result<Self, Box<dyn Error>> {
+        let n = feature_names.len();
+        let mut ids: Vec<String> = vec![];
+        for i in 1..=order {
+            'combi: for combination in (0..n).into_iter().combinations(i) {
+                // Skip we have duplicate features in a combination (which we should not have because `combinations(i)` yield all possible i-combinations where order does not matter), and 
+                //      if we have non-numeric features if they are the same feature just different levels
+                let m = combination.len();
+                if m > 1 {
+                    for j in 0..(m-1) {
+                        let c0 = combination[j].to_owned();
+                        let f0 = match feature_names[c0].to_owned().split("➵").next() {
+                            Some(x) => x.to_owned(),
+                            None => feature_names[c0].to_owned(),
+                        };
+                        for k in (j+1)..m {
+                            let c1 = combination[k].to_owned();
+                            let f1 = match feature_names[c1].to_owned().split("➵").next() {
+                                Some(x) => x.to_owned(),
+                                None => feature_names[c1].to_owned(),
+                            };
+                            if c0 == c1 {
+                                continue 'combi; 
+                            }
+                            if f0 == f1 {
+                                continue 'combi; 
+                            }
+                        }
+                    }
+                }
+                for (j, k) in combination.into_iter().enumerate() {
+                    if j == 0 {
+                        ids.push(feature_names[k].to_owned())
+                    } else {
+                        let idx = ids.len()-1;
+                        ids[idx] = format!("{}▓{}", ids[ids.len()-1], feature_names[k])
+                    };
+                    // println!("ids[idx]={}", ids[idx]);
+                }
+            }
+        }
+        let p = ids.len();
+        let marginals  = Marginals {
+            ids,
+            effects: vec![f32::NAN; p],
+        };
+        Ok(marginals)
+    }
+
+    pub fn check_dimensions(&self) -> Result<(), MarginalError> {
+        if self.ids.len() != self.effects.len() {
+            return Err(MarginalError::DimensionMismatch(format!(
+                "Number of ids ({}) does not match number of effects ({}).",
+                self.ids.len(), self.effects.len()
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn estimate_effects(self: &mut Self, network_orig: &mut Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
+
+        self.check_dimensions()?;
+
+        // Find the range of values for each input node
+        // println!("number of activation layers: {}", network_orig.activations_per_layer.len());
+        // println!("input_layer: {}", network_orig.activations_per_layer[0]);
+
+        let n: usize = network_orig.activations_per_layer[0].n_cols;
+        let p: usize = network_orig.activations_per_layer[0].n_rows;
+
+        // let mut minima: Vec<f32> = vec![f32::NAN; p];
+        // let mut maxima: Vec<f32> = vec![f32::NAN; p];
+        let input_matrix_orig = network_orig.activations_per_layer[0].to_host()?;
+        // let mut input_matrix = input_matrix_orig.clone();
+        // let stream = network_orig.activations_per_layer[0].data.context().default_stream();
+        
+        let mut feature_names: Vec<String> = vec![];
+        for i in 0..self.ids.len() {
+            let id = self.ids[i].to_owned();
+            let id_split = id.split("▓").into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+            if id_split.len() == 1 {
+                feature_names.push(id);
+            }
+        }
+        // Emit custom MarginalError here
+        if p != feature_names.len() {
+            return Err(Box::new(MarginalError::DimensionMismatch(format!("The Network has {} features but the Marginals struct has {} features (i.e. {:?}).", p, feature_names.len(),feature_names))));
+        }
+        // Define the ranges for each of the features
+        let mut ranges: Vec<Vec<f32>> = vec![];
+        for j in 0..p {
+            let ini: usize = j * n;
+            let fin: usize = (j + 1) * n;
+            let old_values = match input_matrix_orig.get(ini..fin) {
+                Some(x) => x.to_owned(),
+                None => return Err(Box::new(MarginalError::DimensionMismatch(format!("Inappropriate slicing index from {} to {}.", ini, fin)))),
+            };
+            // println!("old_values[0]={}, old_values[1]={}, old_values[2]={}, old_values[3]={}", old_values[0], old_values[1], old_values[2], old_values[3]);
+            let min = match old_values.iter().filter(|&a| !a.is_nan()).min_by(|&a, &b| a.total_cmp(b)) {
+                Some(&a) => a,
+                None => f32::NAN,
+            };
+            let max = match old_values.iter().filter(|&a| !a.is_nan()).max_by(|&a, &b| a.total_cmp(b)) {
+                Some(&a) => a,
+                None => f32::NAN,
+            };
+            let step_size = (max - min) / ((m-1) as f32);
+            let new_values_to_iterate: Vec<f32> = (0..m).map(|x| min+(step_size*(x as f32))).collect();
+            ranges.push(new_values_to_iterate);
+        }
+        // println!("ranges: {:?}", ranges);
+        
+
+        // let start_time = Instant::now();
+        // let progress_width: usize = 50;
+        // let counter = Arc::new(atomic::AtomicUsize::new(0));
+        let pb = Arc::new(Mutex::new(ProgressBar::new(self.ids.len(), 50, format!("Estimating {} marginal effects", self.ids.len()))));
+        let effects: Mutex<Vec<f32>> = Mutex::new(vec![f32::NAN; self.ids.len()]);
+        self.ids
+            .par_iter()
+            .enumerate()
+            .for_each(|(i, id)| {
+        // let ids = self.ids.clone();
+        // for (i, id) in ids.into_iter().enumerate() {
+            if verbose {
+                // Atomically increment counter
+                // let x = counter.load(atomic::Ordering::Relaxed);
+                // let perc: f64 = (((progress_width * 100 * (x+1)) as f64)/(self.ids.len() as f64)).round() / (progress_width as f64);
+                // let n_progress: usize = (((progress_width * (x+1)) as f64) / (self.ids.len() as f64)).round() as usize;
+                // let progress_text: String = (0..n_progress).map(|_| "█").collect();
+                // let no_progress_text: String = (0..(progress_width-n_progress)).map(|_| " ").collect();
+                // let t_remaining: f64 = {
+                //     let dp: f64 = n_progress as f64;
+                //     let dt: f64 = start_time.elapsed().as_millis() as f64 / 60_000.0;
+                //     let v: f64 = dp/dt;
+                //     let t_total: f64 = (progress_width as f64) / v;
+                //     t_total - dt
+                // };
+                // print!("\rEstimating {} marginal effects | {:.2}% | {}{} | {:.2} minutes remaining | ", self.ids.len(), perc, progress_text, no_progress_text, t_remaining);
+                // io::stdout().flush().expect("Failed to flush stdout");
+                // counter.fetch_add(1, atomic::Ordering::Relaxed);
+                pb.lock().unwrap().next();
+            }
+            // let id = self.ids[i].to_owned();
+            let id_split = id.split("▓").into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+            // Find the index of the feature name for each id which may contain a single or a combination of 2 or more feature names
+            let mut idx_split: Vec<usize> = vec![];
+            for j in 0..id_split.len() {
+                let x = id_split[j].to_owned();
+                let y = feature_names
+                    .iter()
+                    .enumerate()
+                    .filter(move |&(_j, z)| &x == z)
+                    .map(|(k, _)| k)
+                    .collect::<Vec<usize>>();
+                if y.len() != 1 {
+                    // return Err(Box::new(MarginalError::NameMismatch(format!("Unrecognised feature name: `{}`", id_split[j].to_owned()))))
+                    eprintln!("Unrecognised feature name: `{}`", id_split[j].to_owned());
+                }
+                idx_split.push(y[0]);
+            }
+            ////////////////////////////////////////
+            ////////////////////////////////////////
+            // Estimate up to higher order marginal effects
+            //  where we simplistically assume increase in interaction effects to be along the same order for now
+            ////////////////////////////////////////
+            ////////////////////////////////////////
+            let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
+            let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
+            let mut network = network_orig.clone();
+            let mut input_matrix = input_matrix_orig.clone();
+            let stream = network.activations_per_layer[0].data.context().default_stream();
+            // For each value in the new x-range we predict
+            for j in 0..m {
+                // First we need to define the new x-values for all the features
+                for idx in idx_split.clone() {
+                    let x_j = ranges[idx][j];
+                    let ini: usize = idx * n;
+                    for k in 0..n {
+                        input_matrix[ini+k] = x_j;
+                        x[(j*n)+k] = if x[(j*n)+k].is_nan() {
+                            x_j as f64
+                        } else {
+                            x[(j*n)+k] * (x_j as f64)
+                        };
+                    }
+                }
+                // Predict at the current x-values combination
+                // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
+                network.activations_per_layer[0].data = match stream.clone_htod(&input_matrix) {
+                    Ok(x) => x,
+                    Err(_) => return eprintln!("Error cloning input matrix into the first layer of the activations.")
+                };
+                // network.predict()?;
+                match network.predict() {
+                    Ok(_) => (),
+                    Err(_) => return eprintln!("Error in prediction.")
+                };
+                // let predictions = network.predictions.to_host()?;
+                let predictions = match network.predictions.to_host() {
+                    Ok(x) => x,
+                    Err(_) => return eprintln!("Error extracting the predictions.")
+                };
+                for k in 0..n {
+                    y[(j*n)+k] = predictions[k] as f64;
+                }
+                // Reset input_matrix
+                for idx in idx_split.clone() {
+                    let ini: usize = idx * n;
+                    for k in 0..n {
+                        input_matrix[ini+k] = input_matrix_orig[ini+k];
+                    }
+                }
+            }
+            // println!("x = {:?}", x);
+            // println!("y = {:?}", y);
+            let b: f64 = {
+                let epsilon: f64 = 1e-7;
+                let n: f64 = x.len() as f64;
+                let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
+                let u_y: f64 = y.iter().fold(0.0, |sum, x| sum + x) / n;
+                let cov_xy: f64 = x
+                    .iter()
+                    .zip(y.iter())
+                    .fold(0.0, |a, (x, y)| a + (x - u_x) * (y - u_y));
+                let var_x: f64 = x
+                    .iter()
+                    .fold(0.0, |a, x| a + (x - u_x).powi(2));
+                cov_xy / (var_x + epsilon)
+            };
+            // self.effects[i] = b as f32;
+            // Lock the mutexes to get access
+            let mut locked_effects = effects.lock().unwrap();
+            // Replace the ith element safely
+            if let Some(x) = locked_effects.get_mut(i) {
+                *x = b as f32;
+            }
+            // println!("Higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
+            // // Reset the network to previous state
+            // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
+            // network.predict()?;
+        });
+        // }
+        self.effects = effects.into_inner().unwrap();
+        if verbose {
+            // let progress_text: String = (0..progress_width).map(|_| "█").collect();
+            // print!("\rEstimating {} marginal effects | 100.00% | {} |", self.ids.len(), progress_text);
+            // io::stdout().flush().expect("Failed to flush stdout");
+            // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
+            pb.lock().unwrap().finish();
+
+        }
+        // // Reset the network to previous state
+        // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
+        // network.predict()?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::io::Data;
+    use crate::optimisers::OptimisationParameters;
+    #[test]
+    fn test_marginal() -> Result<(), Box<dyn Error>> {
+ 
+        let feature_names: Vec<String> = vec!["feature_0".to_owned(), "feature_1".to_owned(),"feature_A".to_owned(),"feature_B".to_owned()];
+        let marginals_order_1 = Marginals::new(feature_names.clone(), 1)?;
+        println!("marginals_order_1: {:?}", marginals_order_1);
+        let marginals_order_2 = Marginals::new(feature_names.clone(), 2)?;
+        println!("marginals_order_2: {:?}", marginals_order_2);
+        let marginals_order_3 = Marginals::new(feature_names.clone(), 3)?;
+        println!("marginals_order_3: {:?}", marginals_order_3);
+ 
+        let n: usize = 50; // number of observations
+        let p: usize = 7; // number of input features
+        let k: usize = 1; // number of output features
+        let n_hidden_layers: usize = 2;
+        // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
+        // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
+        let data = Data::simulate(n, p, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let mut optimisation_parameters = OptimisationParameters::new(&network)?;
+        network.train(&mut optimisation_parameters, true)?;
+        
+        // Order: 1
+        let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;
+        let number_of_values_for_interpolate_between_min_and_max: usize = 10;
+        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        println!("Order 1 marginals: {:?}", marginals);
+        assert_eq!(marginals.ids, vec!["feature_0", "feature_1", "feature_2", "feature_3", "feature_4", "feature_5", "feature_6"]);
+        assert_eq!(marginals.effects, vec![-0.0018198125, 0.0016437222, 0.006603645, 0.00040480707, 0.0055924207, 0.005106901, 0.0018019312]);
+        
+        // Order: 2
+        let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
+        let number_of_values_for_interpolate_between_min_and_max: usize = 10;
+        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        println!("Order 2 marginals: {:?}", marginals);
+        assert_eq!(marginals.ids.len(), 28);
+
+        // Order: 3
+        let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
+        let number_of_values_for_interpolate_between_min_and_max: usize = 10;
+        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        println!("Order 3 marginals: {:?}", marginals);
+        assert_eq!(marginals.ids.len(), 63);
+
+        // Clean-up
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+                std::fs::remove_file(&f)?;
+            }
+        }
+
+        Ok(())
+    }
+}

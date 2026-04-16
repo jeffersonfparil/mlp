@@ -1,8 +1,6 @@
 use crate::linalg::matrix::Matrix;
 use cudarc::driver::safe::{CudaFunction, LaunchArgs};
 use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
-use cudarc::nvrtc::compile_ptx;
-use cudarc::nvrtc::safe::Ptx;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -33,12 +31,7 @@ const CLAMP: &str = "
 
 impl Matrix {
     pub fn clamp(self: &Self, lower: f32, upper: f32) -> Result<Self, Box<dyn Error>> {
-        let ptx: Ptx = compile_ptx(CLAMP)?;
-        let f: CudaFunction = self
-            .data
-            .context()
-            .load_module(ptx)?
-            .load_function("cuElementwiseClamp")?;
+        let f: CudaFunction = self.get_cached_kernel("cuElementwiseClamp", CLAMP)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
         let n_rows: u32 = self.n_rows as u32;

@@ -1,12 +1,10 @@
 use crate::activations::Activation;
 use crate::costs::Cost;
-use crate::linalg::matrix::Matrix;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser};
+use crate::progress_bar::ProgressBar;
 use chrono::Utc;
-use cudarc::driver::CudaSlice;
 use rand::prelude::*;
-use rand::rng;
 use rand_chacha::ChaCha12Rng;
 use rayon::prelude::*;
 use ruviz::core::{Plot, PlottingError};
@@ -17,8 +15,7 @@ use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
-
-const FRAC_VALIDATION: f32 = 0.5;
+use std::cmp::Ordering;
 
 #[derive(Debug, PartialEq)]
 enum TrainingError {
@@ -230,65 +227,92 @@ impl Network {
         Ok(col_indexes_per_batch)
     }
 
-    pub fn predict(self: &mut Self) -> Result<(), Box<dyn Error>> {
-        // Different from forwardpass in that it does not apply dropout.
-        let n = self.n_hidden_layers;
-        for i in 0..n {
-            let weights_x_activations =
-                self.weights_per_layer[i].matmul(&self.activations_per_layer[i])?;
-            self.weights_x_biases_per_layer[i] =
-                weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
-            self.activations_per_layer[i + 1] = self
-                .activation
-                .activate(&self.weights_x_biases_per_layer[i])?;
-        }
-        let weights_x_dropout = self.weights_per_layer[n].matmul(&self.activations_per_layer[n])?;
-        self.weights_x_biases_per_layer[n] =
-            weights_x_dropout.rowmatadd(&self.biases_per_layer[n])?;
-        self.predictions = self.weights_x_biases_per_layer[n].clone();
-        Ok(())
-    }
-
     pub fn train_per_batch(
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
+        n_batches: &str,
     ) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
         let mut epochs: Vec<f64> = Vec::new();
         let mut costs: Vec<f64> = Vec::new();
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
-        let n: usize = self.targets.n_cols;
-        let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
-            1
-        } else {
-            (n as f32 * FRAC_VALIDATION).floor() as usize
-        };
-        let mut rng = rng();
-        let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
-        let training_indexes: Vec<usize> = (0..n)
-            .filter(|&x| !validation_indexes.contains(&x))
-            .collect();
-        let mut network_validation = self.slice(&validation_indexes)?;
-        let mut network_training = self.slice(&training_indexes)?;
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // // With cross-validation
+        // const FRAC_VALIDATION: f32 = 0.05;
+        // let n: usize = self.targets.n_cols;
+        // let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
+        //     3
+        // } else {
+        //     (n as f32 * FRAC_VALIDATION).floor() as usize
+        // };
+        // let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
+        // let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
+        // let training_indexes: Vec<usize> = (0..n)
+        //     .filter(|&x| !validation_indexes.contains(&x))
+        //     .collect();
+        // let mut network_validation = self.slice(&validation_indexes)?;
+        // let mut network_training = self.slice(&training_indexes)?;
+        // for epoch in 0..optimisation_parameters.n_epochs {
+        //     network_training.forwardpass()?;
+        //     network_training.backpropagation()?;
+        //     network_training.optimise(optimisation_parameters)?;
+        //     network_training.predict()?;
+        //     epochs.push(epoch as f64);
+        //     // Validate
+        //     network_validation.replace_model(&network_training)?;
+        //     network_validation.predict()?;
+        //     costs.push(network_validation.loss()? as f64);
+        //     // Update the network after training the training network
+        //     self.replace_model(&network_training)?;
+        //     // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
+        //     if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
+        //         // println!("Early stopping at epoch {}", epoch);
+        //         break;
+        //     }
+        // }
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // ///////////////////////////////////////////////////////////////////////////////
+        // No cross-validation
+        // let start_time = Instant::now();
+        // let progress_width: usize = 50;
+        let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches", n_batches));
         for epoch in 0..optimisation_parameters.n_epochs {
-            network_training.forwardpass()?;
-            network_training.backpropagation()?;
-            network_training.optimise(optimisation_parameters)?;
-            network_training.predict()?;
+            // let perc: f64 = (((progress_width * 100 * (epoch+1)) as f64)/(optimisation_parameters.n_epochs as f64)).round() / (progress_width as f64);
+            // let n_progress: usize = (((progress_width * (epoch+1)) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
+            // let progress_text: String = (0..n_progress).map(|_| "█").collect();
+            // let no_progress_text: String = (0..(progress_width-n_progress)).map(|_| " ").collect();
+            // let t_remaining: f64 = {
+            //     let dp: f64 = n_progress as f64;
+            //     let dt: f64 = start_time.elapsed().as_millis() as f64 / 60_000.0;
+            //     let v: f64 = dp/dt;
+            //     let t_total: f64 = (progress_width as f64) / v;
+            //     t_total - dt
+            // };
+            // print!("\rTraining {} batches | {:.2}% | {}{} | {:.2} minutes remaining | ", n_batches, perc, progress_text, no_progress_text, t_remaining);
+            // io::stdout().flush().expect("Failed to flush stdout");
+            pb.next();
+            self.forwardpass()?;
+            self.backpropagation()?;
+            self.optimise(optimisation_parameters)?;
+            self.predict()?;
             epochs.push(epoch as f64);
-            // Validate
-            network_validation.replace_model(&network_training)?;
-            network_validation.predict()?;
-            costs.push(network_validation.loss()? as f64);
-            // Update the network after training the training network
-            self.replace_model(&network_training)?;
+            costs.push(self.loss()? as f64);
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
                 // println!("Early stopping at epoch {}", epoch);
                 break;
             }
         }
+        // let progress_text: String = (0..progress_width).map(|_| "█").collect();
+        // print!("\rTraining {} batches | 100.00% | {} |", n_batches, progress_text);
+        // io::stdout().flush().expect("Failed to flush stdout");
+        // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
+        pb.finish();
+        self.predict()?;
         Ok((epochs, costs))
     }
 
@@ -308,91 +332,75 @@ impl Network {
                 "Number of batches must be greater than zero.".to_string(),
             )));
         }
-        let stream = self.targets.data.context().default_stream();
-        let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = if optimisation_parameters.n_batches
-            == 1
-        {
-            // Only one batch, train on the whole dataset
-            let mut params = optimisation_parameters.clone();
-            let (epochs, costs) = self.train_per_batch(&mut params)?;
-            (vec![epochs], vec![costs])
-        } else {
-            // Multiple batches, split the dataset then average the parameters after training on each batch
-            let col_indexes_per_batch: Vec<Vec<usize>> =
-                self.shufflesplit(optimisation_parameters.n_batches)?;
-            let mut networks_per_batch: Vec<Network> =
-                Vec::with_capacity(optimisation_parameters.n_batches);
-            for col_indexes in col_indexes_per_batch {
-                // indexes for each batch, i.e. for observations
-                let network = self.slice(&col_indexes)?;
-                networks_per_batch.push(network);
-            }
-            let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-            let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-            networks_per_batch
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(i, network)| {
-                    if verbose {
-                        println!(
-                            "Training on batch {} with {} observations.",
-                            i, network.targets.n_cols
-                        );
-                    }
-                    let mut params = optimisation_parameters.clone();
-                    let result = network.train_per_batch(&mut params);
-                    match result {
-                        Ok((epochs_batch, costs_batch)) => {
-                            epochs.lock().unwrap().push(epochs_batch);
-                            costs.lock().unwrap().push(costs_batch);
-                        }
-                        Err(e) => {
-                            // Skip the batch
-                            eprintln!("Error training on batch {}: {}", i, e);
-                        }
-                    }
-                });
-            // Merge the parameters from each batch network back into the original network via simple averaging with a better method
-            for i in 0..self.n_hidden_layers + 1 {
-                let zeros_weights_host: Vec<f32> =
-                    vec![0.0; self.weights_per_layer[i].n_rows * self.weights_per_layer[i].n_cols];
-                let zeros_biases_host: Vec<f32> =
-                    vec![0.0; self.biases_per_layer[i].n_rows * self.biases_per_layer[i].n_cols];
-                let zeros_weights_dev: CudaSlice<f32> = stream.clone_htod(&zeros_weights_host)?;
-                let zeros_biases_dev: CudaSlice<f32> = stream.clone_htod(&zeros_biases_host)?;
-                let mut summed_weights = Matrix::new(
-                    zeros_weights_dev,
-                    self.weights_per_layer[i].n_rows,
-                    self.weights_per_layer[i].n_cols,
-                )?;
-                let mut summed_biases = Matrix::new(
-                    zeros_biases_dev,
-                    self.biases_per_layer[i].n_rows,
-                    self.biases_per_layer[i].n_cols,
-                )?;
-                for network in &networks_per_batch {
-                    summed_weights =
-                        summed_weights.elementwisematadd(&network.weights_per_layer[i])?;
-                    summed_biases =
-                        summed_biases.elementwisematadd(&network.biases_per_layer[i])?;
+        let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) =
+            if optimisation_parameters.n_batches == 1 {
+                // Only one batch, train on the whole dataset
+                let mut params = optimisation_parameters.clone();
+                let (epochs, costs) = self.train_per_batch(&mut params, "1")?;
+                // self.predict()?;
+                (vec![epochs], vec![costs])
+            } else {
+                // Multiple batches, split the dataset then average the parameters after training on each batch
+                let col_indexes_per_batch: Vec<Vec<usize>> =
+                    self.shufflesplit(optimisation_parameters.n_batches)?;
+                let mut networks_per_batch: Vec<Network> =
+                    Vec::with_capacity(optimisation_parameters.n_batches);
+                for col_indexes in col_indexes_per_batch {
+                    // indexes for each batch, i.e. for observations
+                    let network: Network = self.slice(&col_indexes)?;
+                    networks_per_batch.push(network);
                 }
-                self.weights_per_layer[i] =
-                    summed_weights.scalarmatmul(1.00 / networks_per_batch.len() as f32)?;
-                self.biases_per_layer[i] =
-                    summed_biases.scalarmatmul(1.00 / networks_per_batch.len() as f32)?;
-            }
-            // Update predictions using the merged parameters
-            self.predict()?;
-            self.backpropagation()?; // to fill-up the gradients
-                                     // Return epochs, costs
-            (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
-        };
+                // let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                // let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+                let n = networks_per_batch.len();
+                let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
+                let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
+                networks_per_batch
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, network)| {
+                        if verbose {
+                            println!(
+                                "Training on batch {} with {} observations.",
+                                i, network.targets.n_cols
+                            );
+                        }
+                        let mut params = optimisation_parameters.clone();
+                        let result = network.train_per_batch(&mut params, &format!("{}", n));
+                        match result {
+                            Ok((epochs_batch, costs_batch)) => {
+                                // epochs.lock().unwrap().push(epochs_batch);
+                                // costs.lock().unwrap().push(costs_batch);
+                                // Lock the mutexes to get access
+                                let mut locked_epochs = epochs.lock().unwrap();
+                                let mut locked_costs = costs.lock().unwrap();
+                                // Replace the ith element safely
+                                if let Some(x) = locked_epochs.get_mut(i) {
+                                    *x = epochs_batch;
+                                }
+                                if let Some(x) = locked_costs.get_mut(i) {
+                                    *x = costs_batch;
+                                }
+                            }
+                            Err(e) => {
+                                // Skip the batch
+                                eprintln!("Error training on batch {}: {}", i+1, e);
+                            }
+                        }
+                    });
+                // Merge the parameters from each batch network back into the original network via simple averaging with a better method
+                self.average_weights_biases(&networks_per_batch)?;
+                // Return epochs, costs
+                (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
+            };
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {
-            // Plot loss curve
+            ///////////////////////////////////////////////
+            // Plot filenames
+            ///////////////////////////////////////////////
             let dir: PathBuf = current_dir()?;
-            let fname_svg = &format!(
+            let fname_loss_svg = &format!(
                 "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
                 dir.display(),
                 self.n_hidden_layers,
@@ -404,31 +412,102 @@ impl Network {
                 optimisation_parameters.learning_rate,
                 Utc::now().format("%Y%m%d%H%M%S")
             );
+            let fname_scatter_svg = &fname_loss_svg.replace("Loss_curve-", "Observed_vs_predicted-");
+            ///////////////////////////////////////////////
+            // Plot loss curve
+            ///////////////////////////////////////////////
             let mut ylabel = String::from("Cost");
             ylabel.push_str(&format!(
                 " ({:?}; {:?})",
                 self.cost, optimisation_parameters.optimiser
             ));
-            let mut plot_vec = vec![Plot::new()
-                .title("Training Cost over Epochs")
-                .legend_position(LegendPosition::Best)
-                .xlabel("Epochs")
-                .ylabel(&ylabel)
-                .line(&epochs[0], &costs[0])
-                .label("Batch 0")
-                .size(4.0, 3.0)];
+            let mut plot_loss = vec![
+                Plot::new()
+                    .title("Training Cost over Epochs")
+                    .legend_position(LegendPosition::Best)
+                    .xlabel("Epochs")
+                    .ylabel(&ylabel)
+                    .line(&epochs[0], &costs[0])
+                    .label("Batch 0")
+                    .size(4.0, 3.0),                
+            ];
             for i in 1..optimisation_parameters.n_batches {
-                plot_vec[0] = plot_vec[0]
+                plot_loss[0] = plot_loss[0]
                     .clone()
                     .line(&epochs[i], &costs[i])
-                    .label(&format!("Batch {}", i));
+                    .label(&format!("Batch {}", i+1));
             }
-            // plot_vec[0].clone().save(fname_png)?;
-            plot_vec[0].clone().export_svg(fname_svg)?;
+            ;
+            // plot_loss[0].clone().save(fname_png)?;
+            plot_loss[0].clone().export_svg(fname_loss_svg)?;
+            ///////////////////////////////////////////////
+            // Scatter plot of observed vs predicted values
+            ///////////////////////////////////////////////
+            let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
+            let y_predicted: Vec<f64> = self.predictions.to_host()?.iter().map(|&x| x as f64).collect();
+            // OLS
+            let epsilon: f64 = 1e-7;
+            let n: f64 = y_observed.len() as f64;
+            let u_observed: f64 = y_observed.iter().fold(0.0, |sum, x| sum + x) / n;
+            let u_predicted: f64 = y_predicted.iter().fold(0.0, |sum, x| sum + x) / n;
+            let cov_xy: f64 = y_observed
+                .iter()
+                .zip(y_predicted.iter())
+                .fold(0.0, |a, (x, y)| a + (x - u_observed) * (y - u_predicted));
+            let var_x: f64 = y_observed
+                .iter()
+                .fold(0.0, |a, x| a + (x - u_observed).powi(2));
+            let var_y: f64 = y_predicted
+                .iter()
+                .fold(0.0, |a, x| a + (x - u_predicted).powi(2));
+            let b: f64 = cov_xy / (var_x + epsilon);
+            let a: f64 = u_predicted - (b * u_observed);
+            let error2: f64 = y_predicted
+                .iter()
+                .zip(y_observed.iter())
+                .fold(0.0, |a, (y_p, y_t)| a + (y_p - y_t).powi(2));
+            let mse: f64 = error2 / n;
+            let r2: f64 = 1.00 - (error2 / (var_x + epsilon));
+            let cor: f64 = cov_xy / ((var_x.sqrt() * var_y.sqrt()) + epsilon);
+            let x_min: f64 = match y_observed
+                .iter()
+                .min_by(|a, b| {
+                    a.partial_cmp(b).unwrap_or(Ordering::Less)
+                }) {
+                    Some(x) => *x,
+                    None => y_observed[0],
+                };
+            let x_max: f64 = match y_observed
+                .iter()
+                .max_by(|a, b| {
+                    a.partial_cmp(b).unwrap_or(Ordering::Greater)
+                }) {
+                    Some(x) => *x,
+                    None => y_observed[0],
+                };
+            let mut x_for_plotting: Vec<f64> = Vec::with_capacity(100);
+            let mut y_for_plotting: Vec<f64> = Vec::with_capacity(100);
+            let step: f64 = (x_max - x_min) / 99.0;
+            for i in 0..100 {
+                let x: f64 = x_min + (i as f64 * step);
+                let y: f64 = a + x*b;
+                x_for_plotting.push(x);
+                y_for_plotting.push(y);
+            }
+            let title = format!("Observed vs Predicted Values\n(n={}; MSE={:.2}; R2={:.2}; cor={:.2})", n, mse, r2, cor);
+            Plot::new()
+                .title(title.as_str())
+                .xlabel("Observed")
+                .ylabel("Predicted")
+                .scatter(&y_observed, &y_predicted)
+                .line(&x_for_plotting, &y_for_plotting)
+                .export_svg(fname_scatter_svg)?;
+
             // Messages
             println!("===============================================");
             println!("Final cost after training: {}", final_cost_value);
-            println!("Find the loss curve saved as: {}", fname_svg);
+            println!("Find the loss curve saved as: {}", fname_loss_svg);
+            println!("Find the observed vs predicted scatterplot saved as: {}", fname_scatter_svg);
             println!("===============================================");
         }
         Ok(final_cost_value)
@@ -606,7 +685,10 @@ impl Network {
             println!("\t- Dropout Rate: {}", dropout_rate);
             println!("\t- Learning Rate: {}", learning_rate);
             println!("\t- Epochs: {}", n_epochs);
-            println!("\t- Patient Epochs: {}", f_patient_epochs);
+            println!(
+                "\t- Patient Epochs: {}",
+                (f_patient_epochs * n_epochs as f32).ceil() as usize
+            );
             println!("\t- Batches: {}", n_batches);
             println!("\t- Activation: {:?}", activation);
             println!("\t- Cost: {:?}", cost);
@@ -648,35 +730,17 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cudarc::driver::{CudaContext, CudaSlice};
+    use crate::io::Data;
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
-        let ctx = CudaContext::new(0)?;
-        let stream = ctx.default_stream();
         let n: usize = 12_345; // number of observations
-        let p: usize = 12; // number of input features
-        let k: usize = 2; // number of output features
+        let p: usize = 17; // number of input features
+        let k: usize = 1; // number of output features
         let n_hidden_layers: usize = 2;
-        let n_hidden_layer_nodes: usize = 5;
-        let mut input_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
-        let mut output_host: Vec<f32> = vec![0.0f32; k * n]; // k x n
-        rand::fill(&mut input_host[..]);
-        rand::fill(&mut output_host[..]);
-        let input_dev: CudaSlice<f32> = stream.clone_htod(&input_host)?;
-        let output_dev: CudaSlice<f32> = stream.clone_htod(&output_host)?;
-        let input_matrix = Matrix::new(input_dev, p, n)?; // p x n matrix
-        println!("input_matrix: {}", input_matrix);
-        let output_matrix = Matrix::new(output_dev, k, n)?; // k x n matrix
-        println!("output_matrix: {}", output_matrix);
-        let mut network: Network = Network::new(
-            &stream,
-            input_matrix,
-            output_matrix,
-            n_hidden_layers,
-            vec![n_hidden_layer_nodes; n_hidden_layers],
-            vec![0.0f32; n_hidden_layers],
-            42,
-        )?;
+        // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
+        // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
+        let data = Data::simulate(n, p, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         println!("Network:\n{}\n\n", network);
         println!("Optimisation Parameters:\n{}\n\n", optimisation_parameters);
@@ -684,9 +748,7 @@ mod tests {
         // optimisation_parameters.optimiser = Optimiser::GradientDescent;
         optimisation_parameters.optimiser = Optimiser::Adam;
         // optimisation_parameters.optimiser = Optimiser::AdamMax;
-
-        // Tests
-
+        // Test shufflesplit
         let indexes: Vec<Vec<usize>> = network.shufflesplit(5)?;
         // println!("indexes: {:?}", indexes);
         println!("Number of batches: {:?}", indexes.len());
@@ -704,37 +766,32 @@ mod tests {
         }
         println!("Total length: {:?}", total_len);
         assert!(total_len == network.targets.n_cols);
+        // Test train_per_batch
+        let cost_prior_to_training: f32 = network.loss()?;
+        println!("cost prior to training = {}", cost_prior_to_training);
+        println!("predictions before training: {}", network.targets);
+        network.train_per_batch(&mut optimisation_parameters, "1")?;
+        println!("cost after training = {}", network.loss()?);
+        println!("predictions after training: {}", network.targets);
+        assert!(cost_prior_to_training > network.loss()?);
 
-        let stream = network.targets.data.context().default_stream();
-        let mut a_host = vec![0.0f32; network.targets.n_rows * network.targets.n_cols];
-        stream.memcpy_dtoh(&network.targets.data, &mut a_host)?;
-        println!(
-            "targets: [{}, {}, {}, ..., {}]",
-            a_host[0],
-            a_host[1],
-            a_host[2],
-            a_host[a_host.len() - 1]
-        );
-
-        stream.memcpy_dtoh(&network.predictions.data, &mut a_host)?;
-        println!(
-            "predictions (before predict()): [{}, {}, {}, ..., {}]",
-            a_host[0],
-            a_host[1],
-            a_host[2],
-            a_host[a_host.len() - 1]
-        );
-        network.train_per_batch(&mut optimisation_parameters)?;
+        let mut network_epochs_5 = network.clone();
+        let mut network_epochs_200 = network.clone();
+        optimisation_parameters.n_batches = 1;
         optimisation_parameters.n_epochs = 5;
-        optimisation_parameters.n_batches = 2;
-        network.train(&mut optimisation_parameters, true)?;
+        network_epochs_5.train(&mut optimisation_parameters, true)?;
+        optimisation_parameters.n_epochs = 200;
+        network_epochs_200.train(&mut optimisation_parameters, true)?;
+        println!("cost after training for 5 epochs = {}", network_epochs_5.loss()?);
+        println!("cost after training for 200 epochs = {}", network_epochs_200.loss()?);
+        assert!(network_epochs_5.loss()? > network_epochs_200.loss()?);
 
         // Hyper-parameter optimisations
         let range_hidden_layers = Some((1, 2, 1));
         let range_hidden_layer_nodes = Some((5, 5, 5));
         let range_dropout_rate = Some((0.0, 0.0, 0.1));
         let range_learning_rate = Some((0.0001, 0.0001, 0.0001));
-        let range_n_epochs = Some((5, 10, 10));
+        let range_n_epochs = Some((1, 3, 1));
         let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
         let range_n_batches = Some((1, 2, 1));
         let selection_activations = Some(vec![Activation::ReLU]);
@@ -755,7 +812,13 @@ mod tests {
             verbose,
         )?;
         println!("network_hyper_optimised:\n{}", network_hyper_optimised);
-
+        // Clean-up
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+                std::fs::remove_file(&f)?;
+            }
+        }
         Ok(())
     }
 }

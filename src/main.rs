@@ -2,6 +2,7 @@ use chrono::Utc;
 use clap::Parser;
 use std::env::current_dir;
 use std::error::Error;
+use std::fs;
 
 mod activations;
 mod backward;
@@ -12,12 +13,15 @@ mod linalg;
 mod network;
 mod optimisers;
 mod train;
+mod marginal;
+mod progress_bar;
 
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::io::Data;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
+use crate::marginal::Marginals;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -188,6 +192,24 @@ struct Args {
     model: String,
 
     ////////////////////////////////////////////////////////////////////////////////
+    /// Marginal effects estimation only
+    #[arg(short = 'M', long, action)]
+    marginals: bool,
+    
+    // /// Marginal effects estimation: include interaction effects or high-order effects if number of of hidden layers > 1
+    // #[arg(long, action)]
+    // marginals_higher_order: bool,
+    
+    /// Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on
+    #[arg(long, default_value_t = 1)]
+    marginals_order: usize,
+    
+    /// Number of input values across the observed range per feature (or input node) to use in predictions
+    /// i.e. number of values for interpolate between minimum and maximum values observed in each feature or input node
+    #[arg(long, default_value_t = 10)]
+    n_interpolate_min_max: usize,
+
+    ////////////////////////////////////////////////////////////////////////////////
     /// Simulate data only
     #[arg(short = 's', long, action)]
     simulate_data_only: bool,
@@ -222,72 +244,7 @@ struct Args {
     simulation_weights_distribution_param_2: f64,
 }
 
-fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
-    let data_simulated = Data::simulate(
-        args.simulation_n_observations,
-        args.simulation_n_features,
-        args.simulation_n_output_columns,
-        args.simulation_n_hidden_layers,
-        &args.simulation_weights_distribution,
-        args.simulation_weights_distribution_param_1,
-        args.simulation_weights_distribution_param_2,
-        args.seed,
-    )?;
-    let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
-    data_simulated.write_delimited(&fname_simulated, "\t")?;
-    println!(
-        "Please find simulated data: `{}/{}`",
-        current_dir()?.display(),
-        fname_simulated
-    );
-    return Ok(());
-}
-
-fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
-    let fname = match &args.fname {
-        Some(x) => x.to_owned(),
-        None => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Please provide the input data for prediction.",
-            )));
-        }
-    };
-    let model = match args.model.as_ref() {
-        "missing-model.json" => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Please provide the trained model for prediction (Note that the filename should never be `missing-model.json`).",
-            )));
-        }
-        x => x,
-    };
-    let mut network = Network::read_input_and_model(
-        &fname,
-        &args.delim,
-        &args.column_indices_of_targets,
-        &model,
-    )?;
-    // Predict
-    network.predict()?;
-    // Save the updated network containing the fitted weights and biases, targets from the input data, and predictions using the fitted weights and biases
-    let fname_network_output = match &args.fname_network_output {
-        Some(x) => x.to_owned(),
-        None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
-    };
-    network.save_network(&fname_network_output)?;
-    // File name of the updated network containing the fitted weights and biases, targets from the input data, and predictions using the fitted weights and biases
-    println!("Please find the output model (network)");
-    println!("\tcontaining the fitted weights and biases, targets from the input data, and");
-    println!(
-        "\tpredictions using the fitted weights and biases in json format:\n\t ==> {}/{}",
-        current_dir()?.display(),
-        fname_network_output
-    );
-    return Ok(());
-}
-
-fn prepare_network_for_training(args: &Args) -> Result<Network, Box<dyn Error>> {
+fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
     let fname = match &args.fname {
         Some(x) => x.to_owned(),
         None => {
@@ -308,19 +265,194 @@ fn prepare_network_for_training(args: &Args) -> Result<Network, Box<dyn Error>> 
             fname_simulated
         }
     };
-    let data = Data::read_delimited(&fname, &args.delim, &args.column_indices_of_targets)?;
+    Data::read_delimited(&fname, &args.delim, &args.column_indices_of_targets)
+}
+
+fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> {
+    // Simplifying the number of nodes and dropout rates is a single value was entered or left at default
+    let n_hidden_layers: usize = args.n_hidden_layers;
+    let n_hidden_nodes: Vec<usize> = if (n_hidden_layers > 1) & (args.n_hidden_nodes.len() == 1) {
+        vec![args.n_hidden_nodes[0]; n_hidden_layers]
+    } else {
+        args.n_hidden_nodes.clone()
+    };
+    let dropout_rates: Vec<f32> = if (n_hidden_layers > 1) & (args.dropout_rates.len() == 1) {
+        vec![args.dropout_rates[0]; n_hidden_layers]
+    } else {
+        args.dropout_rates.clone()
+    };
+    // Return the network with the input data
     data.init_network(
-        args.n_hidden_layers,
-        args.n_hidden_nodes.clone(),
-        args.dropout_rates.clone(),
+        n_hidden_layers,
+        n_hidden_nodes,
+        dropout_rates,
         args.seed,
     )
+}
+
+fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
+    let data_simulated = Data::simulate(
+        args.simulation_n_observations,
+        args.simulation_n_features,
+        args.simulation_n_output_columns,
+        args.simulation_n_hidden_layers,
+        &args.simulation_weights_distribution,
+        args.simulation_weights_distribution_param_1,
+        args.simulation_weights_distribution_param_2,
+        args.seed,
+    )?;
+    let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
+    data_simulated.write_delimited(&fname_simulated, "\t")?;
+    println!(
+        "Please find simulated data: `{}/{}`",
+        current_dir()?.display(),
+        fname_simulated
+    );
+    Ok(())
+}
+
+fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
+    match &args.fname {
+        Some(_) => (),
+        None => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Please provide the input data for prediction.",
+            )));
+        }
+    };
+    match args.model.as_ref() {
+        "missing-model.json" => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Please provide the trained model for prediction (Note that the filename should never be `missing-model.json`).",
+            )));
+        }
+        _ => (),
+    };
+    let fname_predictions = args.model.replace(".json", "-predictions.tsv");
+    match fs::File::create_new(&fname_predictions) {
+        Ok(_) => {std::fs::remove_file(&fname_predictions)?},
+        Err(_) => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Predictions file '{}' exists!", fname_predictions)))),
+    }
+    // Prepare the network
+    // Load input data
+    let data = read_data(&args)?;
+    let network_fitted = Network::read_network(&args.model)?;
+    // Initialise the network containing the input data and fitted model
+    let mut network = data.init_network(
+        network_fitted.n_hidden_layers,
+        network_fitted.n_hidden_nodes.clone(),
+        network_fitted.dropout_rates.clone(),
+        network_fitted.seed,
+    )?;
+    network.replace_model(&network_fitted)?;
+    // Predict
+    network.predict()?;
+    // Define the output Data struct containing the prediction
+    let n = data.features.n_cols;
+    let p = data.features.n_rows;
+    let k = data.targets.n_rows + network.predictions.n_rows;
+    // println!("n={}; p={}; k={}; data.targets.n_rows={}; network.predictions.n_rows={}", n, p, k, data.targets.n_rows, network.predictions.n_rows);
+    let mut predictions = Data::new(n, p, k)?;
+    predictions.feature_names = data.feature_names.clone();
+    predictions.features = data.features.clone();
+    predictions.target_names = {
+        let mut target_names: Vec<String> = vec!["".to_owned(); k];
+        for i in 0..data.targets.n_rows {
+            target_names[i] = format!("predict-{}", data.target_names[i]);
+        }
+        for i in 0..data.targets.n_rows {
+            target_names[data.targets.n_rows + i] = data.target_names[i].to_owned();
+        }
+        target_names
+    };
+    predictions.targets.data = {
+        let y_pred = network.predictions.to_host()?;
+        let y_true = data.targets.to_host()?;
+        let mut source = vec![f32::NAN; k*n];
+        for i in 0..y_pred.len() {
+            source[i] = y_pred[i];
+        }
+        for i in 0..y_true.len() {
+            source[y_pred.len() + i] = y_true[i];
+        }
+        let stream = data.targets.data.context().default_stream();
+        stream.clone_htod(&source)?
+    };    
+    predictions.write_delimited(&fname_predictions, "\t")?;
+    println!(
+        "Please find the predictions in tab-delimited format: {}/{}",
+        current_dir()?.display(),
+        fname_predictions
+    );
+    Ok(())
+}
+
+fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
+    match &args.fname {
+        Some(_) => (),
+        None => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Please provide the input data used in training the model because it is needed to instantiate the marginal effects ids.",
+            )));
+        }
+    };
+    match args.model.as_ref() {
+        "missing-model.json" => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Please provide the trained model for marginal effects estimation (Note that the filename should never be `missing-model.json`).",
+            )));
+        }
+        _ => (),
+    };
+    match args.marginals_order < 1 {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Maximum interaction effects level/order cannot be less than 1.",
+            )));
+        },
+        false => (),
+    };
+    let fname_marginals = args.model.replace(".json", "-marginal_effects.tsv");
+    match fs::File::create_new(&fname_marginals) {
+        Ok(_) => {std::fs::remove_file(&fname_marginals)?},
+        Err(_) => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Marginal effects file '{}' exists!", fname_marginals)))),
+    }
+    // Load the data including targets and features
+    let data = read_data(&args)?;
+    match args.marginals_order > data.feature_names.len() {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Maximum interaction effects level/order greater than the number of features ({}).", data.feature_names.len()),
+            )));
+        },
+        false => (),
+    };
+    // Prepare the network
+    let mut network = Network::read_network(&args.model)?;
+    // println!("network after saving and reloading: {}", network);
+    // Extract the marginal effects and save
+    // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
+    let mut marginals = Marginals::new(data.feature_names.clone(), args.marginals_order)?;
+    marginals.estimate_effects(&mut network, args.n_interpolate_min_max, args.verbose)?;
+    marginals.write_delimited(&fname_marginals, "\t")?;
+    println!(
+        "Please find the estimated marginal effects in tab-delimited format: {}/{}",
+        current_dir()?.display(),
+        fname_marginals
+    );
+    Ok(())
 }
 
 fn train_with_hyperparameter_optimisation(
     args: &Args,
     network: &mut Network,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     let range_hidden_layers = match args.range_hidden_layers.len() != 3 {
         true => {
             return Err(Box::new(OptimiserError::OptimisationParameterError(
@@ -486,13 +618,13 @@ fn train_with_hyperparameter_optimisation(
         current_dir()?.display(),
         fname_network_output
     );
-    Ok(())
+    Ok(fname_network_output)
 }
 
 fn train_with_fixed_hyperparameters(
     args: &Args,
     network: &mut Network,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     network.activation = match args.activation.as_ref() {
         "ReLU" => Activation::ReLU,
         "Sigmoid" => Activation::Sigmoid,
@@ -532,6 +664,48 @@ fn train_with_fixed_hyperparameters(
         current_dir()?.display(),
         fname_network_output
     );
+    Ok(fname_network_output)
+}
+
+fn marginals_after_training(
+    args: &Args,
+    data: &Data,
+    network: &mut Network,
+    fname_network_output: String
+) -> Result<(), Box<dyn Error>> {
+    let fname_marginals = fname_network_output.replace(".json", "-marginal_effects.tsv");
+    match fs::File::create_new(&fname_marginals) {
+        Ok(_) => {std::fs::remove_file(&fname_marginals)?},
+        Err(_) => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Marginal effects file '{}' exists!", fname_marginals)))),
+    }
+    match args.marginals_order < 1 {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Maximum interaction effects level/order cannot be less than 1.",
+            )));
+        },
+        false => (),
+    };
+    match args.marginals_order > data.feature_names.len() {
+        true => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Maximum interaction effects level/order greater than the number of features ({}).", data.feature_names.len()),
+            )));
+        },
+        false => (),
+    };
+    // Extract the marginal effects and save
+    // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
+    let mut marginals = Marginals::new(data.feature_names.clone(), args.marginals_order)?;
+    marginals.estimate_effects(network, args.n_interpolate_min_max, args.verbose)?;
+    marginals.write_delimited(&fname_marginals, "\t")?;
+    println!(
+        "Please find the estimated marginal effects in tab-delimited format: {}/{}",
+        current_dir()?.display(),
+        fname_marginals
+    );
     Ok(())
 }
 
@@ -540,20 +714,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     // Simulate data only
     if args.simulate_data_only {
-        return simulate_only(&args);
+        return simulate_only(&args)
     }
     // Predict only (using pre-trained model, i.e. in json format)
     if args.predict {
-        return predict_only(&args);
+        return predict_only(&args)
     }
-    // Load the data including targets and features and output the network for training
-    let mut network = prepare_network_for_training(&args)?;
-    // Network training
-    if args.hyperparameter_optimisation {
+    // Marginal effects estimation only (using pre-trained model, i.e. in json format)
+    if args.marginals {
+        return marginals_only(&args)
+    }
+    // Load the data including targets and features
+    let data = read_data(&args)?;
+    // Prepare the network
+    let mut network = prepare_network(&args, &data)?; 
+    // Network training and save
+    let fname_network_output: String = if args.hyperparameter_optimisation {
         // Perform hyperparameter optimisation then use the best hyperparameters to train the network
-        return train_with_hyperparameter_optimisation(&args, &mut network);
+        train_with_hyperparameter_optimisation(&args, &mut network)?
     } else {
         // Train the network using the supplied and/or default hyperparameters
-        return train_with_fixed_hyperparameters(&args, &mut network);
-    }
+        train_with_fixed_hyperparameters(&args, &mut network)?
+    };
+    // println!("network before saving and reloading: {}", network);
+    // Estimate marginal effects after training
+    marginals_after_training(&args, &data, &mut network, fname_network_output)?;
+    Ok(())
 }

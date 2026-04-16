@@ -1,8 +1,6 @@
 use crate::linalg::matrix::{Matrix, MatrixError};
 use cudarc::driver::safe::{CudaFunction, LaunchArgs};
 use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
-use cudarc::nvrtc::compile_ptx;
-use cudarc::nvrtc::safe::Ptx;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -91,12 +89,7 @@ const COLMATADD: &str = "
 
 impl Matrix {
     pub fn scalarmatadd(self: &Self, s: f32) -> Result<Self, Box<dyn Error>> {
-        let ptx: Ptx = compile_ptx(SCALARMATADD)?;
-        let f: CudaFunction = self
-            .data
-            .context()
-            .load_module(ptx)?
-            .load_function("cuScalarMatAdd")?;
+        let f: CudaFunction = self.get_cached_kernel("cuScalarMatAdd", SCALARMATADD)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
         let n_rows: u32 = self.n_rows as u32;
@@ -130,12 +123,7 @@ impl Matrix {
                 self.n_rows, b.n_rows, self.n_cols, b.n_cols
             ))));
         }
-        let ptx: Ptx = compile_ptx(ELEMENTWISEMATADD)?;
-        let f: CudaFunction = self
-            .data
-            .context()
-            .load_module(ptx)?
-            .load_function("cuElementwiseMatAdd")?;
+        let f: CudaFunction = self.get_cached_kernel("cuElementwiseMatAdd", ELEMENTWISEMATADD)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
         let n_rows: u32 = self.n_rows as u32;
@@ -169,12 +157,7 @@ impl Matrix {
                 self.n_rows, b.n_rows, b.n_cols
             ))));
         }
-        let ptx: Ptx = compile_ptx(ROWMATADD)?;
-        let f: CudaFunction = self
-            .data
-            .context()
-            .load_module(ptx)?
-            .load_function("cuRowMatAdd")?;
+        let f: CudaFunction = self.get_cached_kernel("cuRowMatAdd", ROWMATADD)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
         let n_rows: u32 = self.n_rows as u32;
@@ -208,12 +191,7 @@ impl Matrix {
                 self.n_cols, b.n_cols, b.n_rows
             ))));
         }
-        let ptx: Ptx = compile_ptx(COLMATADD)?;
-        let f: CudaFunction = self
-            .data
-            .context()
-            .load_module(ptx)?
-            .load_function("cuColMatAdd")?;
+        let f: CudaFunction = self.get_cached_kernel("cuColMatAdd", COLMATADD)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
         let n_rows: u32 = self.n_rows as u32;

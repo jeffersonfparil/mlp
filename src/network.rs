@@ -9,38 +9,25 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
-/// Implement Error for NetworkError
-impl Error for NetworkError {}
-
-/// Implement std::fmt::Display for NetworkError
-impl fmt::Display for NetworkError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NetworkError::DimensionMismatch(msg) => {
-                write!(f, "Dimension Mismatch in Network: {}", msg)
-            }
-            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
-        }
-    }
-}
+// TODO: revise comments also add docs to make sure we know how each field correspond to each other including their dimensions, i.e. activations is the odd-one-out as it includes the input layer plus all hidden layers and the output layer
 
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Network {
-    pub n_hidden_layers: usize,                   // number of hidden layers
-    pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer (k)
-    pub dropout_rates: Vec<f32>,                  // soft dropout rates per hidden layer (k)
-    pub targets: Matrix,                          // observed values (1 x n)
-    pub predictions: Matrix,                      // predictions (1 x n)
-    pub weights_per_layer: Vec<Matrix>, // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
-    pub biases_per_layer: Vec<Matrix>,  // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub weights_x_biases_per_layer: Vec<Matrix>, // summed weights (i.e. prior to activation function) ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub activations_per_layer: Vec<Matrix>, // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub weights_gradients_per_layer: Vec<Matrix>, // gradients of the weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
-    pub biases_gradients_per_layer: Vec<Matrix>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    pub activation: activations::Activation,     // activation function enum (includes derivative)
-    pub cost: costs::Cost,                       // cost function
-    pub seed: usize,                             // random seed for dropouts
+    pub n_hidden_layers: usize,                   // number of hidden layers (k)
+    pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer
+    pub dropout_rates: Vec<f32>,                  // dropout rates per hidden layer
+    pub targets: Matrix,                          // observed values (n_output_nodes x n_observations)
+    pub predictions: Matrix,                      // predictions (n_output_nodes x n_observations)
+    pub weights_per_layer: Vec<Matrix>,           // weights (n_nodes[i+1] x n_nodes[i]) for each layer
+    pub biases_per_layer: Vec<Matrix>,            // biases (n_nodes[i+1] x 1) for each layer
+    pub weights_x_biases_per_layer: Vec<Matrix>,  // pre-activation sums (n_nodes[i+1] x n_observations) for each layer
+    pub activations_per_layer: Vec<Matrix>,       // activations (n_nodes[i] x n_observations) for each layer, includes input as first element
+    pub weights_gradients_per_layer: Vec<Matrix>, // weight gradients (n_nodes[i+1] x n_nodes[i]) for each layer
+    pub biases_gradients_per_layer: Vec<Matrix>,  // bias gradients (n_nodes[i+1] x 1) for each layer
+    pub activation: activations::Activation,      // activation function enum (includes derivative)
+    pub cost: costs::Cost,                        // cost function
+    pub seed: usize,                              // random seed for reproducibility
 }
 
 impl fmt::Display for Network {
@@ -297,19 +284,15 @@ impl Network {
                 dropout_rates.len(),
             ))));
         }
-        // Number of nodes for all layers, i.e. input node, hiddent-
+        // Number of nodes for all layers including the input layer
         let mut n_nodes: Vec<usize> = vec![n_input_nodes];
         for i in 0..n_hidden_layers {
             n_nodes.push(n_hidden_nodes[i]);
         }
         n_nodes.push(n_output_nodes);
-        let predictions_host: Vec<f32> = {
-            let mut tmp = vec![0f32; n_observations * n_output_nodes];
-            rand::fill(&mut tmp[..]);
-            tmp
-        };
-        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
+        let predictions_host: Vec<f32> = vec![0f32; n_observations * n_output_nodes];
         // let normal = Normal::new(0.0, 1.0)?;
+        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         let normal = Normal::new(0.0, 2.0 / (n_input_nodes as f32))?;
         let predictions_dev: CudaSlice<f32> = stream.clone_htod(&predictions_host)?;
         let predictions: Matrix = Matrix::new(predictions_dev, n_output_nodes, n_observations)?;
@@ -377,9 +360,9 @@ impl Network {
     ) -> Result<Self, Box<dyn Error>> {
         let input_row_indexes: Vec<usize> = (0..self.activations_per_layer[0].n_rows).collect();
         let output_row_indexes: Vec<usize> = (0..self.targets.n_rows).collect();
-        let input_data = self.activations_per_layer[0].slice(&input_row_indexes, col_indexes)?;
-        let output_data = self.targets.slice(&output_row_indexes, col_indexes)?;
-        let network = Network::new(
+        let input_data: Matrix = self.activations_per_layer[0].slice(&input_row_indexes, col_indexes)?;
+        let output_data: Matrix = self.targets.slice(&output_row_indexes, col_indexes)?;
+        let network: Network = Network::new(
             &self.targets.data.context().default_stream(),
             input_data,
             output_data,
@@ -399,6 +382,44 @@ impl Network {
         )
     }
 
+    pub fn average_weights_biases(
+        self: &mut Self,
+        networks_per_batch: &Vec<Network>,
+    ) -> Result<(), Box<dyn Error>> {
+        let n = networks_per_batch.len();
+        let stream = self.targets.data.context().default_stream();
+        // Merge the parameters from each batch network back into the original network via simple averaging with a better method
+        for i in 0..self.n_hidden_layers + 1 {
+            let zeros_weights_host: Vec<f32> =
+                vec![0.0; self.weights_per_layer[i].n_rows * self.weights_per_layer[i].n_cols];
+            let zeros_biases_host: Vec<f32> =
+                vec![0.0; self.biases_per_layer[i].n_rows * self.biases_per_layer[i].n_cols];
+            let zeros_weights_dev: CudaSlice<f32> = stream.clone_htod(&zeros_weights_host)?;
+            let zeros_biases_dev: CudaSlice<f32> = stream.clone_htod(&zeros_biases_host)?;
+            let mut summed_weights = Matrix::new(
+                zeros_weights_dev,
+                self.weights_per_layer[i].n_rows,
+                self.weights_per_layer[i].n_cols,
+            )?;
+            let mut summed_biases = Matrix::new(
+                zeros_biases_dev,
+                self.biases_per_layer[i].n_rows,
+                self.biases_per_layer[i].n_cols,
+            )?;
+            for network in networks_per_batch {
+                summed_weights = summed_weights.elementwisematadd(&network.weights_per_layer[i])?;
+                summed_biases = summed_biases.elementwisematadd(&network.biases_per_layer[i])?;
+            }
+            self.weights_per_layer[i] = summed_weights.scalarmatmul(1.00 / n as f32)?;
+            self.biases_per_layer[i] = summed_biases.scalarmatmul(1.00 / n as f32)?;
+        }
+        // Update predictions using the merged parameters
+        self.predict()?;
+        self.backpropagation()?; // to fill-up the gradients
+
+        Ok(())
+    }
+
     pub fn replace_model(&mut self, other: &Network) -> Result<(), Box<dyn Error>> {
         self.n_hidden_layers = other.n_hidden_layers.clone();
         self.n_hidden_nodes = other.n_hidden_nodes.clone();
@@ -414,6 +435,21 @@ impl Network {
         self.activation = other.activation.clone();
         self.cost = other.cost.clone();
         Ok(())
+    }
+}
+
+/// Implement Error for NetworkError
+impl Error for NetworkError {}
+
+/// Implement std::fmt::Display for NetworkError
+impl fmt::Display for NetworkError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NetworkError::DimensionMismatch(msg) => {
+                write!(f, "Dimension Mismatch in Network: {}", msg)
+            }
+            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
+        }
     }
 }
 

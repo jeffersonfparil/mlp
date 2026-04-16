@@ -2,6 +2,7 @@ use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::linalg::matrix::{Matrix, MatrixError};
 use crate::network::Network;
+use crate::marginal::Marginals;
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -181,7 +182,7 @@ impl Data {
             dropout_rates,
             seed,
         )?;
-        network.forwardpass()?;
+        network.predict()?;
         data.features = network.activations_per_layer[0].clone();
         data.targets = network.predictions.clone();
         Ok(data)
@@ -256,7 +257,7 @@ impl Data {
     pub fn read_delimited(
         path: &str,
         delim: &str,
-        column_indices_of_targets: &Vec<usize>,
+        column_indices_targets: &Vec<usize>,
     ) -> Result<Self, Box<dyn Error>> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -270,12 +271,12 @@ impl Data {
                 "File is empty.".to_string(),
             )));
         };
-        if column_indices_of_targets.is_empty() {
+        if column_indices_targets.is_empty() {
             return Err(Box::new(MatrixError::DimensionMismatch(
                 "No column indices of targets provided.".to_string(),
             )));
         }
-        if column_indices_of_targets
+        if column_indices_targets
             .iter()
             .any(|&idx| idx >= header.len())
         {
@@ -284,18 +285,25 @@ impl Data {
             )));
         }
         let column_indices_features: Vec<usize> = (0..header.len())
-            .filter(|idx| !column_indices_of_targets.contains(idx))
+            .filter(|idx| !column_indices_targets.contains(idx))
             .collect();
-        let target_names: Vec<String> = column_indices_of_targets
+        let target_names_tmp: Vec<String> = column_indices_targets
             .iter()
             .map(|&idx| header[idx].clone())
             .collect();
-        let feature_names: Vec<String> = column_indices_features
+        let feature_names_tmp: Vec<String> = column_indices_features
             .iter()
             .map(|&idx| header[idx].clone())
             .collect();
-        let mut features_data: Vec<f32> = Vec::new();
-        let mut targets_data: Vec<f32> = Vec::new();
+        // Convert targets and features into one-hot encoding if they are non-numeric
+        // First we do a first pass to identify all levels per variable
+        // And on the second pass we extract the one-hot encoding matrices
+        enum Value {
+            Numeric(f32),
+            Text(String),
+        }
+        let mut features_data_tmp: Vec<Value> = Vec::new();
+        let mut targets_data_tmp: Vec<Value> = Vec::new();
         for line in lines {
             let line = line?;
             let values: Vec<&str> = line.trim().split(delim).collect();
@@ -305,18 +313,231 @@ impl Data {
                         .to_string(),
                 )));
             }
-            for &idx in column_indices_of_targets {
-                let value: f32 = values[idx].parse()?;
-                targets_data.push(value);
+            for &idx in column_indices_targets {
+                let value = match values[idx].parse::<f32>() {
+                    Ok(x) => Value::Numeric(x),
+                    Err(_) => Value::Text(values[idx].to_owned()),
+                };
+                targets_data_tmp.push(value);
             }
             for &idx in &column_indices_features {
-                let value: f32 = values[idx].parse()?;
-                features_data.push(value);
+                let value = match values[idx].parse::<f32>() {
+                    Ok(x) => Value::Numeric(x),
+                    Err(_) => Value::Text(values[idx].to_owned()),
+                };
+                features_data_tmp.push(value);
             }
         }
-        let n = targets_data.len() / column_indices_of_targets.len();
-        let p = feature_names.len();
-        let k = target_names.len();
+        // Count the number of levels of the non-numeric variables in preparation for one-hot encoding
+        let n = targets_data_tmp.len() / column_indices_targets.len();
+        let p = feature_names_tmp.len();
+        let k = target_names_tmp.len();
+        // println!("target_names_tmp: {:?}", target_names_tmp);
+        // println!("feature_names_tmp: {:?}", feature_names_tmp);
+        // Targets levels
+        let mut targets_levels: Vec<Vec<String>> = Vec::with_capacity(k);
+        for j in 0..k {
+            targets_levels.push(Vec::new());
+            for i in 0..n {
+                let idx = i*k + j;
+                match &targets_data_tmp[idx] {
+                    Value::Numeric(x) => {
+                        if (targets_levels[j].len() > 0) & (!targets_levels[j].contains(&x.to_string())) {
+                            targets_levels[j].push(x.to_string());
+                        } else {
+                            // Note: we assume that the first 100 elements of the non-numeric target variable cannot be parsed as numeric
+                            if idx < 100 {
+                                continue
+                            } else {
+                                break
+                            }
+                        }
+                    },
+                    Value::Text(x) => {
+                        if !targets_levels[j].contains(x) {
+                            targets_levels[j].push(x.to_owned());
+                        }
+                    }
+                };
+            }
+        }
+        // println!("targets_levels: {:?}", targets_levels);
+        // Features levels
+        let mut features_levels: Vec<Vec<String>> = Vec::with_capacity(p);
+        for j in 0..p {
+            features_levels.push(Vec::new());
+            for i in 0..n {
+                let idx = i*p + j;
+                match &features_data_tmp[idx] {
+                    Value::Numeric(x) => {
+                        if (features_levels[j].len() > 0) & (!features_levels[j].contains(&x.to_string())) {
+                            features_levels[j].push(x.to_string());
+                        } else {
+                            // Note: we assume that the first element of the non-numeric target variable cannot be parsed as numeric
+                            break;
+                        }
+                    },
+                    Value::Text(x) => {
+                        if !features_levels[j].contains(x) {
+                            features_levels[j].push(x.to_owned());
+                        }
+                    }
+                };
+            }
+        }
+        // println!("features_levels: {:?}", features_levels);
+        // Build the one-hot encodings of the targets and/or features
+        // Targets values
+        let m = targets_levels
+            .iter()
+            .fold(0, |sum, x| {
+                if x.len() == 0 {
+                    sum + 1
+                } else {
+                    sum + x.len()
+                }
+            });
+        let mut targets_data: Vec<f32> = vec![0.0; m*n];
+         for j in 0..k {
+            let m_tmp = targets_levels[0..(j+1)]
+            .iter()
+            .fold(0, |sum, x| {
+                if x.len() == 0 {
+                    sum + 1
+                } else {
+                    sum + x.len()
+                }
+            });
+            // println!("m={}", m);
+            // println!("m_tmp={}", m_tmp);
+            for i in 0..n {
+                let idx_source = i*k + j;
+                if targets_levels[j].len() == 0 {
+                    // Numerics
+                    let idx_destination = (m_tmp-1)*n + i;
+                    targets_data[idx_destination] = match &targets_data_tmp[idx_source] {
+                        Value::Numeric(x) => *x,
+                        Value::Text(_) => {
+                            return Err(Box::new(MatrixError::TypeMismatch(
+                                format!("Unexpected type mismatch in target variable: {}. We expected a numeric variable.", target_names_tmp[j])
+                            )));
+                        },
+                    };
+                } else {
+                    // Non-numerics
+                    match &targets_data_tmp[idx_source] {
+                        Value::Text(x) => {
+                            let mut idx: usize = 0;
+                            for i_tmp in 0..targets_levels[j].len() {
+                                if targets_levels[j][i_tmp] == x.to_owned() {
+                                    idx = i_tmp;
+                                    break
+                                }
+                            }
+                            let idx_destination = (m_tmp-(targets_levels[j].len() - idx))*n + i;
+                            targets_data[idx_destination] = 1.0;
+                        },
+                        Value::Numeric(_) => {
+                            return Err(Box::new(MatrixError::TypeMismatch(
+                                format!("Unexpected type mismatch in target variable: {}. We expected a non-numeric.", target_names_tmp[j])
+                            )));
+                        },
+                    };
+                }
+            }
+        }
+        // println!("targets_data: {:?}", targets_data);
+        // Features values
+        let m = features_levels
+            .iter()
+            .fold(0, |sum, x| {
+                if x.len() == 0 {
+                    sum + 1
+                } else {
+                    sum + x.len()
+                }
+            });
+        let mut features_data: Vec<f32> = vec![0.0; m*n];
+         for j in 0..p {
+            let m_tmp = features_levels[0..(j+1)]
+            .iter()
+            .fold(0, |sum, x| {
+                if x.len() == 0 {
+                    sum + 1
+                } else {
+                    sum + x.len()
+                }
+            });
+            // println!("m={}", m);
+            // println!("m_tmp={}", m_tmp);
+            for i in 0..n {
+                let idx_source = i*p + j;
+                if features_levels[j].len() == 0 {
+                    // Numerics
+                    let idx_destination = (m_tmp-1)*n + i;
+                    features_data[idx_destination] = match &features_data_tmp[idx_source] {
+                        Value::Numeric(x) => *x,
+                        Value::Text(_) => {
+                            return Err(Box::new(MatrixError::TypeMismatch(
+                                format!("Unexpected type mismatch in feature variable: {}. We expected a numeric variable.", feature_names_tmp[j])
+                            )));
+                        },
+                    };
+                } else {
+                    // Non-numerics
+                    match &features_data_tmp[idx_source] {
+                        Value::Text(x) => {
+                            let mut idx: usize = 0;
+                            for i_tmp in 0..features_levels[j].len() {
+                                if features_levels[j][i_tmp] == x.to_owned() {
+                                    idx = i_tmp;
+                                    break
+                                }
+                            }
+                            let idx_destination = (m_tmp-(features_levels[j].len() - idx))*n + i;
+                            features_data[idx_destination] = 1.0;
+                        },
+                        Value::Numeric(_) => {
+                            return Err(Box::new(MatrixError::TypeMismatch(
+                                format!("Unexpected type mismatch in feature variable: {}. We expected a non-numeric.", feature_names_tmp[j])
+                            )));
+                        },
+                    };
+                }
+            }
+        }
+        // println!("features_data: {:?}", features_data);
+        // Update target_names and feature_names
+        let k = targets_data.len() / n;
+        let p = features_data.len() / n;
+        let mut target_names: Vec<String> = Vec::with_capacity(k);
+        let mut feature_names: Vec<String> = Vec::with_capacity(p);
+        for i in 0..target_names_tmp.len() {
+            let name: String = target_names_tmp[i].to_owned();
+            if targets_levels[i].len() == 0 {
+                target_names.push(name);
+            } else {
+                for j in 0..targets_levels[i].len() {
+                    let new_name = format!("{}➵{}", name, targets_levels[i][j].to_owned());
+                    target_names.push(new_name);
+                }
+            }
+        }
+        for i in 0..feature_names_tmp.len() {
+            let name: String = feature_names_tmp[i].to_owned();
+            if features_levels[i].len() == 0 {
+                feature_names.push(name);
+            } else {
+                for j in 0..features_levels[i].len() {
+                    let new_name = format!("{}➵{}", name, features_levels[i][j].to_owned());
+                    feature_names.push(new_name);
+                }
+            }
+        }
+        // println!("target_names_tmp: {:?}", target_names_tmp);
+        // println!("feature_names_tmp: {:?}", feature_names_tmp);
+        // println!("target_names: {:?}", target_names);
+        // println!("feature_names: {:?}", feature_names);
         let mut data = Data::new(n, p, k)?;
         let stream = data.features.data.context().default_stream();
         let features_dev: CudaSlice<f32> = stream.clone_htod(&features_data)?;
@@ -327,7 +548,7 @@ impl Data {
         data.target_names = target_names;
         Ok(data)
     }
-
+    
     pub fn init_network(
         &self,
         n_hidden_layers: usize,
@@ -474,8 +695,12 @@ impl Network {
             "HL" => Cost::HL,
             _ => return Err(Box::new(CostError::UnimplementedCost)),
         };
-        for i in 0..(network.weights_per_layer.len() - 1) {
-            let n_rows = serdifiable_network.n_hidden_nodes[i];
+        for i in 0..network.weights_per_layer.len() {
+            let n_rows = if i == (network.weights_per_layer.len() - 1) {
+                k
+            } else {
+                serdifiable_network.n_hidden_nodes[i]
+            };
             let n_cols = if i == 0 {
                 p
             } else {
@@ -484,7 +709,7 @@ impl Network {
             let (acti_n_rows, acti_n_cols) = if i == 0 {
                 (p, n)
             } else {
-                (serdifiable_network.n_hidden_nodes[i], n)
+                (serdifiable_network.n_hidden_nodes[i-1], n)
             };
             network.weights_per_layer[i] = Matrix::new(
                 stream.clone_htod(&serdifiable_network.weights_per_layer[i])?,
@@ -519,27 +744,22 @@ impl Network {
         }
         Ok(network)
     }
+}
 
-    pub fn read_input_and_model(
-        fname: &str,
-        delim: &str,
-        column_indices_of_targets: &Vec<usize>,
-        model: &str,
-    ) -> Result<Self, Box<dyn Error>> {
-        // Load input data
-        let data = Data::read_delimited(fname, delim, column_indices_of_targets)?;
-        // Load the fitted network in JSON format
-        let network_fitted = Network::read_network(model)?;
-        // Initialise the network containing the input data and fitted model
-        let mut network = data.init_network(
-            network_fitted.n_hidden_layers,
-            network_fitted.n_hidden_nodes.clone(),
-            network_fitted.dropout_rates.clone(),
-            network_fitted.seed,
-        )?;
-        network.replace_model(&network_fitted)?;
-        // Note that the target and prediction data are unchanged from the input data
-        Ok(network)
+impl Marginals {
+    pub fn write_delimited(&self, path: &str, delim: &str) -> Result<(), Box<dyn Error>> {
+        self.check_dimensions()?;
+        let file = File::create_new(path)?; // makes sure not to overwrite existing files, i.e. using create_new() instead of just create()
+        let mut writer = BufWriter::new(file);
+        let n = self.ids.len();
+        // Write header
+        writeln!(writer, "{}", vec!["ids", "effects"].join(delim))?;
+        // Write data
+        for i in 0..n {
+            let row: Vec<String> = vec![self.ids[i].to_owned(), self.effects[i].to_string()];
+            writeln!(writer, "{}", row.join(delim))?;
+        }
+        Ok(())
     }
 }
 
@@ -556,12 +776,9 @@ mod tests {
         assert!(data_simulated.targets.summat()? != 0.0);
         assert!(data.features.summat()? == 0.0);
         assert!(data_simulated.features.summat()? != 0.0);
-
         assert_eq!(data.check_dimensions(), Ok(()));
-
         println!("data: {}", data);
         println!("data_simulated: {}", data_simulated);
-
         if exists("test_data.csv")? {
             remove_file("test_data.csv")?;
         }
@@ -570,21 +787,23 @@ mod tests {
         }
         data.write_delimited("test_data.csv", ",")?;
         data_simulated.write_delimited("test_data_simulated.tsv", "\t")?;
-
         let data_reloaded = Data::read_delimited("test_data.csv", ",", &vec![0])?;
         let data_simulated_reloaded =
             Data::read_delimited("test_data_simulated.tsv", "\t", &vec![0])?;
-
+        // Check full contents: test_data_simulated.tsv and test_data_simulated_rewritten.tsv they should be identical
+        data_simulated_reloaded.write_delimited("test_data_simulated_rewritten.tsv", "\t")?;
+        assert_eq!(
+            std::fs::read_to_string("test_data_simulated.tsv")?,
+            std::fs::read_to_string("test_data_simulated_rewritten.tsv")?
+        );
         assert!(data.features.summat()? - data_reloaded.features.summat()? < 1e-5);
         assert!(
             data_simulated.features.summat()? - data_simulated_reloaded.features.summat()? < 1e-5
         );
-
         println!("data_reloaded: {}", data_reloaded);
         println!("data_simulated_reloaded: {}", data_simulated_reloaded);
-
         // Initialise the network from reloaded data
-        let network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
         assert!(
             network.activations_per_layer[0].summat()?
@@ -593,7 +812,6 @@ mod tests {
         );
         assert_eq!(network.n_hidden_layers, 2);
         println!("network: {}", network);
-
         if exists("test_network.json")? {
             remove_file("test_network.json")?;
         }
@@ -608,18 +826,52 @@ mod tests {
             network.predictions.summat()?,
             network_reloaded.predictions.summat()?
         );
-
-        let network_with_data_and_model =
-            Network::read_input_and_model("test_data.csv", ",", &vec![0], "test_network.json")?;
-        println!(
-            "network_with_data_and_model={}",
-            network_with_data_and_model
+        // Data with non-numerics
+        let fname_non_numerics: String = "test_non_numerics.csv".to_owned();
+        {
+            let file = File::create_new(&fname_non_numerics)?;
+            let mut writer = BufWriter::new(file);
+            writeln!(writer, "{}", "target_0,target_1,feature_0,feature_1,feature_2,feature_3")?;
+            writeln!(writer, "{}", "A,0.002356832,X,A1,0.26257637,-0.22530088")?;
+            writeln!(writer, "{}", "B,0.009485791,Y,A2,-0.40898767,-0.6339346")?;
+            writeln!(writer, "{}", "C,0.009100225,Z,A3,0.012834634,-2.0523884")?;
+            writeln!(writer, "{}", "C,0.004334052,Z,A4,1.0629518,2.0183794")?;
+            writeln!(writer, "{}", "C,0.015800802,Z,A4,-0.13212654,-1.7721263")?;
+            writeln!(writer, "{}", "C,0.002177081,Z,A4,0.39454332,-0.8285658")?;
+            writeln!(writer, "{}", "C,0.021280818,Z,A4,-0.15998206,0.07512082")?;
+            writeln!(writer, "{}", "C,0.02473503,A,A3,1.6373256,0.27236217")?;
+            writeln!(writer, "{}", "C,0.019157464,B,A2,-0.6462233,0.92315364")?;
+            writeln!(writer, "{}", "D,0.016854811,C,A1,0.34480542,0.534274")?;
+        }
+        let data_reloaded = Data::read_delimited(&fname_non_numerics.as_str(), ",", &vec![0])?;
+        data_reloaded.write_delimited("test_non_numerics_rewritten.csv", ",")?;
+        let data_rewritten = Data::read_delimited("test_non_numerics_rewritten.csv", ",", &vec![0])?;
+        // Check full contents: re-written non-numerics should match our expectations
+        println!("data_reloaded: {}", data_reloaded);
+        println!("data_rewritten: {}", data_rewritten);
+        assert_eq!(
+            std::fs::read_to_string("test_non_numerics_rewritten.csv")?,
+            "target_0➵A,target_0➵B,target_0➵C,target_0➵D,target_1,feature_0➵X,feature_0➵Y,feature_0➵Z,feature_0➵A,feature_0➵B,feature_0➵C,feature_1➵A1,feature_1➵A2,feature_1➵A3,feature_1➵A4,feature_2,feature_3\n1,0,0,0,0.002356832,1,0,0,0,0,0,1,0,0,0,0.26257637,-0.22530088\n0,1,0,0,0.009485791,0,1,0,0,0,0,0,1,0,0,-0.40898767,-0.6339346\n0,0,1,0,0.009100225,0,0,1,0,0,0,0,0,1,0,0.012834634,-2.0523884\n0,0,1,0,0.004334052,0,0,1,0,0,0,0,0,0,1,1.0629518,2.0183794\n0,0,1,0,0.015800802,0,0,1,0,0,0,0,0,0,1,-0.13212654,-1.7721263\n0,0,1,0,0.002177081,0,0,1,0,0,0,0,0,0,1,0.39454332,-0.8285658\n0,0,1,0,0.021280818,0,0,1,0,0,0,0,0,0,1,-0.15998206,0.07512082\n0,0,1,0,0.02473503,0,0,0,1,0,0,0,0,1,0,1.6373256,0.27236217\n0,0,1,0,0.019157464,0,0,0,0,1,0,0,1,0,0,-0.6462233,0.92315364\n0,0,0,1,0.016854811,0,0,0,0,0,1,1,0,0,0,0.34480542,0.534274\n".to_owned(),
         );
+        // Marginals
+        let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
+        let number_of_values_for_interpolate_between_min_and_max: usize = 10;
+        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        marginals.write_delimited("test_marginals.tsv", "\t")?;
 
         // Clean-up
-        remove_file("test_data.csv")?;
-        remove_file("test_data_simulated.tsv")?;
-        remove_file("test_network.json")?;
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && 
+            (
+                f.extension().and_then(|s| s.to_str()) == Some("svg") || 
+                f.extension().and_then(|s| s.to_str()) == Some("json") || 
+                f.extension().and_then(|s| s.to_str()) == Some("csv") || 
+                f.extension().and_then(|s| s.to_str()) == Some("tsv") 
+            ) {
+                std::fs::remove_file(&f)?;
+            }
+        }
 
         Ok(())
     }
