@@ -139,6 +139,9 @@ time ../../target/release/mlp \
 MARGINALS=$(ls -t1 | grep "marginal_effects.tsv" | head -n1)
 bat $MARGINALS
 
+head ${MARGINALS%-marginal_effects.tsv*}-marginals_main_effects.tsv
+head $MARGINALS
+
 ```
 
 ## Example Fits

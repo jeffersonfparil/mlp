@@ -1,4 +1,4 @@
-use crate::network::{self, Network};
+use crate::network::Network;
 use std::error::Error;
 use ruviz::core::{Plot, PlottingError};
 use ruviz::prelude::LegendPosition;
@@ -158,12 +158,12 @@ impl Marginals {
         let start_time = Instant::now();
         let effects: Mutex<Vec<f32>> = Mutex::new(vec![f32::NAN; self.ids.len()]);
         let counter = Arc::new(atomic::AtomicUsize::new(0));
-        // self.ids
-        //     .par_iter()
-        //     .enumerate()
-        //     .for_each(|(i, id)| {
-        let ids = self.ids.clone();
-        for (i, id) in ids.into_iter().enumerate() {
+        self.ids
+            .par_iter()
+            .enumerate()
+            .for_each(|(i, id)| {
+        // let ids = self.ids.clone();
+        // for (i, id) in ids.into_iter().enumerate() {
             if verbose {
                 // Atomically increment counter
                 let x = counter.load(atomic::Ordering::Relaxed);
@@ -220,21 +220,21 @@ impl Marginals {
                     }
                 }
                 // Predict at the current x-values combination
-                network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
-                // network.activations_per_layer[0].data = match stream.clone_htod(&input_matrix) {
-                //     Ok(x) => x,
-                //     Err(_) => return eprintln!("Error cloning input matrix into the first layer of the activations.")
-                // };
-                network.predict()?;
-                // match network.predict() {
-                //     Ok(_) => (),
-                //     Err(_) => return eprintln!("Error in prediction.")
-                // };
-                let predictions = network.predictions.to_host()?;
-                // let predictions = match network.predictions.to_host() {
-                //     Ok(x) => x,
-                //     Err(_) => return eprintln!("Error extracting the predictions.")
-                // };
+                // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix)?;
+                network.activations_per_layer[0].data = match stream.clone_htod(&input_matrix) {
+                    Ok(x) => x,
+                    Err(_) => return eprintln!("Error cloning input matrix into the first layer of the activations.")
+                };
+                // network.predict()?;
+                match network.predict() {
+                    Ok(_) => (),
+                    Err(_) => return eprintln!("Error in prediction.")
+                };
+                // let predictions = network.predictions.to_host()?;
+                let predictions = match network.predictions.to_host() {
+                    Ok(x) => x,
+                    Err(_) => return eprintln!("Error extracting the predictions.")
+                };
                 for k in 0..n {
                     y[(j*n)+k] = predictions[k] as f64;
                 }
@@ -273,8 +273,8 @@ impl Marginals {
             // // Reset the network to previous state
             // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
             // network.predict()?;
-        // });
-        }
+        });
+        // }
         self.effects = effects.into_inner().unwrap();
         if verbose {
             let progress_text: String = (0..100).map(|_| "█").collect();

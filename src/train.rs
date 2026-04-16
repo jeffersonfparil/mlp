@@ -724,7 +724,6 @@ impl Network {
 mod tests {
     use super::*;
     use crate::io::Data;
-    use cudarc::driver::{CudaContext, CudaSlice};
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
         let n: usize = 12_345; // number of observations

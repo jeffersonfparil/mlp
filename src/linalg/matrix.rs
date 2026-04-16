@@ -1,6 +1,11 @@
 use cudarc::driver::CudaSlice;
+use cudarc::driver::safe::CudaFunction;
+use cudarc::nvrtc::compile_ptx;
 use std::error::Error;
 use std::fmt;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use lazy_static::lazy_static;
 
 /// Matrix is stored in GPU memory
 /// I have decided to store data in a row-major format just because I feel like it :-P
@@ -345,6 +350,30 @@ impl fmt::Display for MatrixError {
 impl From<Box<dyn Error>> for MatrixError {
     fn from(err: Box<dyn Error>) -> MatrixError {
         MatrixError::CompileError(err.to_string())
+    }
+}
+
+// CUDA kernel cache system to prevent re-compilations of the CUDA code every time we perform matrix operations
+lazy_static! {
+    static ref KERNEL_CACHE: Mutex<HashMap<String, CudaFunction>> = Mutex::new(HashMap::new());
+}
+
+impl Matrix {
+    pub fn get_cached_kernel(&self, kernel_name: &str, ptx_source: &str) -> Result<CudaFunction, Box<dyn Error>> {
+        // Return cloned function if already cached
+        let mut cache = KERNEL_CACHE.lock().unwrap();
+        if let Some(func) = cache.get(kernel_name) {
+            return Ok(func.clone());
+        }
+        // Compile and load the function (CUDA kernel)
+        let ptx = compile_ptx(ptx_source)?;
+        let func = self.data.context()
+            .load_module(ptx)?
+            .load_function(kernel_name)?;
+        // Insert into cache
+        cache.entry(kernel_name.to_string()).or_insert_with(|| func.clone());
+        // Return the function
+        Ok(func)
     }
 }
 

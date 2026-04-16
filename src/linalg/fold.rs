@@ -4,29 +4,17 @@ use std::error::Error;
 
 impl Matrix {
     pub fn summat(self: &Self) -> Result<f32, Box<dyn Error>> {
-        let mut a_host: Vec<f32> = vec![0.0f32; self.n_rows * self.n_cols];
-        self.data
-            .context()
-            .default_stream()
-            .memcpy_dtoh(&self.data, &mut a_host)?;
+        let a_host: Vec<f32> = self.to_host()?;
         Ok(a_host.iter().fold(0.0, |sum, x| sum + x))
     }
 
     pub fn prodmat(self: &Self) -> Result<f32, Box<dyn Error>> {
-        let mut a_host: Vec<f32> = vec![0.0f32; self.n_rows * self.n_cols];
-        self.data
-            .context()
-            .default_stream()
-            .memcpy_dtoh(&self.data, &mut a_host)?;
+        let a_host: Vec<f32> = self.to_host()?;
         Ok(a_host.iter().fold(1.0, |prod, x| prod * x))
     }
 
     pub fn rowsummat(self: &Self) -> Result<Self, Box<dyn Error>> {
-        let mut a_host: Vec<f32> = vec![0.0f32; self.n_rows * self.n_cols];
-        self.data
-            .context()
-            .default_stream()
-            .memcpy_dtoh(&self.data, &mut a_host)?;
+        let a_host: Vec<f32> = self.to_host()?;
         let mut rowsums: Vec<f32> = vec![0.0f32; self.n_rows];
         for i in 0..self.n_rows {
             for j in 0..self.n_cols {
@@ -39,11 +27,7 @@ impl Matrix {
     }
 
     pub fn colsummat(self: &Self) -> Result<Self, Box<dyn Error>> {
-        let mut a_host: Vec<f32> = vec![0.0f32; self.n_rows * self.n_cols];
-        self.data
-            .context()
-            .default_stream()
-            .memcpy_dtoh(&self.data, &mut a_host)?;
+        let a_host: Vec<f32> = self.to_host()?;
         let mut colsums: Vec<f32> = vec![0.0f32; self.n_cols];
         for j in 0..self.n_cols {
             for i in 0..self.n_rows {
@@ -56,11 +40,7 @@ impl Matrix {
     }
 
     pub fn rowprodmat(self: &Self) -> Result<Self, Box<dyn Error>> {
-        let mut a_host: Vec<f32> = vec![0.0f32; self.n_rows * self.n_cols];
-        self.data
-            .context()
-            .default_stream()
-            .memcpy_dtoh(&self.data, &mut a_host)?;
+        let a_host: Vec<f32> = self.to_host()?;
         let mut rowprods: Vec<f32> = vec![1.0f32; self.n_rows];
         for i in 0..self.n_rows {
             for j in 0..self.n_cols {
@@ -73,11 +53,7 @@ impl Matrix {
     }
 
     pub fn colprodmat(self: &Self) -> Result<Self, Box<dyn Error>> {
-        let mut a_host: Vec<f32> = vec![0.0f32; self.n_rows * self.n_cols];
-        self.data
-            .context()
-            .default_stream()
-            .memcpy_dtoh(&self.data, &mut a_host)?;
+        let a_host: Vec<f32> = self.to_host()?;
         let mut colprods: Vec<f32> = vec![1.0f32; self.n_cols];
         for j in 0..self.n_cols {
             for i in 0..self.n_rows {
