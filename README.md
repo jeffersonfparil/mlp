@@ -42,25 +42,11 @@ pixi shell
 time cargo test -- --show-output
 ```
 
-<<<<<<< HEAD
-5. Build and test (Note: successful build and tests on NVIDIA H100 and V100 but fails on T4)
-=======
 ## More testing
->>>>>>> dev
 
 ```shell
 cd mlp
 pixi shell
-<<<<<<< HEAD
-cargo build --release
-target/release/mlp -h
-target/release/mlp -s
-target/release/mlp
-
-# Testing binaries across different GPUs
-mv target/ target-$(hostname)/
-```
-=======
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo run -- -h
 time cargo run -- -s --verbose
@@ -179,4 +165,3 @@ head $MARGINALS
 - Used in progress bars: `█`
 - Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
 - Used as delimiters in marginals' combinations: `▓`
->>>>>>> dev
