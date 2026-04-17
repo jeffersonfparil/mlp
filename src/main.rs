@@ -438,7 +438,12 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     // println!("network after saving and reloading: {}", network);
     // Extract the marginal effects and save
     // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
-    let mut marginals = Marginals::new(data.feature_names.clone(), args.marginals_order)?;
+    let marginals_order: usize = if args.marginals_order > data.feature_names.len() {
+        data.feature_names.len()
+    } else {
+        args.marginals_order
+    };
+    let mut marginals = Marginals::new(data.feature_names.clone(), marginals_order)?;
     marginals.estimate_effects(&mut network, args.n_interpolate_min_max, args.verbose)?;
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
@@ -698,7 +703,12 @@ fn marginals_after_training(
     };
     // Extract the marginal effects and save
     // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
-    let mut marginals = Marginals::new(data.feature_names.clone(), args.marginals_order)?;
+    let marginals_order: usize = if args.marginals_order > data.feature_names.len() {
+        data.feature_names.len()
+    } else {
+        args.marginals_order
+    };
+    let mut marginals = Marginals::new(data.feature_names.clone(), marginals_order)?;
     marginals.estimate_effects(network, args.n_interpolate_min_max, args.verbose)?;
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
