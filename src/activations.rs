@@ -245,12 +245,7 @@ const LEAKYRELU_DERIVATIVE: &str = "
 ";
 
 pub fn sigmoid(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(SIGMOID)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuSigmoid")?;
+    let f: CudaFunction = a.get_cached_kernel("cuSigmoid", SIGMOID)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -277,12 +272,7 @@ pub fn sigmoid(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 }
 
 pub fn sigmoidderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(SIGMOID_DERIVATIVE)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuSigmoidDerivative")?;
+    let f: CudaFunction = a.get_cached_kernel("cuSigmoidDerivative", SIGMOID_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -309,12 +299,7 @@ pub fn sigmoidderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 }
 
 pub fn hyperbolictangent(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(HYPERBOLICTANGENT)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuHyperbolicTangent")?;
+    let f: CudaFunction = a.get_cached_kernel("cuHyperbolicTangent", HYPERBOLICTANGENT)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -341,12 +326,7 @@ pub fn hyperbolictangent(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 }
 
 pub fn hyperbolictangentderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(HYPERBOLICTANGENT_DERIVATIVE)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuHyperbolicTangentDerivative")?;
+    let f: CudaFunction = a.get_cached_kernel("cuHyperbolicTangentDerivative", HYPERBOLICTANGENT_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -373,8 +353,7 @@ pub fn hyperbolictangentderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>>
 }
 
 pub fn relu(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(RELU)?;
-    let f: CudaFunction = a.data.context().load_module(ptx)?.load_function("cuReLU")?;
+    let f: CudaFunction = a.get_cached_kernel("cuReLU", RELU)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -401,12 +380,7 @@ pub fn relu(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 }
 
 pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(RELU_DERIVATIVE)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuReLUDerivative")?;
+    let f: CudaFunction = a.get_cached_kernel("cuReLUDerivative", RELU_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -435,12 +409,7 @@ pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 // Different function signatures as above:
 
 pub fn leakyrelu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(LEAKYRELU)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuLeakyReLU")?;
+    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLU", LEAKYRELU)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -468,12 +437,7 @@ pub fn leakyrelu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
 }
 
 pub fn leakyreluderivative(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let ptx: Ptx = compile_ptx(LEAKYRELU_DERIVATIVE)?;
-    let f: CudaFunction = a
-        .data
-        .context()
-        .load_module(ptx)?
-        .load_function("cuLeakyReLUDerivative")?;
+    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLUDerivative", LEAKYRELU_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;

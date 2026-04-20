@@ -587,9 +587,10 @@ pub struct SerdifiableNetwork {
     activations_per_layer: Vec<Vec<f32>>, // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
     weights_gradients_per_layer: Vec<Vec<f32>>, // gradients of the weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
     biases_gradients_per_layer: Vec<Vec<f32>>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    activation: String,                        // activation function enum (includes derivative)
-    cost: String,                              // cost function
-    seed: usize,                               // random seed for dropouts
+    activation: String, // activation function enum (includes derivative)
+    cost: String, // cost function
+    n_epochs: usize, // number of training epochs
+    seed: usize, // random seed for dropouts
     loss: f32, // mean loss (additional field not part of the actual Network struct)
 }
 
@@ -645,6 +646,7 @@ impl Network {
                 .collect(),
             activation: self.activation.to_string(),
             cost: self.cost.to_string(),
+            n_epochs: self.n_epochs,
             seed: self.seed,
             loss: self.loss()?,
         };

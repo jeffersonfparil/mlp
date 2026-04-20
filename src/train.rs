@@ -313,6 +313,7 @@ impl Network {
         // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
         pb.finish();
         self.predict()?;
+        self.n_epochs = epochs.len();
         Ok((epochs, costs))
     }
 
@@ -332,67 +333,67 @@ impl Network {
                 "Number of batches must be greater than zero.".to_string(),
             )));
         }
-        let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) =
-            if optimisation_parameters.n_batches == 1 {
-                // Only one batch, train on the whole dataset
-                let mut params = optimisation_parameters.clone();
-                let (epochs, costs) = self.train_per_batch(&mut params, "1")?;
-                // self.predict()?;
-                (vec![epochs], vec![costs])
-            } else {
-                // Multiple batches, split the dataset then average the parameters after training on each batch
-                let col_indexes_per_batch: Vec<Vec<usize>> =
-                    self.shufflesplit(optimisation_parameters.n_batches)?;
-                let mut networks_per_batch: Vec<Network> =
-                    Vec::with_capacity(optimisation_parameters.n_batches);
-                for col_indexes in col_indexes_per_batch {
-                    // indexes for each batch, i.e. for observations
-                    let network: Network = self.slice(&col_indexes)?;
-                    networks_per_batch.push(network);
+        let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = if optimisation_parameters.n_batches == 1 {
+            // Only one batch, train on the whole dataset
+            let mut params = optimisation_parameters.clone();
+            let (epochs, costs) = self.train_per_batch(&mut params, "1")?;
+            // self.predict()?;
+            (vec![epochs], vec![costs])
+        } else {
+            // Multiple batches, split the dataset then average the parameters after training on each batch
+            let col_indexes_per_batch: Vec<Vec<usize>> =
+                self.shufflesplit(optimisation_parameters.n_batches)?;
+            let mut networks_per_batch: Vec<Network> =
+                Vec::with_capacity(optimisation_parameters.n_batches);
+            for col_indexes in col_indexes_per_batch {
+                // indexes for each batch, i.e. for observations
+                let network: Network = self.slice(&col_indexes)?;
+                networks_per_batch.push(network);
+            }
+            // let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+            // let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
+            let n = networks_per_batch.len();
+            let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
+            let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
+            networks_per_batch
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, network)| {
+                    if verbose {
+                        println!(
+                            "Training on batch {} with {} observations.",
+                            i, network.targets.n_cols
+                        );
+                    }
+                    let mut params = optimisation_parameters.clone();
+                    let result = network.train_per_batch(&mut params, &format!("{}", n));
+                    match result {
+                        Ok((epochs_batch, costs_batch)) => {
+                            // epochs.lock().unwrap().push(epochs_batch);
+                            // costs.lock().unwrap().push(costs_batch);
+                            // Lock the mutexes to get access
+                            let mut locked_epochs = epochs.lock().unwrap();
+                            let mut locked_costs = costs.lock().unwrap();
+                            // Replace the ith element safely
+                            if let Some(x) = locked_epochs.get_mut(i) {
+                                *x = epochs_batch;
+                            }
+                            if let Some(x) = locked_costs.get_mut(i) {
+                                *x = costs_batch;
+                            }
+                        }
+                        Err(e) => {
+                            // Skip the batch
+                            eprintln!("Error training on batch {}: {}", i+1, e);
+                        }
+                    }
                 }
-                // let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-                // let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-                let n = networks_per_batch.len();
-                let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
-                let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
-                networks_per_batch
-                    .par_iter_mut()
-                    .enumerate()
-                    .for_each(|(i, network)| {
-                        if verbose {
-                            println!(
-                                "Training on batch {} with {} observations.",
-                                i, network.targets.n_cols
-                            );
-                        }
-                        let mut params = optimisation_parameters.clone();
-                        let result = network.train_per_batch(&mut params, &format!("{}", n));
-                        match result {
-                            Ok((epochs_batch, costs_batch)) => {
-                                // epochs.lock().unwrap().push(epochs_batch);
-                                // costs.lock().unwrap().push(costs_batch);
-                                // Lock the mutexes to get access
-                                let mut locked_epochs = epochs.lock().unwrap();
-                                let mut locked_costs = costs.lock().unwrap();
-                                // Replace the ith element safely
-                                if let Some(x) = locked_epochs.get_mut(i) {
-                                    *x = epochs_batch;
-                                }
-                                if let Some(x) = locked_costs.get_mut(i) {
-                                    *x = costs_batch;
-                                }
-                            }
-                            Err(e) => {
-                                // Skip the batch
-                                eprintln!("Error training on batch {}: {}", i+1, e);
-                            }
-                        }
-                    });
-                // Merge the parameters from each batch network back into the original network via simple averaging with a better method
-                self.average_weights_biases(&networks_per_batch)?;
-                // Return epochs, costs
-                (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
-            };
+            );
+            // Merge the parameters from each batch network back into the original network via simple averaging with a better method
+            self.average_weights_biases(&networks_per_batch)?;
+            // Return epochs, costs
+            (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
+        };
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {

@@ -27,6 +27,7 @@ pub struct Network {
     pub biases_gradients_per_layer: Vec<Matrix>,  // bias gradients (n_nodes[i+1] x 1) for each layer
     pub activation: activations::Activation,      // activation function enum (includes derivative)
     pub cost: costs::Cost,                        // cost function
+    pub n_epochs: usize,                          // number of epochs ran
     pub seed: usize,                              // random seed for reproducibility
 }
 
@@ -44,6 +45,7 @@ impl fmt::Display for Network {
             predictions = {}
             activation = {:?}
             cost = {:?}
+            n_epochs = {:?}
             weights_per_layer (len={}) = [
                 {} (sum={}), 
                 ..., 
@@ -85,6 +87,7 @@ impl fmt::Display for Network {
             self.predictions,
             self.activation,
             self.cost,
+            self.n_epochs,
             self.weights_per_layer.len(),
             self.weights_per_layer[0],
             match self.weights_per_layer[0].summat() {
@@ -348,6 +351,7 @@ impl Network {
             activations_per_layer: activations_per_layer,
             activation: activations::Activation::ReLU,
             cost: costs::Cost::MSE,
+            n_epochs: 0,
             seed: seed,
         };
         out.check_dimensions()?;
@@ -413,6 +417,12 @@ impl Network {
             self.weights_per_layer[i] = summed_weights.scalarmatmul(1.00 / n as f32)?;
             self.biases_per_layer[i] = summed_biases.scalarmatmul(1.00 / n as f32)?;
         }
+        // Use the rounded-off number of epochs
+        let mut n_epochs: usize = 0;
+        for i in 0..networks_per_batch.len() {
+            n_epochs += networks_per_batch[i].n_epochs;
+        }
+        self.n_epochs = ((n_epochs as f64) / (networks_per_batch.len() as f64)).round() as usize;
         // Update predictions using the merged parameters
         self.predict()?;
         self.backpropagation()?; // to fill-up the gradients
@@ -434,6 +444,7 @@ impl Network {
         self.biases_gradients_per_layer = other.biases_gradients_per_layer.clone();
         self.activation = other.activation.clone();
         self.cost = other.cost.clone();
+        self.n_epochs = other.n_epochs;
         Ok(())
     }
 }
