@@ -906,7 +906,6 @@ mod tests {
         // println!("marginals: {:?}", marginals);
         // println!("marginals_reloaded: {:?}", marginals_reloaded);
         assert_eq!(marginals, marginals_reloaded);
-
         // Clean-up
         for f in std::fs::read_dir(".")? {
             let f = f?.path();
@@ -920,7 +919,6 @@ mod tests {
                 std::fs::remove_file(&f)?;
             }
         }
-
         Ok(())
     }
 }
