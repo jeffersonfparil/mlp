@@ -115,6 +115,10 @@ impl Data {
 
 
 
+        let mut p = p;
+        for qi in q {
+            p += qi;
+        }
         let mut data = Data::new(n, p, k)?;
         let stream = data.features.data.context().default_stream();
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
@@ -865,7 +869,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let data_simulated = Data::simulate(100, 5, vec![2,3,4,5], 1, 2, "normal", 0.0, 1.0, 42)?;
+        let data_simulated = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);
