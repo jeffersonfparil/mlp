@@ -57,6 +57,7 @@ impl Data {
     pub fn simulate(
         n: usize,
         p: usize,
+        q: Vec<usize>,
         k: usize,
         d: usize,
         dist: &str,
@@ -64,6 +65,56 @@ impl Data {
         par2: f64,
         seed: usize,
     ) -> Result<Self, Box<dyn Error>> {
+
+        // // n = total number of observations
+        // // p = number of continuous explanatory variables or features
+        // // q = vector of the number of levels in categorical variable
+        // // k = number of response variables or targets
+        // // d = number of hidden layers
+        // // dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
+        // // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
+        // // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
+        // // seed = randomisation seed for repeatbility
+
+        // let n_features = p + q.len();
+
+        // let mut data = Data::new(n, n_features, k)?;
+        // let stream = data.features.data.context().default_stream();
+        // let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
+        // // Features simulation
+        // let mut features_host: Vec<f32> = Vec::with_capacity(n_features * n);
+        // // Continuous features
+        // for _j in 0..p {
+        //     for _i in 0..n {
+        //         features_host.push(rng.random());
+        //     }
+        // }
+        // // Categorical features (binary values)
+        // for n_levels in q.clone() {
+        //     let mut assigned: Vec<bool> = vec![false; n];
+        //     for j in 0..n_levels {
+        //         for i in 0..n {
+        //             let value = if rng.random::<f64>() < (1.00 / (q.len() as f64)) {
+        //                 1.00
+        //             } else {
+        //                 0.00
+        //             };
+        //             if assigned[i] {
+        //                 features_host.push(0.0);
+        //             } else if j < (n_levels-1) {
+        //                 features_host.push(value);
+        //                 assigned[i] = assigned[i] || (value != 0.0);
+        //             } else {
+        //                 features_host.push(1.00);
+        //             }
+        //         }
+        //     }
+        // }
+        // // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
+
+
+
+
         let mut data = Data::new(n, p, k)?;
         let stream = data.features.data.context().default_stream();
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
@@ -814,7 +865,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let data_simulated = Data::simulate(100, 10, 1, 2, "normal", 0.0, 1.0, 42)?;
+        let data_simulated = Data::simulate(100, 5, vec![2,3,4,5], 1, 2, "normal", 0.0, 1.0, 42)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);

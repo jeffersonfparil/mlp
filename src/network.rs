@@ -296,7 +296,7 @@ impl Network {
         let predictions_host: Vec<f32> = vec![0f32; n_observations * n_output_nodes];
         // let normal = Normal::new(0.0, 1.0)?;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
-        let normal = Normal::new(0.0, 2.0 / (n_input_nodes as f32))?;
+        let normal = Normal::new(0.0, 2.0 / (n_input_nodes as f32))?; // He initialisation
         let predictions_dev: CudaSlice<f32> = stream.clone_htod(&predictions_host)?;
         let predictions: Matrix = Matrix::new(predictions_dev, n_output_nodes, n_observations)?;
         let mut weights_per_layer: Vec<Matrix> = vec![];
@@ -308,7 +308,7 @@ impl Network {
         for i in 0..(n_nodes.len() - 1) {
             let n: usize = n_nodes[i + 1];
             let p: usize = n_nodes[i];
-            // let normal = Normal::new(0.0, 2.0/(p as f32).sqrt())?;
+            let normal = Normal::new(0.0, 2.0/(p as f32))?;
             let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
             let dweights_host: Vec<f32> = vec![0f32; n * p];
             let biases_host: Vec<f32> = vec![0f32; n * 1];

@@ -151,12 +151,13 @@ mod test {
     #[test]
     fn test_plot() -> Result<(), Box<dyn Error>> {
         let n: usize = 12_345; // number of observations
-        let p: usize = 17; // number of input features
+        let p: usize = 17; // number of input features (continuous)
+        let q: Vec<usize> = vec![3,4,5,10]; // number of input features (categorical levels)
         let k: usize = 1; // number of output features
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(n, p, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
+        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
         let network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         let optimisation_parameters = OptimisationParameters::new(&network)?;
 
