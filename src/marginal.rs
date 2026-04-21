@@ -291,12 +291,13 @@ mod tests {
         println!("marginals_order_3: {:?}", marginals_order_3);
  
         let n: usize = 50; // number of observations
-        let p: usize = 7; // number of input features
+        let p: usize = 2; // number of continuous input features
+        let q: Vec<usize> = vec![2,3]; // number of levels for each categorical feature variable
         let k: usize = 1; // number of output features
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(n, p, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
+        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
         let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         network.train(&mut optimisation_parameters, true)?;
@@ -307,7 +308,7 @@ mod tests {
         marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["feature_0", "feature_1", "feature_2", "feature_3", "feature_4", "feature_5", "feature_6"]);
-        assert_eq!(marginals.effects, vec![-0.0018198125, 0.0016437222, 0.006603645, 0.00040480707, 0.0055924207, 0.005106901, 0.0018019312]);
+        assert_eq!(marginals.effects, vec![-0.0038391596, 0.0034921032, 0.010571194, 0.00028001683, 0.012000282, 0.011370256, 0.0031345356]);
         
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;

@@ -620,13 +620,14 @@ mod tests {
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
         let n: usize = 12_345; // number of observations
-        let p: usize = 17; // number of input features
+        let p: usize = 17; // number of continuous input features
+        let q: Vec<usize> = vec![2,3,4,5]; // number of levels for each categorical feature variable
         let k: usize = 1; // number of output features
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(n, p, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
-        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 123)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 123)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         println!("Network:\n{}\n\n", network);
         println!("Optimisation Parameters:\n{}\n\n", optimisation_parameters);
@@ -656,7 +657,9 @@ mod tests {
         let cost_prior_to_training: f32 = network.loss()?;
         println!("cost prior to training = {}", cost_prior_to_training);
         println!("predictions before training: {}", network.targets);
-        network.train_per_batch(&mut optimisation_parameters, "1")?;
+        for _ in 0..7 {
+            network.train_per_batch(&mut optimisation_parameters, "1")?;
+        }
         println!("cost after training = {}", network.loss()?);
         println!("predictions after training: {}", network.targets);
         assert!(cost_prior_to_training > network.loss()?);
