@@ -1,16 +1,21 @@
+setwd("OUTPUT-acorsi.grayleafspot")
+
 library(agridat)
 data(acorsi.grayleafspot)
 dat <- acorsi.grayleafspot
 
 # Acorsi figure 2. Note: Acorsi used cell means
-op <- par(mfrow=c(2,1), mar=c(5,4,3,2))
-libs(lattice)
-boxplot(y ~ env, dat, las=2,
-        xlab="environment", ylab="GLS severity")
-title("acorsi.grayleafspot")
-boxplot(y ~ gen, dat, las=2,
-        xlab="genotype", ylab="GLS severity")
-par(op)
+
+png("acorsi.grayleafspot-fig_2.png")
+        op <- par(mfrow=c(2,1), mar=c(5,4,3,2))
+        libs(lattice)
+        boxplot(y ~ env, dat, las=2,
+                xlab="environment", ylab="GLS severity")
+        title("acorsi.grayleafspot")
+        boxplot(y ~ gen, dat, las=2,
+                xlab="genotype", ylab="GLS severity")
+        par(op)
+dev.off()
 
 # GLM models
 
@@ -68,7 +73,27 @@ gmat <- cbind(res2a[10:45, 1], res2b[10:45, 1])
 rownames(gmat) <- gsub("fac2.", "", rownames(gmat))
 
 # match Acorsi figure 4
-biplot(gmat, emat, xlim=c(-2.2, 2.2), ylim=c(-2.2, 2.2), expand=2, cex=0.5,
-        xlab="Axis 1", ylab="Axis 2",
-        main="acorsi.grayleafspot - GAMMI biplot")
+png("acorsi.grayleafspot-fig_4.png")
+        biplot(gmat, emat, xlim=c(-2.2, 2.2), ylim=c(-2.2, 2.2), expand=2, cex=0.5,
+                xlab="Axis 1", ylab="Axis 2",
+                main="acorsi.grayleafspot - GAMMI biplot")
 dev.off()
+
+### Additional plots for comparison with mlp
+
+### fig_coef
+df = stack(coef(gnm2c))
+str(df)
+str(dat)
+
+genotypes_ids = levels(dat$gen)
+environments_ids = levels(dat$env)
+intercept = df$values[df$ind == "(Intercept)"]
+genotypes_coefs = c(intercept, intercept + df$values[grepl("^gen", df$ind)])
+environments_coefs = c(intercept, intercept + df$values[grepl("^env", df$ind) & !grepl(":", df$ind)])
+
+df_genotypes = data.frame(ids=genotypes_ids, coefs=genotypes_coefs)
+df_environments = data.frame(ids=environments_ids, coefs=environments_coefs)
+
+df_genotypes[order(df_genotypes$coefs, decreasing=FALSE), ]
+df_environments[order(df_environments$coefs, decreasing=FALSE), ]

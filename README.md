@@ -80,6 +80,60 @@ cargo build --release
 ./target/release/mlp -h
 ```
 
+## Tests on simulated data
+
+We simulated 10,000 observations of 1 response variable controlled by 500 continuous features across multi-layer perceptrons with 1, 2, 3, 4, and 5 hidden layers whose effects are normally (μ=0, σ=1) and gamma (α=2, θ=2) distributed.
+
+### Simulate data
+
+```shell
+cd mlp/tests
+MLP=../target/release/mlp
+for HIDDEN_LAYERS in $(seq 1 5)
+do
+    # HIDDEN_LAYERS=1
+    F_NORMAL=input_simulated-NORMAL-${HIDDEN_LAYERS}HL.tsv
+    F_GAMMA=input_simulated-GAMMA-${HIDDEN_LAYERS}HL.tsv
+    echo "######################"
+    echo "$F_NORMAL and $F_GAMMA"
+    $MLP \
+        --simulate-data-only \
+       --simulation-n-observations 10000 \
+       --simulation-n-features 500 \
+       --simulation-n-output-columns 1 \
+       --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
+       --simulation-weights-distribution normal \
+       --simulation-weights-distribution-param-1 0 \
+       --simulation-weights-distribution-param-2 1 \
+       --seed ${HIDDEN_LAYERS}
+    F0=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
+    $MLP \
+        --simulate-data-only \
+       --simulation-n-observations 10000 \
+       --simulation-n-features 500 \
+       --simulation-n-output-columns 1 \
+       --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
+       --simulation-weights-distribution gamma \
+       --simulation-weights-distribution-param-1 2 \
+       --simulation-weights-distribution-param-2 2 \
+       --seed ${HIDDEN_LAYERS}
+    F1=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
+    mv $F0 $F_NORMAL
+    mv $F1 $F_GAMMA
+done
+```
+
+### Analysis using R
+
+```R
+
+```
+
+### Analysis using mlp
+
+```shell
+```
+
 ## Tests on empirical data
 
 **NOTES:** 
@@ -91,7 +145,7 @@ e.g. convert `reps=[1, 1, 1, 2, 2, 2, 3, 3]` into `reps=["R1", "R1", "R1", "R2",
 ### Prepare test data
 
 ```shell
-cd mlp/misc
+cd mlp/tests
 mkdir agridat/
 cd agridat/
 curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
@@ -99,7 +153,7 @@ curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip
 
 ### File checker and formatter prior to run
 
-Save the following as `mlp/misc/agridat/scripts/prep_agridat.jl`:
+Save the following as `mlp/tests/agridat/scripts/prep_agridat.jl`:
 
 ```julia
 using DataFrames, CSV
@@ -284,7 +338,7 @@ prep_agridat_data(ARGS)
 ### Run tests on empirical data
 
 ```shell
-cd mlp/misc/agridat
+cd mlp/tests/agridat
 MLP=../../target/release/mlp
 
 for FILE in $(find . -name "*.txt")
