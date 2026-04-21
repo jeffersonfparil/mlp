@@ -253,6 +253,7 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
             let data_simulated = Data::simulate(
                 args.simulation_n_observations,
                 args.simulation_n_features,
+                vec![2,3,4,5],
                 args.simulation_n_output_columns,
                 args.simulation_n_hidden_layers,
                 &args.simulation_weights_distribution,
@@ -295,6 +296,7 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
     let data_simulated = Data::simulate(
         args.simulation_n_observations,
         args.simulation_n_features,
+        vec![2,3,4,5],
         args.simulation_n_output_columns,
         args.simulation_n_hidden_layers,
         &args.simulation_weights_distribution,
