@@ -7,18 +7,15 @@ use chrono::Utc;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use rayon::prelude::*;
-use ruviz::core::{Plot, PlottingError};
-use ruviz::prelude::LegendPosition;
 use std::env::current_dir;
 use std::error::Error;
 use std::fmt;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::cmp::Ordering;
 
 #[derive(Debug, PartialEq)]
-enum TrainingError {
+pub enum TrainingError {
     BatchingError(String),
     EpochError(String),
     OtherError(String),
@@ -37,12 +34,6 @@ impl fmt::Display for TrainingError {
             TrainingError::EpochError(msg) => write!(f, "Epoch error during training: {}", msg),
             TrainingError::OtherError(msg) => write!(f, "Other error during training: {}", msg),
         }
-    }
-}
-
-impl From<PlottingError> for TrainingError {
-    fn from(err: PlottingError) -> Self {
-        TrainingError::OtherError(err.to_string())
     }
 }
 
@@ -397,114 +388,8 @@ impl Network {
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {
-            ///////////////////////////////////////////////
-            // Plot filenames
-            ///////////////////////////////////////////////
-            let dir: PathBuf = current_dir()?;
-            let fname_loss_svg = &format!(
-                "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
-                dir.display(),
-                self.n_hidden_layers,
-                self.activation,
-                optimisation_parameters.optimiser,
-                optimisation_parameters.n_epochs,
-                optimisation_parameters.f_patient_epochs,
-                optimisation_parameters.n_batches,
-                optimisation_parameters.learning_rate,
-                Utc::now().format("%Y%m%d%H%M%S")
-            );
-            let fname_scatter_svg = &fname_loss_svg.replace("Loss_curve-", "Observed_vs_predicted-");
-            ///////////////////////////////////////////////
-            // Plot loss curve
-            ///////////////////////////////////////////////
-            let mut ylabel = String::from("Cost");
-            ylabel.push_str(&format!(
-                " ({:?}; {:?})",
-                self.cost, optimisation_parameters.optimiser
-            ));
-            let mut plot_loss = vec![
-                Plot::new()
-                    .title("Training Cost over Epochs")
-                    .legend_position(LegendPosition::Best)
-                    .xlabel("Epochs")
-                    .ylabel(&ylabel)
-                    .line(&epochs[0], &costs[0])
-                    .label("Batch 0")
-                    .size(4.0, 3.0),                
-            ];
-            for i in 1..optimisation_parameters.n_batches {
-                plot_loss[0] = plot_loss[0]
-                    .clone()
-                    .line(&epochs[i], &costs[i])
-                    .label(&format!("Batch {}", i+1));
-            }
-            ;
-            // plot_loss[0].clone().save(fname_png)?;
-            plot_loss[0].clone().export_svg(fname_loss_svg)?;
-            ///////////////////////////////////////////////
-            // Scatter plot of observed vs predicted values
-            ///////////////////////////////////////////////
-            let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
-            let y_predicted: Vec<f64> = self.predictions.to_host()?.iter().map(|&x| x as f64).collect();
-            // OLS
-            let epsilon: f64 = 1e-7;
-            let n: f64 = y_observed.len() as f64;
-            let u_observed: f64 = y_observed.iter().fold(0.0, |sum, x| sum + x) / n;
-            let u_predicted: f64 = y_predicted.iter().fold(0.0, |sum, x| sum + x) / n;
-            let cov_xy: f64 = y_observed
-                .iter()
-                .zip(y_predicted.iter())
-                .fold(0.0, |a, (x, y)| a + (x - u_observed) * (y - u_predicted));
-            let var_x: f64 = y_observed
-                .iter()
-                .fold(0.0, |a, x| a + (x - u_observed).powi(2));
-            let var_y: f64 = y_predicted
-                .iter()
-                .fold(0.0, |a, x| a + (x - u_predicted).powi(2));
-            let b: f64 = cov_xy / (var_x + epsilon);
-            let a: f64 = u_predicted - (b * u_observed);
-            let error2: f64 = y_predicted
-                .iter()
-                .zip(y_observed.iter())
-                .fold(0.0, |a, (y_p, y_t)| a + (y_p - y_t).powi(2));
-            let mse: f64 = error2 / n;
-            let r2: f64 = 1.00 - (error2 / (var_x + epsilon));
-            let cor: f64 = cov_xy / ((var_x.sqrt() * var_y.sqrt()) + epsilon);
-            let x_min: f64 = match y_observed
-                .iter()
-                .min_by(|a, b| {
-                    a.partial_cmp(b).unwrap_or(Ordering::Less)
-                }) {
-                    Some(x) => *x,
-                    None => y_observed[0],
-                };
-            let x_max: f64 = match y_observed
-                .iter()
-                .max_by(|a, b| {
-                    a.partial_cmp(b).unwrap_or(Ordering::Greater)
-                }) {
-                    Some(x) => *x,
-                    None => y_observed[0],
-                };
-            let mut x_for_plotting: Vec<f64> = Vec::with_capacity(100);
-            let mut y_for_plotting: Vec<f64> = Vec::with_capacity(100);
-            let step: f64 = (x_max - x_min) / 99.0;
-            for i in 0..100 {
-                let x: f64 = x_min + (i as f64 * step);
-                let y: f64 = a + x*b;
-                x_for_plotting.push(x);
-                y_for_plotting.push(y);
-            }
-            let title = format!("Observed vs Predicted Values\n(n={}; MSE={:.2}; R2={:.2}; cor={:.2})", n, mse, r2, cor);
-            Plot::new()
-                .title(title.as_str())
-                .xlabel("Observed")
-                .ylabel("Predicted")
-                .scatter(&y_observed, &y_predicted)
-                .line(&x_for_plotting, &y_for_plotting)
-                .export_svg(fname_scatter_svg)?;
-
-            // Messages
+            let fname_loss_svg = self.plot_loss(epochs, costs, optimisation_parameters)?;
+            let fname_scatter_svg = self.plot_true_vs_pred(optimisation_parameters)?;
             println!("===============================================");
             println!("Final cost after training: {}", final_cost_value);
             println!("Find the loss curve saved as: {}", fname_loss_svg);

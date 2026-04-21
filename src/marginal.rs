@@ -31,7 +31,7 @@ impl fmt::Display for MarginalError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Marginals {
     pub ids: Vec<String>,
     pub effects: Vec<f32>,
@@ -98,22 +98,17 @@ impl Marginals {
     }
 
     pub fn estimate_effects(self: &mut Self, network_orig: &mut Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
-
         self.check_dimensions()?;
-
         // Find the range of values for each input node
         // println!("number of activation layers: {}", network_orig.activations_per_layer.len());
         // println!("input_layer: {}", network_orig.activations_per_layer[0]);
-
         let n: usize = network_orig.activations_per_layer[0].n_cols;
         let p: usize = network_orig.activations_per_layer[0].n_rows;
-
         // let mut minima: Vec<f32> = vec![f32::NAN; p];
         // let mut maxima: Vec<f32> = vec![f32::NAN; p];
         let input_matrix_orig = network_orig.activations_per_layer[0].to_host()?;
         // let mut input_matrix = input_matrix_orig.clone();
         // let stream = network_orig.activations_per_layer[0].data.context().default_stream();
-        
         let mut feature_names: Vec<String> = vec![];
         for i in 0..self.ids.len() {
             let id = self.ids[i].to_owned();
@@ -149,8 +144,6 @@ impl Marginals {
             ranges.push(new_values_to_iterate);
         }
         // println!("ranges: {:?}", ranges);
-        
-
         // let start_time = Instant::now();
         // let progress_width: usize = 50;
         // let counter = Arc::new(atomic::AtomicUsize::new(0));
@@ -163,22 +156,6 @@ impl Marginals {
         // let ids = self.ids.clone();
         // for (i, id) in ids.into_iter().enumerate() {
             if verbose {
-                // Atomically increment counter
-                // let x = counter.load(atomic::Ordering::Relaxed);
-                // let perc: f64 = (((progress_width * 100 * (x+1)) as f64)/(self.ids.len() as f64)).round() / (progress_width as f64);
-                // let n_progress: usize = (((progress_width * (x+1)) as f64) / (self.ids.len() as f64)).round() as usize;
-                // let progress_text: String = (0..n_progress).map(|_| "█").collect();
-                // let no_progress_text: String = (0..(progress_width-n_progress)).map(|_| " ").collect();
-                // let t_remaining: f64 = {
-                //     let dp: f64 = n_progress as f64;
-                //     let dt: f64 = start_time.elapsed().as_millis() as f64 / 60_000.0;
-                //     let v: f64 = dp/dt;
-                //     let t_total: f64 = (progress_width as f64) / v;
-                //     t_total - dt
-                // };
-                // print!("\rEstimating {} marginal effects | {:.2}% | {}{} | {:.2} minutes remaining | ", self.ids.len(), perc, progress_text, no_progress_text, t_remaining);
-                // io::stdout().flush().expect("Failed to flush stdout");
-                // counter.fetch_add(1, atomic::Ordering::Relaxed);
                 pb.lock().unwrap().next();
             }
             // let id = self.ids[i].to_owned();

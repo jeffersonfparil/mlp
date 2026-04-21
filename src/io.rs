@@ -2,7 +2,7 @@ use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::linalg::matrix::{Matrix, MatrixError};
 use crate::network::Network;
-use crate::marginal::Marginals;
+use crate::marginal::{Marginals, MarginalError};
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -763,6 +763,48 @@ impl Marginals {
         }
         Ok(())
     }
+
+    pub fn read_delimited(fname: &str, delim: &str) -> Result<Self, Box<dyn Error>> {
+        let file = File::open(fname)?;
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
+        // Read header
+        let header: Vec<String> = if let Some(header_line) = lines.next() {
+            let header = header_line?;
+            header.trim().split(delim).map(|s| s.to_string()).collect()
+        } else {
+            return Err(Box::new(MarginalError::DimensionMismatch(
+                "File is empty.".to_string(),
+            )));
+        };
+        if &header[0] != "ids" {
+            return Err(Box::new(MarginalError::NameMismatch(
+                format!("We expect the first column to be \"ids\" but found \"{}\" instead.", header[0]),
+            )));
+        }
+        if &header[1] != "effects" {
+            return Err(Box::new(MarginalError::NameMismatch(
+                format!("We expect the first column to be \"effects\" but found \"{}\" instead.", header[1]),
+            )));
+        }
+        let mut ids: Vec<String> = Vec::new();
+        let mut effects: Vec<f32> = Vec::new();
+        for line in lines {
+            let line = line?;
+            let values: Vec<&str> = line.trim().split(delim).collect();
+            if values.len() != header.len() {
+                return Err(Box::new(MarginalError::DimensionMismatch(
+                    "Number of values in a row does not match number of columns in header."
+                        .to_string(),
+                )));
+            }
+            ids.push(values[0].to_owned());
+            effects.push(values[1].parse::<f32>()?);
+        }
+        let marginals =  Marginals {ids, effects};
+        marginals.check_dimensions()?;
+        Ok(marginals)
+    }
 }
 
 #[cfg(test)]
@@ -860,6 +902,10 @@ mod tests {
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
         marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
         marginals.write_delimited("test_marginals.tsv", "\t")?;
+        let marginals_reloaded = Marginals::read_delimited("test_marginals.tsv", "\t")?;
+        // println!("marginals: {:?}", marginals);
+        // println!("marginals_reloaded: {:?}", marginals_reloaded);
+        assert_eq!(marginals, marginals_reloaded);
 
         // Clean-up
         for f in std::fs::read_dir(".")? {

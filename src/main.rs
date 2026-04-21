@@ -15,6 +15,7 @@ mod optimisers;
 mod train;
 mod marginal;
 mod progress_bar;
+mod plot;
 
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
