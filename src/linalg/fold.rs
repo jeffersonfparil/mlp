@@ -8,6 +8,38 @@ impl Matrix {
         Ok(a_host.iter().fold(0.0, |sum, x| sum + x))
     }
 
+    pub fn meanmat(self: &Self) -> Result<f32, Box<dyn Error>> {
+        let sum: f32 = self.summat()?;
+        let n: f32 = (self.n_rows * self.n_cols) as f32;
+        Ok(sum / n)
+    }
+
+    pub fn varmat(self: &Self) -> Result<f32, Box<dyn Error>> {
+        let a_host: Vec<f32> = self.to_host()?;
+        let mean: f32 = self.meanmat()?;
+        let n: f32 = (self.n_rows * self.n_cols) as f32;
+        let sum_sq: f32 = a_host.into_iter().fold(0.0, |sum_sq, x| sum_sq + (x - mean).powf(2.0));
+        Ok(sum_sq / (n-1.00))
+    }
+
+    pub fn min(self: &Self) -> Result<f32, Box<dyn Error>> {
+        let a_host: Vec<f32> = self.to_host()?;
+        let out: f32 = match a_host.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) {
+            Some(x) => *x,
+            None => f32::NAN
+        };
+        Ok(out)
+    }
+
+    pub fn max(self: &Self) -> Result<f32, Box<dyn Error>> {
+        let a_host: Vec<f32> = self.to_host()?;
+        let out: f32 = match a_host.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) {
+            Some(x) => *x,
+            None => f32::NAN
+        };
+        Ok(out)
+    }
+
     pub fn prodmat(self: &Self) -> Result<f32, Box<dyn Error>> {
         let a_host: Vec<f32> = self.to_host()?;
         Ok(a_host.iter().fold(1.0, |prod, x| prod * x))
