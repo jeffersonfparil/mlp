@@ -50,6 +50,7 @@ impl Network {
     }
 
     pub fn deep_shap(&mut self, input_reference_1: Matrix, input_reference_2: Matrix) -> Result<Matrix, Box<dyn Error>> {
+        // SHapley Additive exPlanations (SHAP) analysis for deep neural nets (Lundberg & Lee, 2015)
         // Backup the original input data and 
         let input_original: Matrix = self.activations_per_layer[0].clone();
         // Define the differences in the 2 input reference matrices
