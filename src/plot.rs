@@ -1,4 +1,5 @@
 use crate::network::Network;
+use crate::marginal::Marginals;
 use crate::optimisers::OptimisationParameters;
 use crate::train::TrainingError;
 use chrono::Utc;
@@ -142,10 +143,12 @@ impl Network {
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-// TODO: implement marginals plotting functions
-// impl Marginals {
-//     pub fn plot
-// }
+// TODO: implement other plotting functions
+impl Marginals {
+    pub fn plot() -> () {
+        unimplemented!()
+    }
+}
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
