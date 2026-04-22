@@ -49,8 +49,96 @@ impl Network {
         Ok(())
     }
 
-    pub fn deep_shap() -> () {
-        unimplemented!()
+    pub fn deep_shap(&mut self, input_reference_1: Matrix, input_reference_2: Matrix) -> Result<Matrix, Box<dyn Error>> {
+        // Backup the original input data and 
+        let input_original: Matrix = self.activations_per_layer[0].clone();
+        // Define the differences in the 2 input reference matrices
+        let d_input: Matrix = input_reference_1
+            .elementwisematadd(
+                &input_reference_2
+                    .scalarmatmul(-1.0)?
+            )?;
+        // println!("d_input: {}", d_input);
+        // Instantiate linear, non-linear and output layers for the 2 input reference matrices
+        let mut linears: Vec<Vec<Matrix>> = Vec::with_capacity(2);
+        let mut nonlinears: Vec<Vec<Matrix>> = Vec::with_capacity(2);
+        let mut outputs: Vec<Vec<Matrix>> = Vec::with_capacity(2);
+        for input_reference in vec![input_reference_1, input_reference_2] {
+            // Replace input layer with the reference input
+            self.activations_per_layer[0] = input_reference;
+            // Forwardpass-ish (more like the `predict()` method)
+            let n = self.n_hidden_layers;
+            let mut wxb: Vec<Matrix> = Vec::with_capacity(n);
+            let mut a: Vec<Matrix> = Vec::with_capacity(n);
+            let mut y: Vec<Matrix> = Vec::with_capacity(1);
+            for i in 0..(n+1) {
+                let weights_x_activations =
+                    self.weights_per_layer[i].matmul(&self.activations_per_layer[i])?;
+                self.weights_x_biases_per_layer[i] =
+                    weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
+                if i < n {
+                    self.activations_per_layer[i + 1] = self
+                        .activation
+                        .activate(&self.weights_x_biases_per_layer[i])?;
+                    wxb.push(self.weights_x_biases_per_layer[i].clone());
+                    a.push(self.activations_per_layer[i + 1].clone());
+                } else {
+                    y.push(self.weights_x_biases_per_layer[i].clone());
+                }
+            }
+            linears.push(wxb);
+            nonlinears.push(a);
+            outputs.push(y);
+        }
+        // Backpropagate the multipliers
+        let dc_over_da = self.cost.derivative(&self.predictions, &self.targets)?;
+        let da_over_ds = 1.00f32;
+        let dc_over_ds = dc_over_da.scalarmatmul(da_over_ds)?;
+        let mut multipliers: Vec<Matrix> = vec![dc_over_ds];
+        let n_total_layers = self.weights_per_layer.len();
+        for i in 1..(self.n_hidden_layers + 1) {
+            // println!("i = {}; self.weights_per_layer[n_total_layers - i]: {}", i, self.weights_per_layer[n_total_layers - i]);
+            let dc_over_da: Matrix =
+                self.weights_per_layer[n_total_layers - i].matmult0(&multipliers[multipliers.len() - 1])?;
+            let d_linears_i: Matrix = linears[0][i-1]
+                .elementwisematadd(
+                    &linears[1][i-1].
+                        scalarmatmul(-1.0)?
+                )?;
+            let d_nonlinears_i: Matrix = nonlinears[0][i-1]
+                .elementwisematadd(
+                    &nonlinears[1][i-1].
+                        scalarmatmul(-1.0)?
+                )?;
+
+            let rescaler: Matrix = d_nonlinears_i
+                .elementwisematmul(
+                    &d_linears_i
+                        .scalarmatadd(0.00001)?
+                        .elementwisematinverse()?
+                )?;
+            // println!("rescaler: {}", rescaler);
+            let multiplier: Matrix = dc_over_da.elementwisematmul(&rescaler)?;
+            // let multiplier: Matrix = dc_over_da.elementwisematmul(&self.weights_x_biases_per_layer[n_total_layers - (i + 1)])?.elementwisematmul(&rescaler)?;
+            // println!("multiplier: {}", multiplier);
+            multipliers.push(multiplier);
+        }
+        // println!("multipliers.len(): {}", multipliers.len());
+        // println!("self.weights_per_layer.len(): {}", self.weights_per_layer.len());
+        // println!("multipliers[multipliers.len() - 1]: {}", multipliers[multipliers.len() - 1]);
+        // Input layer multipliers
+        let m_x: Matrix = self.weights_per_layer[0].matmult0(&multipliers[multipliers.len() - 1])?;
+        // println!("m_x: {}", m_x);
+        // println!("d_input: {}", d_input);
+        // SHAP values
+        let shap: Matrix = m_x.elementwisematmul(&d_input)?;
+        // let row_sums = shap.rowsummat()?;
+        // println!("row_sums: {}", row_sums);
+        // Reset
+        self.activations_per_layer[0] = input_original;
+        self.predict()?;
+        // Output
+        Ok(shap)
     }
 }
 
@@ -66,6 +154,7 @@ mod tests {
         let n: usize = 100;
         let p: usize = 17;
         let k: usize = 1;
+        let h: usize = 10;
         let mut input_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
         let mut output_host: Vec<f32> = vec![0.0f32; k * n]; // k x n
         rand::fill(&mut input_host[..]);
@@ -80,9 +169,9 @@ mod tests {
             &stream,
             input_matrix,
             output_matrix,
-            10,
-            vec![256; 10],
-            vec![0.0f32; 10],
+            h,
+            vec![256; h],
+            vec![0.0f32; h],
             42,
         )?;
         // Assess the weights at the ith layer
@@ -124,6 +213,42 @@ mod tests {
         let s = network.weights_gradients_per_layer[i].summat()?;
         println!("s (with forwardpass) = {}", s);
         assert!(s != 0.0);
+
+
+        // DeepSHAP for Network explainability
+        let stream = ctx.default_stream();
+        let n: usize = 100;
+        let p: usize = 17;
+        let k: usize = 1;
+        let h: usize = 3; // larger number of hidden layers with no training will zero-out all SHAP effects
+        let mut input_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
+        let mut output_host: Vec<f32> = vec![0.0f32; k * n]; // k x n
+        rand::fill(&mut input_host[..]);
+        rand::fill(&mut output_host[..]);
+        let input_dev: CudaSlice<f32> = stream.clone_htod(&input_host)?;
+        let output_dev: CudaSlice<f32> = stream.clone_htod(&output_host)?;
+        let input_matrix = Matrix::new(input_dev, p, n)?; // p x n matrix
+        println!("input_matrix: {}", input_matrix);
+        let output_matrix = Matrix::new(output_dev, k, n)?; // k x n matrix
+        println!("output_matrix: {}", output_matrix);
+        let mut network: Network = Network::new(
+            &stream,
+            input_matrix,
+            output_matrix,
+            h,
+            vec![256; h],
+            vec![0.0f32; h],
+            42,
+        )?;
+        let mut input_reference_1_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
+        let mut input_reference_2_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
+        rand::fill(&mut input_reference_1_host[..]);
+        rand::fill(&mut input_reference_2_host[..]);
+        let input_reference_1: Matrix = Matrix::new(stream.clone_htod(&input_reference_1_host)?, p, n)?;
+        let input_reference_2: Matrix = Matrix::new(stream.clone_htod(&input_reference_2_host)?, p, n)?;
+        let shap = network.deep_shap(input_reference_1, input_reference_2)?;
+        println!("shap: {}", shap);
+        assert!(shap.summat()? > 0.0);
         Ok(())
     }
 }
