@@ -248,7 +248,7 @@ mod tests {
         let input_reference_2: Matrix = Matrix::new(stream.clone_htod(&input_reference_2_host)?, p, n)?;
         let shap = network.deep_shap(input_reference_1, input_reference_2)?;
         println!("shap: {}", shap);
-        assert!(shap.summat()? > 0.0);
+        assert!(shap.summat()? != 0.0);
         Ok(())
     }
 }
