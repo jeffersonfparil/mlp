@@ -48,6 +48,10 @@ impl Network {
         }
         Ok(())
     }
+
+    pub fn deep_shap() -> () {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]

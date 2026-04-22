@@ -307,22 +307,22 @@ mod tests {
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
         marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
-        assert_eq!(marginals.ids, vec!["feature_0", "feature_1", "feature_2", "feature_3", "feature_4", "feature_5", "feature_6"]);
-        assert_eq!(marginals.effects, vec![-0.0038391596, 0.0034921032, 0.010571194, 0.00028001683, 0.012000282, 0.011370256, 0.0031345356]);
+        assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
+        assert_eq!(marginals.effects, vec![0.001258011, -0.00037895, 0.00078878005, 0.0013426174, 0.00030576906, -0.00265601, -0.00016025733]);
         
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
         marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 2 marginals: {:?}", marginals);
-        assert_eq!(marginals.ids.len(), 28);
+        assert_eq!(marginals.ids.len(), 24);
 
         // Order: 3
         let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
         marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 3 marginals: {:?}", marginals);
-        assert_eq!(marginals.ids.len(), 63);
+        assert_eq!(marginals.ids.len(), 41);
 
         // Clean-up
         for f in std::fs::read_dir(".")? {

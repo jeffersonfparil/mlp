@@ -53,18 +53,17 @@ impl Network {
     pub fn predict(self: &mut Self) -> Result<(), Box<dyn Error>> {
         // Different from forwardpass in that it does not apply dropout.
         let n = self.n_hidden_layers;
-        for i in 0..n {
+        for i in 0..(n+1) {
             let weights_x_activations =
                 self.weights_per_layer[i].matmul(&self.activations_per_layer[i])?;
             self.weights_x_biases_per_layer[i] =
                 weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
-            self.activations_per_layer[i + 1] = self
-                .activation
-                .activate(&self.weights_x_biases_per_layer[i])?;
+            if i < n {
+                self.activations_per_layer[i + 1] = self
+                    .activation
+                    .activate(&self.weights_x_biases_per_layer[i])?;
+            }
         }
-        let weights_x_dropout = self.weights_per_layer[n].matmul(&self.activations_per_layer[n])?;
-        self.weights_x_biases_per_layer[n] =
-            weights_x_dropout.rowmatadd(&self.biases_per_layer[n])?;
         self.predictions = self.weights_x_biases_per_layer[n].clone();
         Ok(())
     }

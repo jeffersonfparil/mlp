@@ -219,9 +219,19 @@ struct Args {
     #[arg(short = 'n', long, default_value_t = 100)]
     simulation_n_observations: usize,
 
-    /// Number of features to simulate
+    /// Number of continuous features to simulate
     #[arg(short = 'p', long, default_value_t = 10)]
-    simulation_n_features: usize,
+    simulation_n_features_continuous: usize,
+    
+    /// Number of continuous features to simulate
+    #[arg(
+        short = 'q',
+        long,
+        value_parser,
+        value_delimiter = ',',
+        default_value = "2,3,5"
+    )]
+    simulation_n_features_categorical: Vec<usize>,
 
     /// Number of simulated output column
     #[arg(short = 'k', long, default_value_t = 1)]
@@ -252,8 +262,8 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
             println!("No input file provided. Simulating data...");
             let data_simulated = Data::simulate(
                 args.simulation_n_observations,
-                args.simulation_n_features,
-                vec![2,3,4,5],
+                args.simulation_n_features_continuous,
+                args.simulation_n_features_categorical.clone(),
                 args.simulation_n_output_columns,
                 args.simulation_n_hidden_layers,
                 &args.simulation_weights_distribution,
@@ -295,8 +305,8 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
 fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
     let data_simulated = Data::simulate(
         args.simulation_n_observations,
-        args.simulation_n_features,
-        vec![2,3,4,5],
+        args.simulation_n_features_continuous,
+        args.simulation_n_features_categorical.clone(),
         args.simulation_n_output_columns,
         args.simulation_n_hidden_layers,
         &args.simulation_weights_distribution,

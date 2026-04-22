@@ -36,6 +36,69 @@ impl fmt::Display for Data {
     }
 }
 
+fn simulate_weights(dist: &str, par1: f64, par2: f64, p: usize, seed: usize) -> Result<Vec<f32>, Box<dyn Error>> {
+    let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
+    let weights: Vec<f32> = match dist {
+        "normal" => {
+            let distribution = Normal::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+        "lognormal" => {
+            let distribution = LogNormal::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+        "cauchy" => {
+            let distribution = Cauchy::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+        "weibull" => {
+            let distribution = Weibull::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+        "gamma" => {
+            let distribution = Gamma::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+        "beta" => {
+            let distribution = Beta::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+        _ => {
+            let distribution = Normal::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
+    };
+    Ok(weights)
+}
+
 impl Data {
     pub fn new(n: usize, p: usize, k: usize) -> Result<Self, Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -65,165 +128,63 @@ impl Data {
         par2: f64,
         seed: usize,
     ) -> Result<Self, Box<dyn Error>> {
-
-        // // n = total number of observations
-        // // p = number of continuous explanatory variables or features
-        // // q = vector of the number of levels in categorical variable
-        // // k = number of response variables or targets
-        // // d = number of hidden layers
-        // // dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
-        // // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
-        // // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
-        // // seed = randomisation seed for repeatbility
-
-        // let n_features = p + q.len();
-
-        // let mut data = Data::new(n, n_features, k)?;
-        // let stream = data.features.data.context().default_stream();
-        // let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
-        // // Features simulation
-        // let mut features_host: Vec<f32> = Vec::with_capacity(n_features * n);
-        // // Continuous features
-        // for _j in 0..p {
-        //     for _i in 0..n {
-        //         features_host.push(rng.random());
-        //     }
-        // }
-        // // Categorical features (binary values)
-        // for n_levels in q.clone() {
-        //     let mut assigned: Vec<bool> = vec![false; n];
-        //     for j in 0..n_levels {
-        //         for i in 0..n {
-        //             let value = if rng.random::<f64>() < (1.00 / (q.len() as f64)) {
-        //                 1.00
-        //             } else {
-        //                 0.00
-        //             };
-        //             if assigned[i] {
-        //                 features_host.push(0.0);
-        //             } else if j < (n_levels-1) {
-        //                 features_host.push(value);
-        //                 assigned[i] = assigned[i] || (value != 0.0);
-        //             } else {
-        //                 features_host.push(1.00);
-        //             }
-        //         }
-        //     }
-        // }
-        // // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
-
-
-
-
-        let mut p = p;
-        for qi in q {
-            p += qi;
-        }
-        let mut data = Data::new(n, p, k)?;
-        let stream = data.features.data.context().default_stream();
+        // n = total number of observations
+        // p = number of continuous explanatory variables or features
+        // q = vector of the number of levels in categorical variable
+        // k = number of response variables or targets
+        // d = number of hidden layers
+        // dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
+        // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
+        // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
+        // seed = randomisation seed for repeatability
+        let n_features = p + q.iter().fold(0, |sum, &x| sum + x);
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
-        let (features_host, targets_host): (Vec<f32>, Vec<f32>) = match dist {
-            "normal" => {
-                let distribution = Normal::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
+        // Features simulation
+        let mut feature_names: Vec<String> = Vec::with_capacity(n_features);
+        let mut features_host: Vec<f32> = Vec::with_capacity(n_features * n);
+        // Continuous features
+        for j in 0..p {
+            feature_names.push(format!("fcon_{}", j));
+            for _i in 0..n {
+                features_host.push(rng.random());
             }
-            "lognormal" => {
-                let distribution = LogNormal::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
+        }
+        // Categorical features (binary values)
+        for (id, n_levels) in q.clone().into_iter().enumerate() {
+            let mut assigned: Vec<bool> = vec![false; n];
+            for j in 0..n_levels {
+                feature_names.push(format!("fcat_{}➵{}", id, j));
+                for i in 0..n {
+                    let value = if rng.random::<f64>() < (1.00 / (q.len() as f64)) {
+                        1.00
+                    } else {
+                        0.00
+                    };
+                    if assigned[i] {
+                        features_host.push(0.0);
+                    } else if j < (n_levels-1) {
+                        features_host.push(value);
+                        assigned[i] = assigned[i] || (value != 0.0);
+                    } else {
+                        features_host.push(1.00);
+                    }
+                }
             }
-            "cauchy" => {
-                let distribution = Cauchy::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
-            }
-            "weibull" => {
-                let distribution = Weibull::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
-            }
-            "gamma" => {
-                let distribution = Gamma::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
-            }
-            "beta" => {
-                let distribution = Beta::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
-            }
-            _ => {
-                // Use normal distribution by default
-                let distribution = Normal::new(par1, par2)?;
-                let features_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(p * n)
-                    .map(|x| x as f32)
-                    .collect();
-                let targets_host: Vec<f32> = (&mut rng)
-                    .sample_iter(distribution)
-                    .take(k * n)
-                    .map(|x| x as f32)
-                    .collect();
-                (features_host, targets_host)
-            }
-        };
-        let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, p, n)?;
+        }
+        // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
+        let targets_host: Vec<f32> = (0..(k*n)).map(|_| rng.random()).collect();
+        // println!("n = {}", n);
+        // println!("p = {}", p);
+        // println!("k = {}", k);
+        // println!("n_features = {}", n_features);
+        // println!("q = {:?}", q);
+        // println!("features_host.len() = {}", features_host.len());
+        // println!("targets_host.len() = {}", targets_host.len());
+        // Instantiate the Data and extract the CUDA device stream for instantiating the features and target matrices
+        let mut data = Data::new(n, n_features, k)?;
+        let stream = data.features.data.context().default_stream();
+        // Instantiate the Network
+        let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, n_features, n)?;
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
         let n_hidden_layers: usize = d;
         let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
@@ -237,7 +198,18 @@ impl Data {
             dropout_rates,
             seed,
         )?;
+        // Redefine the weights
+        for i in 0..(network.n_hidden_layers+1) {
+            let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
+            let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
+            let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
+            network.weights_per_layer[i] = weights;
+        }
+        // Extract non-dummy targets
         network.predict()?;
+        // Update the feature names
+        data.feature_names = feature_names.clone();
+        // Update the features and targets with the simulated data
         data.features = network.activations_per_layer[0].clone();
         data.targets = network.predictions.clone();
         Ok(data)
