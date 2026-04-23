@@ -23,8 +23,8 @@ impl Network {
     pub fn plot_loss(self: &Self, epochs: Vec<Vec<f64>>, costs: Vec<Vec<f64>>, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
-        let fname_loss_png = format!(
-            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.png",
+        let fname_loss_svg = format!(
+            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
             dir.display(),
             self.n_hidden_layers,
             self.activation,
@@ -58,15 +58,15 @@ impl Network {
         }
         ;
         // plot_loss[0].clone().save(fname_png)?;
-        plot_loss[0].clone().save(&fname_loss_png)?;
-        Ok(fname_loss_png)
+        plot_loss[0].clone().export_svg(&fname_loss_svg)?;
+        Ok(fname_loss_svg)
     }
 
     pub fn plot_true_vs_pred(self: &Self, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
-        let fname_scatter_png = format!(
-            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.png",
+        let fname_scatter_svg = format!(
+            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
             dir.display(),
             self.n_hidden_layers,
             self.activation,
@@ -136,8 +136,8 @@ impl Network {
             .ylabel("Predicted")
             .scatter(&y_observed, &y_predicted)
             .line(&x_for_plotting, &y_for_plotting)
-            .save(&fname_scatter_png)?;
-        Ok(fname_scatter_png)
+            .export_svg(&fname_scatter_svg)?;
+        Ok(fname_scatter_svg)
     }
 }
 
@@ -252,7 +252,7 @@ mod test {
         // Clean-up
         for f in std::fs::read_dir(".")? {
             let f = f?.path();
-            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("png") {
+            if f.is_file() && (f.extension().and_then(|s| s.to_str()) == Some("png") || f.extension().and_then(|s| s.to_str()) == Some("svg")) {
                 std::fs::remove_file(&f)?;
             }
         }
