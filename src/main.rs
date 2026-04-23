@@ -189,8 +189,8 @@ struct Args {
     predict: bool,
 
     /// File name of the MLP model in JSON format
-    #[arg(short = 'm', long, default_value = "missing-model.json")]
-    model: String,
+    #[arg(short = 'm', long)]
+    model: Option<String>,
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Marginal effects estimation only
@@ -341,16 +341,16 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
             )));
         }
     };
-    match args.model.as_ref() {
-        "missing-model.json" => {
+    let model = match &args.model {
+        Some(x) => x.to_owned(),
+        None => {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "Please provide the trained model for prediction (Note that the filename should never be `missing-model.json`).",
+                "Please provide the trained model for prediction.",
             )));
         }
-        _ => (),
     };
-    let fname_predictions = args.model.replace(".json", "-predictions.tsv");
+    let fname_predictions = model.replace(".json", "-predictions.tsv");
     match fs::File::create_new(&fname_predictions) {
         Ok(_) => {std::fs::remove_file(&fname_predictions)?},
         Err(_) => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Predictions file '{}' exists!", fname_predictions)))),
@@ -358,7 +358,7 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     // Prepare the network
     // Load input data
     let data = read_data(&args)?;
-    let network_fitted = Network::read_network(&args.model)?;
+    let network_fitted = Network::read_network(&model)?;
     // Initialise the network containing the input data and fitted model
     let mut network = data.init_network(
         network_fitted.n_hidden_layers,
@@ -419,14 +419,14 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
             )));
         }
     };
-    match args.model.as_ref() {
-        "missing-model.json" => {
+    let model = match &args.model {
+        Some(x) => x.to_owned(),
+        None => {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "Please provide the trained model for marginal effects estimation (Note that the filename should never be `missing-model.json`).",
+                "Please provide the trained model for marginal effects estimation.",
             )));
         }
-        _ => (),
     };
     match args.marginals_order < 1 {
         true => {
@@ -437,7 +437,7 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
         },
         false => (),
     };
-    let fname_marginals = args.model.replace(".json", "-marginal_effects.tsv");
+    let fname_marginals = model.replace(".json", "-marginal_effects.tsv");
     match fs::File::create_new(&fname_marginals) {
         Ok(_) => {std::fs::remove_file(&fname_marginals)?},
         Err(_) => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Marginal effects file '{}' exists!", fname_marginals)))),
@@ -454,7 +454,7 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
         false => (),
     };
     // Prepare the network
-    let mut network = Network::read_network(&args.model)?;
+    let mut network = Network::read_network(&model)?;
     // println!("network after saving and reloading: {}", network);
     // Extract the marginal effects and save
     // Note that the maximum order of effects is naively set to `network.n_hidden_layers + 1` even though technically all possible feature combinations are possible even at 1 hidden layer
@@ -754,6 +754,26 @@ fn marginals_after_training(
 fn main() -> Result<(), Box<dyn Error>> {
     // Parse arguments
     let args = Args::parse();
+    // Make sure the output and input models if they are supplied have the extension "json"
+    // which is required to make sure the marginal effects filenames are generated correctly
+    match &args.fname_network_output {
+        Some(x) => {
+            let path = std::path::Path::new(x);
+            if path.extension().map_or(false, |ext| ext != "json") {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Output model file needs to have '.json' extension: {}", x))))
+            }
+        },
+        None => (),
+    };
+    match &args.model {
+        Some(x) => {
+            let path = std::path::Path::new(x);
+            if path.extension().map_or(false, |ext| ext != "json") {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Input model file needs to have '.json' extension: {}", x))))
+            }
+        },
+        None => (),
+    };
     // Simulate data only
     if args.simulate_data_only {
         return simulate_only(&args)
