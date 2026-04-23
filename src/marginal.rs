@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::sync::Arc;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
-use rand_distr::Normal;
+use rand_distr::{Normal, Uniform};
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
@@ -278,102 +278,113 @@ impl Marginals {
         Ok(())
     }
 
-    pub fn estimate_deepshap(self: &mut Self, network: &mut Network, seed: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
+    pub fn estimate_deepshap(self: &mut Self, network: &mut Network, r: usize, seed: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
         self.check_dimensions()?;
         let n: usize = network.activations_per_layer[0].n_cols;
         let p: usize = network.activations_per_layer[0].n_rows;
         let stream = network.activations_per_layer[0].data.context().default_stream();
-        
-
-        // Naive
-        // let mut input_reference_1_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
-        // let mut input_reference_2_host: Vec<f32> = vec![0.0f32; p * n]; // p x n
-        // rand::fill(&mut input_reference_1_host[..]);
-        // rand::fill(&mut input_reference_2_host[..]);
-
-        // Using the properties of the features including the fact that some are continuous while others are categorical
-        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
-        let input_reference_1_host: Vec<f32> = network.activations_per_layer[0].to_host()?;
-        let mut input_reference_2_host: Vec<f32> = Vec::with_capacity(p*n);
-        let mut row_indexes: Vec<usize> = vec![0];
-        let col_indexes: Vec<usize> = (0..p).collect();
-        let mut categorical_level_marker: Vec<bool> = vec![false; n];
-        for i in 0..p {
-            row_indexes[0] = i;
-            let y: Matrix = network.activations_per_layer[0].slice(&row_indexes, &col_indexes)?;
-            let y_mean: f32 = y.meanmat()?;
-            let y_var: f32 = y.varmat()?;
-            let y_min: f32 = y.min()?;
-            let y_max: f32 = y.max()?;
-            let distribution = Normal::new(y_mean as f64, (y_var as f64).sqrt())?;
-            let y_hat: Vec<f32> = (&mut rng)
-                .sample_iter(distribution)
-                .take(n)
-                .map(|x| 
-                    if (x as f32) < y_min {
-                        y_min
-                    } else if (x as f32) > y_max {
-                        y_max
-                    } else {
-                        x as f32
-                })
-                .collect::<Vec<f32>>();
-            let id: String = self.ids[i].to_owned();
-            let id_split: Vec<&str> = id.split("➵").collect();
-            // Determine is the current feature is the last level of a categorical variable
-            let last_level_of_categorical: bool = if i == p-1 {
-                true
-            } else {
-                let id_next_split: Vec<&str> = self.ids[i+1].split("➵").collect();
-                if (id_next_split.len() > 1) && (id_next_split[id_next_split.len() - 1] == "0") {
+        // Generate SHAP values for r replications of random samnpling across the distributions of the observed input features (assuming normal distribution of these features)
+        let mut shaps: Vec<Matrix> = Vec::with_capacity(r);
+        let mut pb = ProgressBar::new(r, 50, format!("DeepSHAP estimation for {} replications", r));
+        for _ in 0..r {
+            // Using the properties of the features including the fact that some are continuous while others are categorical
+            let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
+            let input_reference_1_host: Vec<f32> = network.activations_per_layer[0].to_host()?;
+            let mut input_reference_2_host: Vec<f32> = Vec::with_capacity(p*n);
+            // Initialise vectors used in the innner loop across features
+            let mut row_indexes: Vec<usize> = vec![0];
+            let col_indexes: Vec<usize> = (0..p).collect();
+            let mut categorical_level_marker: Vec<bool> = vec![false; n];
+            for i in 0..p {
+                row_indexes[0] = i;
+                let y: Matrix = network.activations_per_layer[0].slice(&row_indexes, &col_indexes)?;
+                let y_mean: f32 = y.meanmat()?;
+                let y_var: f32 = y.varmat()?;
+                let y_min: f32 = y.min()?;
+                let y_max: f32 = y.max()?;
+                let distribution = Normal::new(y_mean as f64, (y_var as f64).sqrt())?;
+                let y_hat: Vec<f32> = (&mut rng)
+                    .sample_iter(distribution)
+                    .take(n)
+                    .map(|x| 
+                        if (x as f32) < y_min {
+                            y_min
+                        } else if (x as f32) > y_max {
+                            y_max
+                        } else {
+                            x as f32
+                    })
+                    .collect::<Vec<f32>>();
+                let id: String = self.ids[i].to_owned();
+                let id_split: Vec<&str> = id.split("➵").collect();
+                // Determine is the current feature is the last level of a categorical variable
+                let last_level_of_categorical: bool = if i == p-1 {
                     true
                 } else {
-                    false
+                    let id_next_split: Vec<&str> = self.ids[i+1].split("➵").collect();
+                    if (id_next_split.len() > 1) && (id_next_split[id_next_split.len() - 1] == "0") {
+                        true
+                    } else {
+                        false
+                    }
+                };
+                // Reset categorical_level_marker for every start of each categorical feature, i.e. with zero '0' as its trailing id
+                if id_split.len() > 1 {
+                    if id_split[id_split.len() -1] == "0" {
+                        categorical_level_marker = vec![false; n];
+                    }
                 }
-            };
-            // Reset categorical_level_marker for every start of each categorical feature, i.e. with zero '0' as its trailing id
-            if id_split.len() > 1 {
-                if id_split[id_split.len() -1] == "0" {
-                    categorical_level_marker = vec![false; n];
+                for j in 0..n {
+                    if id_split.len() == 1 {
+                        // Continuous
+                        input_reference_2_host.push(y_hat[j]);
+                    } else {
+                        // Categorical
+                        let val: f32 = if categorical_level_marker[j] {
+                            0.0
+                        } else if last_level_of_categorical && !categorical_level_marker[j] {
+                            1.00
+                        } else {
+                            if y_hat[j] > 0.5 {1.00} else {0.0}
+                        };
+                        input_reference_2_host.push(val);
+                        categorical_level_marker[j] = val == 1.00;
+                    }
                 }
             }
-            for j in 0..n {
-                if id_split.len() == 1 {
-                    // Continuous
-                    input_reference_2_host.push(y_hat[j]);
-                } else {
-                    // Categorical
-                    let val: f32 = if categorical_level_marker[j] {
-                        0.0
-                    } else if last_level_of_categorical && !categorical_level_marker[j] {
-                        1.00
-                    } else {
-                        if y_hat[j] > 0.5 {1.00} else {0.0}
-                    };
-                    input_reference_2_host.push(val);
-                    categorical_level_marker[j] = val == 1.00;
-                }
+            // Estimate 
+            let input_reference_1: Matrix = Matrix::new(stream.clone_htod(&input_reference_1_host)?, p, n)?;
+            let input_reference_2: Matrix = Matrix::new(stream.clone_htod(&input_reference_2_host)?, p, n)?;
+            let shap: Matrix = network.deep_shap(input_reference_1, input_reference_2)?;
+            shaps.push(shap);
+            if verbose {
+                pb.next();
             }
         }
+        if verbose {
+            pb.finish();
+        }
+        // Take the mean of the SHAP values across replications
+        let mut shap: Matrix = shaps[0].clone();
+        for i in 1..r {
+            // let shap_feature_means: Vec<f32> = shaps[i].rowsummat()?.to_host()?;
+            // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+            // println!("i={}\nshaps[i]: {}\nshap_feature_means:{:?}", i, &shaps[i], shap_feature_means);
+            shap = shap.elementwisematadd(&shaps[i])?;
+        }
+        shap = shap.scalarmatmul(1.00 / (r as f32))?;
+        
+        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-        // Probably repeat this to generate a various SHAPs for a variety of input_reference_2 random samples??
-
-        // Estimate 
-        let input_reference_1: Matrix = Matrix::new(stream.clone_htod(&input_reference_1_host)?, p, n)?;
-        let input_reference_2: Matrix = Matrix::new(stream.clone_htod(&input_reference_2_host)?, p, n)?;
-        let shap: Matrix = network.deep_shap(input_reference_1, input_reference_2)?;
+        // TODO: improve below
+        // Average the SHAP values per feature across samples or observations
         let shap_feature_means: Vec<f32> = shap.rowsummat()?.to_host()?;
-
-        // TODO: summarise and plot the SHAP using different approaches...
-
         // Update marginal effects
         for i in 0..shap.n_rows {
             self.effects[i] = shap_feature_means[i];
         }
-
         Ok(())
     }
 }
@@ -433,7 +444,7 @@ mod tests {
         // DeepSHAP
         let seed: usize = 123;
         let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;
-        marginals.estimate_deepshap(&mut network, seed, false)?;
+        marginals.estimate_deepshap(&mut network, 100, seed, true)?;
         println!("SHAP marginals: {:?}", marginals);
 
         // Clean-up
