@@ -3,9 +3,9 @@ use crate::marginal::Marginals;
 use crate::optimisers::OptimisationParameters;
 use crate::train::TrainingError;
 use chrono::Utc;
-use ruviz::core::{Plot, PlottingError};
-use ruviz::prelude::LegendPosition;
-
+use ruviz::core::{Plot, PlottingError, SubplotFigure, subplots};
+use ruviz::prelude::{LegendPosition, PlotBuilder};
+use ruviz::plots::BarConfig;
 use std::env::current_dir;
 use std::error::Error;
 use std::path::PathBuf;
@@ -17,12 +17,14 @@ impl From<PlottingError> for TrainingError {
     }
 }
 
+// NOTE: The following methods generate quick and dirty plots not meant as final or production-grade or publication-quality plots.
+
 impl Network {
     pub fn plot_loss(self: &Self, epochs: Vec<Vec<f64>>, costs: Vec<Vec<f64>>, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
-        let fname_loss_svg = format!(
-            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
+        let fname_loss_png = format!(
+            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.png",
             dir.display(),
             self.n_hidden_layers,
             self.activation,
@@ -47,7 +49,6 @@ impl Network {
                 .ylabel(&ylabel)
                 .line(&epochs[0], &costs[0])
                 .label("Batch 0")
-                .size(4.0, 3.0),                
         ];
         for i in 1..optimisation_parameters.n_batches {
             plot_loss[0] = plot_loss[0]
@@ -57,15 +58,15 @@ impl Network {
         }
         ;
         // plot_loss[0].clone().save(fname_png)?;
-        plot_loss[0].clone().export_svg(&fname_loss_svg)?;
-        Ok(fname_loss_svg)
+        plot_loss[0].clone().save(&fname_loss_png)?;
+        Ok(fname_loss_png)
     }
 
     pub fn plot_true_vs_pred(self: &Self, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
-        let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
+        let fname_scatter_png = format!(
+            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.png",
             dir.display(),
             self.n_hidden_layers,
             self.activation,
@@ -135,24 +136,76 @@ impl Network {
             .ylabel("Predicted")
             .scatter(&y_observed, &y_predicted)
             .line(&x_for_plotting, &y_for_plotting)
-            .export_svg(&fname_scatter_svg)?;
-        Ok(fname_scatter_svg)
+            .save(&fname_scatter_png)?;
+        Ok(fname_scatter_png)
     }
 }
 
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-// TODO: implement other plotting functions
 impl Marginals {
-    pub fn plot() -> () {
-        unimplemented!()
+    pub fn plot_main_effects(self: &Self) -> Result<String, Box<dyn Error>> {
+        // Filename
+        let dir: PathBuf = current_dir()?;
+        let fname_main_effects_png = format!(
+            "{}/Marginal_main_effects-T{}.png",
+            dir.display(),
+            Utc::now().format("%Y%m%d%H%M%S")
+        );
+        // Extract main effects only
+        let mut ids_all: Vec<String> = Vec::new();
+        let mut effects_all: Vec<f64> = Vec::new();
+        for i in 0..self.ids.len() {
+            let id = self.ids[i].to_owned();
+            let id_split = id.split("▓").collect::<Vec<&str>>();
+            if id_split.len() == 1 {
+                ids_all.push(id);
+                effects_all.push(self.effects[i] as f64);
+            }
+        }
+        let max_x_tick_labels: usize = 7;
+        let layout_n_plots: usize = ids_all.len().div_ceil(max_x_tick_labels);
+        let layout_n_rows: usize = (layout_n_plots as f64).sqrt().ceil() as usize;
+        let layout_n_cols: usize = layout_n_plots.div_ceil(layout_n_rows);
+        // TODO: Post an issue in ruviz: using `ylim(min, max)` does not work!
+        // let y_min = match effects_all.iter().min_by(|&a, &b| a.partial_cmp(b).unwrap()) {
+        //     Some(x) => *x,
+        //     None => f64::NEG_INFINITY,
+        // };
+        // let y_max = match effects_all.iter().max_by(|&a, &b| a.partial_cmp(b).unwrap()) {
+        //     Some(x) => *x,
+        //     None => f64::INFINITY,
+        // };
+        // println!("y_min={}; y_max={}", y_min, y_max);
+        let mut plots: Vec<PlotBuilder<BarConfig>> = Vec::with_capacity(layout_n_plots);
+        let mut ini: usize = 0;
+        for _ in 0..layout_n_plots {
+            let fin: usize = if (ini+max_x_tick_labels) < ids_all.len() {
+                ini+max_x_tick_labels
+            } else {
+                ids_all.len()
+            };
+            let ids: Vec<String> = ids_all[ini..fin].to_vec();
+            let effects: Vec<f64> = effects_all[ini..fin].to_vec();
+            let title = format!("Marginal main effects ({}/{})", ids.len(), ids_all.len());
+            let plot = Plot::new()
+                    .title(title.as_str())
+                    .ylabel("Effect")
+                    // .ylim(y_min, y_max)
+                    .bar(&ids, &effects);
+            plots.push(plot);
+            // println!("ini={}; fin={}; effects: {:?}", ini, fin, effects);
+            ini = fin;
+        }
+        let mut plot = vec![SubplotFigure::new(layout_n_rows, layout_n_cols, 1_500, 900)?];
+        for i in 0..layout_n_rows {
+            for j in 0..layout_n_cols {
+                let k = (i * layout_n_cols) + j;
+                plot[0] = plot[0].clone().subplot(i, j, plots[k].clone().into())?.clone();
+            }
+        }
+        plot[0].clone().save(&fname_main_effects_png)?;
+        Ok(fname_main_effects_png)
     }
 }
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-
 
 #[cfg(test)]
 mod test {
@@ -171,7 +224,7 @@ mod test {
         let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
         let network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         let optimisation_parameters = OptimisationParameters::new(&network)?;
-
+        // Network-related plots
         let mut rng = rand::rng();
         let m: usize = 3;
         let q: usize = 100;
@@ -187,11 +240,22 @@ mod test {
             epochs.push(e);
             costs.push(c);
         }
-        let fname_loss = network.plot_loss(epochs, costs, &optimisation_parameters)?;
-        let fname_true_vs_pred = network.plot_true_vs_pred(&optimisation_parameters)?;
+        let _fname_loss = network.plot_loss(epochs, costs, &optimisation_parameters)?;
+        let _fname_true_vs_pred = network.plot_true_vs_pred(&optimisation_parameters)?;
+        // Marginal effects-related plots
+        let mut marginals = Marginals::new(data.feature_names, 3)?;
+        for i in 0..marginals.ids.len() {
+            marginals.effects[i] = rng.random::<f32>();
+        }
+        // println!("marginals: {:?}", marginals);
+        let _fname_main_effects_png = marginals.plot_main_effects()?;
         // Clean-up
-        std::fs::remove_file(&fname_loss)?;
-        std::fs::remove_file(&fname_true_vs_pred)?;
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("png") {
+                std::fs::remove_file(&f)?;
+            }
+        }
         Ok(())
     }
 }

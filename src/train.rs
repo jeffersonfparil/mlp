@@ -3,15 +3,12 @@ use crate::costs::Cost;
 use crate::network::Network;
 use crate::optimisers::{OptimisationParameters, Optimiser};
 use crate::progress_bar::ProgressBar;
-use chrono::Utc;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use rayon::prelude::*;
-use std::env::current_dir;
 use std::error::Error;
 use std::fmt;
 use std::ops::Add;
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[derive(Debug, PartialEq)]
@@ -704,7 +701,7 @@ mod tests {
         // Clean-up
         for f in std::fs::read_dir(".")? {
             let f = f?.path();
-            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("png") {
                 std::fs::remove_file(&f)?;
             }
         }
