@@ -701,7 +701,7 @@ mod tests {
         // Clean-up
         for f in std::fs::read_dir(".")? {
             let f = f?.path();
-            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("png") {
+            if f.is_file() && (f.extension().and_then(|s| s.to_str()) == Some("png") || f.extension().and_then(|s| s.to_str()) == Some("svg")) {
                 std::fs::remove_file(&f)?;
             }
         }
