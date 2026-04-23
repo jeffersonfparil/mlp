@@ -1,8 +1,6 @@
 use crate::linalg::matrix::Matrix;
 use cudarc::driver::safe::{CudaFunction, CudaSlice, LaunchArgs};
 use cudarc::driver::{CudaStream, LaunchConfig, PushKernelArg};
-use cudarc::nvrtc::compile_ptx;
-use cudarc::nvrtc::safe::Ptx;
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;

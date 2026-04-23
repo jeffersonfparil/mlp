@@ -3,14 +3,13 @@ use crate::network::Network;
 use crate::progress_bar::ProgressBar;
 use std::error::Error;
 use itertools::Itertools;
-use ruviz::plots::distribution;
 use std::fmt;
 use rayon::prelude::*;
 use std::sync::Mutex;
 use std::sync::Arc;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
-use rand_distr::{Normal, Uniform};
+use rand_distr::Normal;
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
@@ -452,13 +451,13 @@ mod tests {
         marginals.estimate_deepshap(&mut network, 100, seed, true)?;
         println!("SHAP marginals: {:?}", marginals);
 
-        // Clean-up
-        for f in std::fs::read_dir(".")? {
-            let f = f?.path();
-            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
-                std::fs::remove_file(&f)?;
-            }
-        }
+        // // Clean-up
+        // for f in std::fs::read_dir(".")? {
+        //     let f = f?.path();
+        //     if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+        //         std::fs::remove_file(&f)?;
+        //     }
+        // }
 
         Ok(())
     }

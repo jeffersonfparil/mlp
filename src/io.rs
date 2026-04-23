@@ -7,8 +7,6 @@ use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use rand_distr::{Beta, Cauchy, Gamma, LogNormal, Normal, Weibull};
-// use std::path::PathBuf;
-// use std::env::current_dir;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
