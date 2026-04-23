@@ -102,7 +102,7 @@ impl Marginals {
         Ok(())
     }
 
-    pub fn estimate_perturb(self: &mut Self, network_orig: &Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
+    pub fn estimate_perturb(self: &mut Self, network_orig: &Network, n_interpolate_min_max: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
         self.check_dimensions()?;
         // Find the range of values for each input node
         // println!("number of activation layers: {}", network_orig.activations_per_layer.len());
@@ -144,8 +144,8 @@ impl Marginals {
                 Some(&a) => a,
                 None => f32::NAN,
             };
-            let step_size = (max - min) / ((m-1) as f32);
-            let new_values_to_iterate: Vec<f32> = (0..m).map(|x| min+(step_size*(x as f32))).collect();
+            let step_size = (max - min) / ((n_interpolate_min_max-1) as f32);
+            let new_values_to_iterate: Vec<f32> = (0..n_interpolate_min_max).map(|x| min+(step_size*(x as f32))).collect();
             ranges.push(new_values_to_iterate);
         }
         // println!("ranges: {:?}", ranges);
@@ -183,23 +183,36 @@ impl Marginals {
             }
             ////////////////////////////////////////
             ////////////////////////////////////////
-            // Estimate up to higher order marginal effects
-            //  where we simplistically assume increase in interaction effects to be along the same order for now
+            // Estimate marginal effects from the main effects to higher-order interaction effects
+            //  where we explore various combinations of the interacting features via random sampling across the pre-defined range of each feature
             ////////////////////////////////////////
             ////////////////////////////////////////
-            let mut x: Vec<f64> = vec![f64::NAN; m*n]; // new input values
-            let mut y: Vec<f64> = vec![f64::NAN; m*n]; // resulting changes to predictions
+            let mut x: Vec<f64> = vec![f64::NAN; n_interpolate_min_max*n]; // new input values
+            let mut y: Vec<f64> = vec![f64::NAN; n_interpolate_min_max*n]; // resulting changes to predictions
             let mut network = network_orig.clone();
             let mut input_matrix = input_matrix_orig.clone();
             let stream = network.activations_per_layer[0].data.context().default_stream();
             // For each value in the new x-range we predict
-            for j in 0..m {
-                // First we need to define the new x-values for all the features
+            for j in 0..n_interpolate_min_max {
+                // First we need to define the new x-values for all the features, where
+                // for each feature index in the current combination
                 for idx in idx_split.clone() {
-                    let x_j = ranges[idx][j];
+                    // Get the current value from the predefined range for this feature, if we are dealing with a main effect, otherwise
+                    // we randomly sample from the range of values so that we explore various combinations of the interacting features (not just along the same direction)
+                    let x_j = if idx_split.len() == 1 {
+                        ranges[idx][j]
+                    } else {
+                        let mut rng = ChaCha12Rng::seed_from_u64(j as u64); // using j as a randomisation seed
+                        let k: usize = rng.random_range(0..n_interpolate_min_max);
+                        ranges[idx][k]
+                    };
+                    // Calculate the starting index in the flattened input matrix
                     let ini: usize = idx * n;
+                    // Update all observations for this feature
                     for k in 0..n {
+                        // Set the input matrix value to the current range value
                         input_matrix[ini+k] = x_j;
+                        // Track the x values: initialize if NaN, otherwise multiply for interaction effects
                         x[(j*n)+k] = if x[(j*n)+k].is_nan() {
                             x_j as f64
                         } else {
@@ -385,8 +398,6 @@ impl Marginals {
 
 #[cfg(test)]
 mod tests {
-    use core::net;
-
     use super::*;
     use crate::io::Data;
     use crate::optimisers::OptimisationParameters;
