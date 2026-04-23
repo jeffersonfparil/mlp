@@ -27,3 +27,9 @@ target
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# Test artifacts
+*.tsv
+*.json
+*.svg
+*.png

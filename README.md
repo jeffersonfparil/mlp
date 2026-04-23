@@ -56,6 +56,7 @@ time cargo run -- -f $INPUT -v --n-batches=2 --n-epochs=10
 MODEL=$(ls -t1 | grep "output.*.json" | head -n1)
 MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 head $MODEL
+tail $MODEL
 head $MARGINALS
 time cargo run -- -f $INPUT -v -m $MODEL --predict
 PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
@@ -92,7 +93,8 @@ We simulated 10,000 observations of 1 response variable controlled by 500 contin
 ### Simulate data
 
 ```shell
-cd mlp/tests
+cd mlp/
+cd tests/
 MLP=../target/release/mlp
 for HIDDEN_LAYERS in $(seq 1 5)
 do
@@ -104,7 +106,8 @@ do
     $MLP \
         --simulate-data-only \
        --simulation-n-observations 10000 \
-       --simulation-n-features 500 \
+       --simulation-n-features-continuous 10 \
+       --simulation-n-features-categorical 5,4,2,100,10,30,3 \
        --simulation-n-output-columns 1 \
        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
        --simulation-weights-distribution normal \
@@ -115,7 +118,8 @@ do
     $MLP \
         --simulate-data-only \
        --simulation-n-observations 10000 \
-       --simulation-n-features 500 \
+       --simulation-n-features-continuous 10 \
+       --simulation-n-features-categorical 5,4,2,100,10,30,3 \
        --simulation-n-output-columns 1 \
        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
        --simulation-weights-distribution gamma \
@@ -137,6 +141,18 @@ done
 ### Analysis using mlp
 
 ```shell
+cd mlp/
+cd tests/
+MLP=../target/release/mlp
+for INPUT in $(ls input_simulated-*-*.tsv)
+do
+    # INPUT=$(ls input_simulated-*-*.tsv | head -n1)
+    echo $INPUT
+    OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed 's/.tsv/.json/g')
+    echo $OUTPUT
+    $MLP -f $INPUT -o $OUTPUT
+done
+
 ```
 
 ## Tests on empirical data
@@ -150,7 +166,8 @@ e.g. convert `reps=[1, 1, 1, 2, 2, 2, 3, 3]` into `reps=["R1", "R1", "R1", "R2",
 ### Prepare test data
 
 ```shell
-cd mlp/tests
+cd mlp/
+cd tests/
 mkdir agridat/
 cd agridat/
 curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
@@ -343,7 +360,8 @@ prep_agridat_data(ARGS)
 ### Run tests on empirical data
 
 ```shell
-cd mlp/tests/agridat
+cd mlp/
+cd tests/agridat/
 MLP=../../target/release/mlp
 
 for FILE in $(find . -name "*.txt")
