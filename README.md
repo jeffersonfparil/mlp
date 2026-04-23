@@ -66,10 +66,15 @@ MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 mv $MARGINALS marginal_2nd.tsv
 time cargo run -- -f $INPUT -v -m $MODEL --marginals --marginals-order=3
 MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
+mv $MARGINALS marginal_3rd.tsv
+time cargo run -- -f $INPUT -v -m $MODEL --marginals --deep-shap --deep-shap-reps=100
+MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
+mv $MARGINALS deep_shap.tsv
 head marginal_main.tsv
 head marginal_2nd.tsv
-head $MARGINALS
-bat $MARGINALS
+head marginal_3rd.tsv
+head deep_shap.tsv
+
 ```
 
 ## Compile for release

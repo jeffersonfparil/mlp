@@ -102,7 +102,7 @@ impl Marginals {
         Ok(())
     }
 
-    pub fn estimate_effects(self: &mut Self, network_orig: &Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
+    pub fn estimate_perturb(self: &mut Self, network_orig: &Network, m: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
         self.check_dimensions()?;
         // Find the range of values for each input node
         // println!("number of activation layers: {}", network_orig.activations_per_layer.len());
@@ -373,14 +373,8 @@ impl Marginals {
             shap = shap.elementwisematadd(&shaps[i])?;
         }
         shap = shap.scalarmatmul(1.00 / (r as f32))?;
-        
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-
-        // TODO: improve below
         // Average the SHAP values per feature across samples or observations
-        let shap_feature_means: Vec<f32> = shap.rowsummat()?.to_host()?;
+        let shap_feature_means: Vec<f32> = shap.rowsummat()?.scalarmatmul(1.00/(shap.n_cols as f32))?.to_host()?;
         // Update marginal effects
         for i in 0..shap.n_rows {
             self.effects[i] = shap_feature_means[i];
@@ -422,7 +416,7 @@ mod tests {
         // Order: 1
         let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
-        marginals.estimate_effects(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        marginals.estimate_perturb(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
         assert_eq!(marginals.effects, vec![0.001258011, -0.00037895, 0.00078878005, 0.0013426174, 0.00030576906, -0.00265601, -0.00016025733]);
@@ -430,14 +424,14 @@ mod tests {
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
-        marginals.estimate_effects(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        marginals.estimate_perturb(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 2 marginals: {:?}", marginals);
         assert_eq!(marginals.ids.len(), 24);
 
         // Order: 3
         let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
-        marginals.estimate_effects(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        marginals.estimate_perturb(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 3 marginals: {:?}", marginals);
         assert_eq!(marginals.ids.len(), 41);
 

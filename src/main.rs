@@ -197,10 +197,6 @@ struct Args {
     #[arg(short = 'M', long, action)]
     marginals: bool,
     
-    // /// Marginal effects estimation: include interaction effects or high-order effects if number of of hidden layers > 1
-    // #[arg(long, action)]
-    // marginals_higher_order: bool,
-    
     /// Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on
     #[arg(long, default_value_t = 1)]
     marginals_order: usize,
@@ -210,6 +206,17 @@ struct Args {
     #[arg(long, default_value_t = 10)]
     n_interpolate_min_max: usize,
 
+    /// Use DeepSHAP instead of the perturbation method
+    /// Note that the current implementation of DeepSHAP generates only main effects and no interaction effects.
+    /// Do not enable this flag to use the default perturbation method if you require marginal interaction effects.
+    #[arg(short = 'D', long, action)]
+    deep_shap: bool,
+
+    /// Number of replications for DeepSHAP main effects estimation
+    /// Each replication samples feature values from their normally distributed values
+    #[arg(long, default_value_t = 10)]
+    deep_shap_reps: usize,
+    
     ////////////////////////////////////////////////////////////////////////////////
     /// Simulate data only
     #[arg(short = 's', long, action)]
@@ -457,7 +464,13 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
         args.marginals_order
     };
     let mut marginals = Marginals::new(data.feature_names.clone(), marginals_order)?;
-    marginals.estimate_effects(&mut network, args.n_interpolate_min_max, args.verbose)?;
+    if !args.deep_shap {
+        // Use perturbation analysis to estimate main and interaction (if requested) effects
+        marginals.estimate_perturb(&mut network, args.n_interpolate_min_max, args.verbose)?;
+    } else {
+        // Use DeepSHAP to estimate main effects only
+        marginals.estimate_deepshap(&mut network, args.deep_shap_reps, args.seed, args.verbose)?;
+    }
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
         "Please find the estimated marginal effects in tab-delimited format: {}/{}",
@@ -722,7 +735,13 @@ fn marginals_after_training(
         args.marginals_order
     };
     let mut marginals = Marginals::new(data.feature_names.clone(), marginals_order)?;
-    marginals.estimate_effects(network, args.n_interpolate_min_max, args.verbose)?;
+    if !args.deep_shap {
+        // Use perturbation analysis to estimate main and interaction (if requested) effects
+        marginals.estimate_perturb(network, args.n_interpolate_min_max, args.verbose)?;
+    } else {
+        // Use DeepSHAP to estimate main effects only
+        marginals.estimate_deepshap(network, args.deep_shap_reps, args.seed, args.verbose)?;
+    }
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
         "Please find the estimated marginal effects in tab-delimited format: {}/{}",
