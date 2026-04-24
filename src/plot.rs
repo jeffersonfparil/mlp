@@ -142,29 +142,35 @@ impl Network {
 }
 
 impl Marginals {
-    pub fn plot_main_effects(self: &Self) -> Result<String, Box<dyn Error>> {
+    pub fn plot(self: &Self, main_only: bool) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
         let fname_main_effects_png = format!(
-            "{}/Marginal_main_effects-T{}.png",
+            "{}/Marginal_effects-T{}.png",
             dir.display(),
             Utc::now().format("%Y%m%d%H%M%S")
         );
-        // Extract main effects only
+        // Extract ids and effects
         let mut ids_all: Vec<String> = Vec::new();
         let mut effects_all: Vec<f64> = Vec::new();
         for i in 0..self.ids.len() {
             let id = self.ids[i].to_owned();
             let id_split = id.split("▓").collect::<Vec<&str>>();
-            if id_split.len() == 1 {
-                ids_all.push(id);
-                effects_all.push(self.effects[i] as f64);
+            if main_only && (id_split.len() > 1) {
+                continue;
             }
+            ids_all.push(id);
+            effects_all.push(self.effects[i] as f64);
         }
-        let max_x_tick_labels: usize = 7;
-        let layout_n_plots: usize = ids_all.len().div_ceil(max_x_tick_labels);
-        let layout_n_rows: usize = (layout_n_plots as f64).sqrt().ceil() as usize;
-        let layout_n_cols: usize = layout_n_plots.div_ceil(layout_n_rows);
+        let (max_x_tick_labels, layout_n_plots) = {
+            let max_x_tick_labels: usize = 10;
+            let layout_n_plots: usize = ids_all.len().div_ceil(max_x_tick_labels);
+            if layout_n_plots > 10 {
+                (10, ids_all.len().div_ceil(layout_n_plots))
+            } else {
+                (max_x_tick_labels, layout_n_plots)
+            }
+        };
         // TODO: Post an issue in ruviz: using `ylim(min, max)` does not work!
         // let y_min = match effects_all.iter().min_by(|&a, &b| a.partial_cmp(b).unwrap()) {
         //     Some(x) => *x,
@@ -183,9 +189,14 @@ impl Marginals {
             } else {
                 ids_all.len()
             };
-            let ids: Vec<String> = ids_all[ini..fin].to_vec();
+            // let ids: Vec<String> = ids_all[ini..fin].to_vec();
+            let ids: Vec<String> = ids_all[ini..fin].iter().map(|x| x.replace("▓", "\n")).collect();
             let effects: Vec<f64> = effects_all[ini..fin].to_vec();
-            let title = format!("Marginal main effects ({}/{})", ids.len(), ids_all.len());
+            let title = if main_only {
+                format!("Main Marginal Effects ({}/{})", ids.len(), ids_all.len())
+            } else {
+                format!("All Marginal Effects ({}/{})", ids.len(), ids_all.len())
+            };
             let plot = Plot::new()
                     .title(title.as_str())
                     .ylabel("Effect")
@@ -195,14 +206,13 @@ impl Marginals {
             // println!("ini={}; fin={}; effects: {:?}", ini, fin, effects);
             ini = fin;
         }
-        let mut plot = vec![SubplotFigure::new(layout_n_rows, layout_n_cols, 1_500, 900)?];
-        for i in 0..layout_n_rows {
-            for j in 0..layout_n_cols {
-                let k = (i * layout_n_cols) + j;
-                plot[0] = plot[0].clone().subplot(i, j, plots[k].clone().into())?.clone();
-            }
+        let mut plot = vec![SubplotFigure::new(layout_n_plots, 1, 1_200, (layout_n_plots * 300) as u32)?];
+        for i in 0..layout_n_plots {
+            plot[0] = plot[0].clone().subplot(i, 0, plots[i].clone().into())?.clone();
         }
         plot[0].clone().save(&fname_main_effects_png)?;
+        // plot[0].clone().save_with_dpi(&fname_main_effects_png, 300.0)?;
+        // plot[0].clone().export_svg(&fname_main_effects_png)?;
         Ok(fname_main_effects_png)
     }
 }
@@ -248,14 +258,15 @@ mod test {
             marginals.effects[i] = rng.random::<f32>();
         }
         // println!("marginals: {:?}", marginals);
-        let _fname_main_effects_png = marginals.plot_main_effects()?;
+        let _fname_main_effects_png = marginals.plot(true)?;
+        let _fname_all_effects_png = marginals.plot(false)?;
         // Clean-up
-        for f in std::fs::read_dir(".")? {
-            let f = f?.path();
-            if f.is_file() && (f.extension().and_then(|s| s.to_str()) == Some("png") || f.extension().and_then(|s| s.to_str()) == Some("svg")) {
-                std::fs::remove_file(&f)?;
-            }
-        }
+        // for f in std::fs::read_dir(".")? {
+        //     let f = f?.path();
+        //     if f.is_file() && (f.extension().and_then(|s| s.to_str()) == Some("png") || f.extension().and_then(|s| s.to_str()) == Some("svg")) {
+        //         std::fs::remove_file(&f)?;
+        //     }
+        // }
         Ok(())
     }
 }

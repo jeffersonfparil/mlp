@@ -182,7 +182,7 @@ impl Marginals {
             }
             ////////////////////////////////////////
             ////////////////////////////////////////
-            // Estimate marginal effects from the main effects to higher-order interaction effects
+            // Estimate marginal effects including the main effects and higher-order interaction effects (if any)
             //  where we explore various combinations of the interacting features via random sampling across the pre-defined range of each feature
             ////////////////////////////////////////
             ////////////////////////////////////////
@@ -282,7 +282,10 @@ impl Marginals {
             // io::stdout().flush().expect("Failed to flush stdout");
             // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
             pb.lock().unwrap().finish();
-
+            let fname_marginals_effects_png: String = self.plot(true)?; // Main effects only as the interaction effects may explode and we leave it to the users to plot them using some other plotting software
+            println!("===============================================");
+            println!("Find the marginal effects (perturbation estimates) barplot saved as: {}", fname_marginals_effects_png);
+            println!("===============================================");
         }
         // // Reset the network to previous state
         // network.activations_per_layer[0].data = stream.clone_htod(&input_matrix_orig)?;
@@ -390,6 +393,12 @@ impl Marginals {
         // Update marginal effects
         for i in 0..shap.n_rows {
             self.effects[i] = shap_feature_means[i];
+        }
+        if verbose {
+            let fname_marginals_effects_png: String = self.plot(true)?;
+            println!("===============================================");
+            println!("Find the marginal effects (DeepSHAP estimates) barplot saved as: {}", fname_marginals_effects_png);
+            println!("===============================================");
         }
         Ok(())
     }
