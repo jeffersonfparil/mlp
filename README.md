@@ -145,6 +145,9 @@ done
 ### Analysis using R
 
 ```R
+library("lme4")
+library("flexplot")
+
 fname_input = "input_simulated-NORMAL-1HL.tsv"
 df = read.delim(fname_input, T)
 head(df)
@@ -160,7 +163,10 @@ str(df)
 
 
 models = list()
-mod = lm(target_0 ~ ., df)
+
+
+mod = lm(y ~ ., df)
+summary(mod)
 df_tmp = data.frame(ids=names(coef(mod)), effects=coef(mod))
 intercept = df_tmp$effects[df_tmp$ids == "(Intercept)"]
 ids_dummy = ids_features[!(ids_features %in% df_tmp$ids)]
@@ -168,7 +174,7 @@ effects_dummy = c()
 for (id in ids_dummy) {
     # id = ids_dummy[1]
     id = gsub("level-0", "", id)
-    effects_dummy = c(effects_dummy, mean(df_tmp$effects[grepl(id, df_tmp$ids)]))
+    effects_dummy = c(effects_dummy, mean(c(intercept, df_tmp$effects[grepl(id, df_tmp$ids)])))
 }
 df_coef = data.frame(
     ids = c(
@@ -181,7 +187,20 @@ df_coef = data.frame(
     )
 )
 df_coef$ids = gsub("level", "➵level", df_coef$ids)
+df_coef
 
+mod = lmer(y ~ year + site + treatment + (1|entry) + (1|row) + (1|col), df)
+summary(mod)
+fixef(mod)
+ranef(mod)
+
+library(lattice)
+
+png("test.png")
+# flexplot::visualize(mod, plot="residual")
+dotplot(ranef(mod), "entry")
+p$row
+dev.off()
 
 ```
 
