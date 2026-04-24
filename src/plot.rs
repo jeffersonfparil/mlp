@@ -142,6 +142,9 @@ impl Network {
 }
 
 impl Marginals {
+
+    // TODO: include r2s
+
     pub fn plot(self: &Self, main_only: bool) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;

@@ -818,10 +818,10 @@ impl Marginals {
         let mut writer = BufWriter::new(file);
         let n = self.ids.len();
         // Write header
-        writeln!(writer, "{}", vec!["ids", "effects"].join(delim))?;
+        writeln!(writer, "{}", vec!["ids", "effects", "r2s"].join(delim))?;
         // Write data
         for i in 0..n {
-            let row: Vec<String> = vec![self.ids[i].to_owned(), self.effects[i].to_string()];
+            let row: Vec<String> = vec![self.ids[i].to_owned(), self.effects[i].to_string(), self.r2s[i].to_string()];
             writeln!(writer, "{}", row.join(delim))?;
         }
         Ok(())
@@ -847,11 +847,17 @@ impl Marginals {
         }
         if &header[1] != "effects" {
             return Err(Box::new(MarginalError::NameMismatch(
-                format!("We expect the first column to be \"effects\" but found \"{}\" instead.", header[1]),
+                format!("We expect the second column to be \"effects\" but found \"{}\" instead.", header[1]),
+            )));
+        }
+        if &header[2] != "r2s" {
+            return Err(Box::new(MarginalError::NameMismatch(
+                format!("We expect the third column to be \"r2s\" but found \"{}\" instead.", header[1]),
             )));
         }
         let mut ids: Vec<String> = Vec::new();
         let mut effects: Vec<f32> = Vec::new();
+        let mut r2s: Vec<f32> = Vec::new();
         for line in lines {
             let line = line?;
             let values: Vec<&str> = line.trim().split(delim).collect();
@@ -863,8 +869,9 @@ impl Marginals {
             }
             ids.push(values[0].to_owned());
             effects.push(values[1].parse::<f32>()?);
+            r2s.push(values[2].parse::<f32>()?);
         }
-        let marginals =  Marginals {ids, effects};
+        let marginals =  Marginals {ids, effects, r2s};
         marginals.check_dimensions()?;
         Ok(marginals)
     }

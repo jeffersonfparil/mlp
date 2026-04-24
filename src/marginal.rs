@@ -39,6 +39,7 @@ impl fmt::Display for MarginalError {
 pub struct Marginals {
     pub ids: Vec<String>,
     pub effects: Vec<f32>,
+    pub r2s: Vec<f32>,
 }
 
 impl Marginals {
@@ -87,6 +88,7 @@ impl Marginals {
         let marginals  = Marginals {
             ids,
             effects: vec![f32::NAN; p],
+            r2s: vec![f32::NAN; p],
         };
         Ok(marginals)
     }
@@ -96,6 +98,18 @@ impl Marginals {
             return Err(MarginalError::DimensionMismatch(format!(
                 "Number of ids ({}) does not match number of effects ({}).",
                 self.ids.len(), self.effects.len()
+            )));
+        }
+        if self.ids.len() != self.r2s.len() {
+            return Err(MarginalError::DimensionMismatch(format!(
+                "Number of ids ({}) does not match number of r2s ({}).",
+                self.ids.len(), self.r2s.len()
+            )));
+        }
+        if self.effects.len() != self.r2s.len() {
+            return Err(MarginalError::DimensionMismatch(format!(
+                "Number of effects ({}) does not match number of r2s ({}).",
+                self.effects.len(), self.r2s.len()
             )));
         }
         Ok(())
@@ -153,6 +167,7 @@ impl Marginals {
         // let counter = Arc::new(atomic::AtomicUsize::new(0));
         let pb = Arc::new(Mutex::new(ProgressBar::new(self.ids.len(), 50, format!("Estimating {} marginal effects", self.ids.len()))));
         let effects: Mutex<Vec<f32>> = Mutex::new(vec![f32::NAN; self.ids.len()]);
+        let r2s: Mutex<Vec<f32>> = Mutex::new(vec![f32::NAN; self.ids.len()]);
         self.ids
             .par_iter()
             .enumerate()
@@ -248,7 +263,7 @@ impl Marginals {
             }
             // println!("x = {:?}", x);
             // println!("y = {:?}", y);
-            let b: f64 = {
+            let (b, r2): (f64, f64) = {
                 let epsilon: f64 = 1e-7;
                 let n: f64 = x.len() as f64;
                 let u_x: f64 = x.iter().fold(0.0, |sum, x| sum + x) / n;
@@ -260,14 +275,26 @@ impl Marginals {
                 let var_x: f64 = x
                     .iter()
                     .fold(0.0, |a, x| a + (x - u_x).powi(2));
-                cov_xy / (var_x + epsilon)
+                let b = cov_xy / (var_x + epsilon);
+                let a: f64 = u_y - (b * u_x);
+                let y_hat: Vec<f64> = x.iter().map(|&x_i| a + (x_i*b)).collect();
+                let sse: f64 = y_hat
+                    .iter()
+                    .zip(y.iter())
+                    .fold(0.0, |a, (y_p, y_t)| a + (y_p - y_t).powi(2));
+                let r2: f64 = 1.00 - (sse / (var_x + epsilon));
+                (b, r2)
             };
             // self.effects[i] = b as f32;
             // Lock the mutexes to get access
             let mut locked_effects = effects.lock().unwrap();
+            let mut locked_r2s = r2s.lock().unwrap();
             // Replace the ith element safely
             if let Some(x) = locked_effects.get_mut(i) {
                 *x = b as f32;
+            }
+            if let Some(x) = locked_r2s.get_mut(i) {
+                *x = r2 as f32;
             }
             // println!("Higher-degree effects: {} = {}", self.ids[i], self.effects[i]);
             // // Reset the network to previous state
@@ -276,6 +303,7 @@ impl Marginals {
         });
         // }
         self.effects = effects.into_inner().unwrap();
+        self.r2s = r2s.into_inner().unwrap();
         if verbose {
             // let progress_text: String = (0..progress_width).map(|_| "█").collect();
             // print!("\rEstimating {} marginal effects | 100.00% | {} |", self.ids.len(), progress_text);
@@ -460,13 +488,13 @@ mod tests {
         marginals.estimate_deepshap(&mut network, 100, seed, true)?;
         println!("SHAP marginals: {:?}", marginals);
 
-        // // Clean-up
-        // for f in std::fs::read_dir(".")? {
-        //     let f = f?.path();
-        //     if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
-        //         std::fs::remove_file(&f)?;
-        //     }
-        // }
+        // Clean-up
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && f.extension().and_then(|s| s.to_str()) == Some("svg") {
+                std::fs::remove_file(&f)?;
+            }
+        }
 
         Ok(())
     }
