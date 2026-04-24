@@ -185,8 +185,13 @@ impl Data {
         let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, n_features, n)?;
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
         let n_hidden_layers: usize = d;
-        let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
+        let n_hidden_nodes: Vec<usize> = vec![(n_features as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
+        // println!("features: {}", features);
+        // println!("targets: {}", targets);
+        // println!("n_hidden_layers: {}", n_hidden_layers);
+        // println!("n_hidden_nodes: {:?}", n_hidden_nodes);
+        // println!("dropout_rates: {:?}", dropout_rates);
         let mut network = Network::new(
             &stream,
             features,
@@ -196,6 +201,7 @@ impl Data {
             dropout_rates,
             seed,
         )?;
+        // println!("network: {}", network);
         // Redefine the weights
         for i in 0..(network.n_hidden_layers+1) {
             let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
@@ -977,6 +983,9 @@ mod tests {
                 std::fs::remove_file(&f)?;
             }
         }
+
+        let data_simulated = Data::simulate(100, 0, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42)?;
+
         Ok(())
     }
 }

@@ -111,9 +111,9 @@ do
     echo "$F_NORMAL and $F_GAMMA"
     $MLP \
         --simulate-data-only \
-       --simulation-n-observations 10000 \
-       --simulation-n-features-continuous 10 \
-       --simulation-n-features-categorical 5,4,2,100,10,30,3 \
+       --simulation-n-observations $(echo 5*4*2*50*10*20 | bc) \
+       --simulation-n-features-continuous 0 \
+       --simulation-n-features-categorical 5,4,2,50,10,20 \
        --simulation-n-output-columns 1 \
        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
        --simulation-weights-distribution normal \
@@ -121,11 +121,13 @@ do
        --simulation-weights-distribution-param-2 1 \
        --seed ${HIDDEN_LAYERS}
     F0=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
+    sed 's/target_0/y/g' $F0 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/row/g'  | sed 's/fcat_5/col/g' > tmp
+    mv tmp $F0
     $MLP \
         --simulate-data-only \
-       --simulation-n-observations 10000 \
-       --simulation-n-features-continuous 10 \
-       --simulation-n-features-categorical 5,4,2,100,10,30,3 \
+       --simulation-n-observations $(echo 5*4*2*50*10*20 | bc) \
+       --simulation-n-features-continuous 0 \
+       --simulation-n-features-categorical 5,4,2,50,10,20 \
        --simulation-n-output-columns 1 \
        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
        --simulation-weights-distribution gamma \
@@ -133,6 +135,9 @@ do
        --simulation-weights-distribution-param-2 2 \
        --seed ${HIDDEN_LAYERS}
     F1=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
+    sed 's/target_0/y/g' $F1 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/row/g'  | sed 's/fcat_5/col/g' > tmp
+    mv tmp $F1
+    
     mv $F0 $F_NORMAL
     mv $F1 $F_GAMMA
 done
@@ -141,6 +146,43 @@ done
 ### Analysis using R
 
 ```R
+fname_input = "input_simulated-NORMAL-1HL.tsv"
+df = read.delim(fname_input, T)
+head(df)
+ids_features = c()
+for (j in 1:ncol(df)) {
+    # j = 7
+    if (is.character(df[, j])) {
+        df[, j] = as.factor(df[, j])
+        ids_features = c(ids_features, paste0(names(df)[j], sort(levels(df[, j]))))
+    }
+}
+str(df)
+
+
+models = list()
+mod = lm(target_0 ~ ., df)
+df_tmp = data.frame(ids=names(coef(mod)), effects=coef(mod))
+intercept = df_tmp$effects[df_tmp$ids == "(Intercept)"]
+ids_dummy = ids_features[!(ids_features %in% df_tmp$ids)]
+effects_dummy = c()
+for (id in ids_dummy) {
+    # id = ids_dummy[1]
+    id = gsub("level-0", "", id)
+    effects_dummy = c(effects_dummy, mean(df_tmp$effects[grepl(id, df_tmp$ids)]))
+}
+df_coef = data.frame(
+    ids = c(
+        ids_dummy,
+        df_tmp$ids[df_tmp$ids != "(Intercept)"]
+    ),
+    effects = c(
+        effects_dummy,
+        df_tmp$effects[df_tmp$ids != "(Intercept)"]
+    )
+)
+df_coef$ids = gsub("level", "➵level", df_coef$ids)
+
 
 ```
 
