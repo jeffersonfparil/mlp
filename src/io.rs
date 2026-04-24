@@ -256,23 +256,55 @@ impl Data {
         let n = self.features.n_cols;
         let p = self.features.n_rows;
         let k = self.targets.n_rows;
-        // Write header
-        let mut header: Vec<String> = Vec::with_capacity(p + k);
+        // Define the number of continuous features plus the number of levels in each categorical feature
+        // Also extract the header names, i.e.:
+        //      - names of the target variables,
+        //      - names of the continuous features, and
+        //      - base names of the categorical features
+        let mut n_features: usize = 0;
+        let mut header: Vec<String> = Vec::new();
         for t in &self.target_names {
             header.push(t.clone());
         }
         for f in &self.feature_names {
-            header.push(f.clone());
+            let f_split = f.split("➵").collect::<Vec<&str>>();
+            if f_split.len() == 1 {
+                // Continuous features
+                header.push(f.clone());
+            } else {
+                // Categorical features
+                // Assumes the categorical factor levels are sorted/grouped together along the vector of feature names
+                if header[header.len()-1] != f_split[0] {
+                    // Add the categorical feature if it is new
+                    header.push(f_split[0].to_owned());
+                    n_features += 1;
+                }
+            }
         }
+        // Write header
         writeln!(writer, "{}", header.join(delim))?;
         // Write data
         for i in 0..n {
-            let mut row: Vec<String> = Vec::with_capacity(p + k);
+            let mut row: Vec<String> = Vec::with_capacity(k + n_features);
+            // Write targets
             for j in 0..k {
                 row.push(format!("{}", targets[(j * n) + i]));
             }
+            // Write features
             for j in 0..p {
-                row.push(format!("{}", features[(j * n) + i]));
+                let val: f32 = features[(j * n) + i];
+                let f_split: Vec<&str> = self.feature_names[j].split("➵").collect::<Vec<&str>>();
+                if f_split.len() == 1 {
+                    row.push(format!("{}", val));
+                } else {
+                    if val == 1.00 {
+                        // Add "level" if the categorical feature level is numeric
+                        match f_split[1].parse::<f64>() {
+                            Ok(_) => {row.push(format!("level-{}", f_split[1]));},
+                            Err(_) => {row.push(format!("{}", f_split[1]));}
+                        };
+                    }
+                }
             }
             writeln!(writer, "{}", row.join(delim))?;
         }
@@ -920,7 +952,7 @@ mod tests {
         println!("data_rewritten: {}", data_rewritten);
         assert_eq!(
             std::fs::read_to_string("test_non_numerics_rewritten.csv")?,
-            "target_0➵A,target_0➵B,target_0➵C,target_0➵D,target_1,feature_0➵X,feature_0➵Y,feature_0➵Z,feature_0➵A,feature_0➵B,feature_0➵C,feature_1➵A1,feature_1➵A2,feature_1➵A3,feature_1➵A4,feature_2,feature_3\n1,0,0,0,0.002356832,1,0,0,0,0,0,1,0,0,0,0.26257637,-0.22530088\n0,1,0,0,0.009485791,0,1,0,0,0,0,0,1,0,0,-0.40898767,-0.6339346\n0,0,1,0,0.009100225,0,0,1,0,0,0,0,0,1,0,0.012834634,-2.0523884\n0,0,1,0,0.004334052,0,0,1,0,0,0,0,0,0,1,1.0629518,2.0183794\n0,0,1,0,0.015800802,0,0,1,0,0,0,0,0,0,1,-0.13212654,-1.7721263\n0,0,1,0,0.002177081,0,0,1,0,0,0,0,0,0,1,0.39454332,-0.8285658\n0,0,1,0,0.021280818,0,0,1,0,0,0,0,0,0,1,-0.15998206,0.07512082\n0,0,1,0,0.02473503,0,0,0,1,0,0,0,0,1,0,1.6373256,0.27236217\n0,0,1,0,0.019157464,0,0,0,0,1,0,0,1,0,0,-0.6462233,0.92315364\n0,0,0,1,0.016854811,0,0,0,0,0,1,1,0,0,0,0.34480542,0.534274\n".to_owned(),
+            "target_0➵A,target_0➵B,target_0➵C,target_0➵D,target_1,feature_0,feature_1,feature_2,feature_3\n1,0,0,0,0.002356832,X,A1,0.26257637,-0.22530088\n0,1,0,0,0.009485791,Y,A2,-0.40898767,-0.6339346\n0,0,1,0,0.009100225,Z,A3,0.012834634,-2.0523884\n0,0,1,0,0.004334052,Z,A4,1.0629518,2.0183794\n0,0,1,0,0.015800802,Z,A4,-0.13212654,-1.7721263\n0,0,1,0,0.002177081,Z,A4,0.39454332,-0.8285658\n0,0,1,0,0.021280818,Z,A4,-0.15998206,0.07512082\n0,0,1,0,0.02473503,A,A3,1.6373256,0.27236217\n0,0,1,0,0.019157464,B,A2,-0.6462233,0.92315364\n0,0,0,1,0.016854811,C,A1,0.34480542,0.534274\n".to_owned(),
         );
         // Marginals
         let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
@@ -936,6 +968,7 @@ mod tests {
             let f = f?.path();
             if f.is_file() && 
             (
+                f.extension().and_then(|s| s.to_str()) == Some("png") || 
                 f.extension().and_then(|s| s.to_str()) == Some("svg") || 
                 f.extension().and_then(|s| s.to_str()) == Some("json") || 
                 f.extension().and_then(|s| s.to_str()) == Some("csv") || 
