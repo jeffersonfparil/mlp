@@ -306,6 +306,7 @@ impl Network {
         for i in 0..(n_nodes.len() - 1) {
             let n: usize = n_nodes[i + 1];
             let p: usize = n_nodes[i];
+            // println!("i={};p={}", i, p);
             let normal = Normal::new(0.0, 2.0/(p as f32))?; // He initialisation
             let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
             let dweights_host: Vec<f32> = vec![0f32; n * p];
