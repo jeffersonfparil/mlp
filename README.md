@@ -137,7 +137,6 @@ do
     F1=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
     sed 's/target_0/y/g' $F1 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/row/g'  | sed 's/fcat_5/col/g' > tmp
     mv tmp $F1
-    
     mv $F0 $F_NORMAL
     mv $F1 $F_GAMMA
 done
