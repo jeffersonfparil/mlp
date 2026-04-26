@@ -1,6 +1,9 @@
 use cudarc::driver::CudaSlice;
 use cudarc::driver::safe::CudaFunction;
 use cudarc::nvrtc::compile_ptx;
+
+use cudarc::nvrtc::{compile_ptx_with_opts, CompileOptions};
+
 use std::error::Error;
 use std::fmt;
 use std::collections::HashMap;
@@ -368,8 +371,14 @@ impl Matrix {
         if let Some(func) = cache.get(kernel_name) {
             return Ok(func.clone());
         }
-        // Compile and load the function (CUDA kernel)
-        let ptx = compile_ptx(ptx_source)?;
+        // // For older NVIDIA GPUs
+        // let opts = CompileOptions {
+        //     options: vec!["-arch=sm_50".to_string()],
+        //     ..Default::default()
+        // };
+        // let ptx = compile_ptx_with_opts(ptx_source, opts)?;
+        Compile and load the function (CUDA kernel)
+        // let ptx = compile_ptx(ptx_source)?;
         let func = self.data.context()
             .load_module(ptx)?
             .load_function(kernel_name)?;

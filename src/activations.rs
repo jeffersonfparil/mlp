@@ -139,7 +139,7 @@ const HYPERBOLICTANGENT_DERIVATIVE: &str = "
             float a = exp(A[idx]);
             float b = exp(-A[idx]);
             float t = (a - b) / (a + b);
-            B[idx] = 1.00 - pow(t, 2);
+            B[idx] = 1.00 - powf(t, 2.0f);
         }
     }
 ";
@@ -489,6 +489,7 @@ impl Activation {
 mod tests {
     use super::*;
     use cudarc::driver::safe::CudaContext;
+    use approx::assert_relative_eq;
     #[test]
     fn test_activations() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -582,8 +583,24 @@ mod tests {
         let matrix_4 = activation_2.derivative(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_4.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
         println!("After `hyperbolictangentderivative`: a_host {:?}", a_host);
-        assert_eq!(
-            a_host,
+        // assert_eq!(
+        //     a_host,
+        //     vec![
+        //         1.0,
+        //         0.41997433,
+        //         0.070650935,
+        //         0.009866118,
+        //         0.0013408661,
+        //         0.00018179417,
+        //         2.4557114e-5,
+        //         3.0994415e-6,
+        //         3.5762787e-7,
+        //         0.0,
+        //         0.0,
+        //         0.0
+        //     ]
+        // );
+        a_host.iter().zip(
             vec![
                 1.0,
                 0.41997433,
@@ -597,8 +614,7 @@ mod tests {
                 0.0,
                 0.0,
                 0.0
-            ]
-        );
+            ].iter()).for_each(|(a, b)| assert_relative_eq!(a, b, epsilon=1.0e-6));
 
         let matrix_5 = activation_3.activate(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_5.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU

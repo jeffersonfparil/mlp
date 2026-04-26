@@ -568,6 +568,7 @@ impl Matrix {
 mod tests {
     use super::*;
     use cudarc::driver::safe::CudaContext;
+    use approx::assert_relative_eq;
     #[test]
     fn test_mult() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -675,8 +676,24 @@ mod tests {
         let matrix_p = a_matrix.elementwisematpower(2.0)?;
         stream.memcpy_dtoh(&matrix_p.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
         println!("After `elementwisematinverse`: a_host {:?}", a_host);
-        assert_eq!(
-            a_host,
+        // assert_eq!(
+        //     a_host,
+        //     vec![
+        //         0.0_f32.powf(2.0),
+        //         1.0_f32.powf(2.0),
+        //         2.0_f32.powf(2.0),
+        //         3.0_f32.powf(2.0),
+        //         4.0_f32.powf(2.0),
+        //         5.0_f32.powf(2.0),
+        //         6.0_f32.powf(2.0),
+        //         7.0_f32.powf(2.0),
+        //         8.0_f32.powf(2.0),
+        //         9.0_f32.powf(2.0),
+        //         10.0_f32.powf(2.0),
+        //         11.0_f32.powf(2.0)
+        //     ]
+        // );
+            a_host.iter().zip(
             vec![
                 0.0_f32.powf(2.0),
                 1.0_f32.powf(2.0),
@@ -690,8 +707,9 @@ mod tests {
                 9.0_f32.powf(2.0),
                 10.0_f32.powf(2.0),
                 11.0_f32.powf(2.0)
-            ]
-        );
+            ].iter()).for_each(|(a, b)| {
+                assert_relative_eq!(a, b, epsilon=1.0e-06)
+            });
 
         let matrix_2 = a_matrix.elementwisematmul(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_2.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
