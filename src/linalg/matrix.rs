@@ -378,7 +378,7 @@ impl Matrix {
         // };
         // let ptx = compile_ptx_with_opts(ptx_source, opts)?;
         // Compile and load the function (CUDA kernel)
-        // let ptx = compile_ptx(ptx_source)?;
+        let ptx = compile_ptx(ptx_source)?;
         let func = self.data.context()
             .load_module(ptx)?
             .load_function(kernel_name)?;
