@@ -143,6 +143,9 @@ impl Network {
 
 impl Marginals {
 
+    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
     // TODO: include r2s
 
     pub fn plot(self: &Self, main_only: bool) -> Result<String, Box<dyn Error>> {
