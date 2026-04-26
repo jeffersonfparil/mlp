@@ -2,6 +2,7 @@ use cudarc::driver::CudaSlice;
 use cudarc::driver::safe::CudaFunction;
 use cudarc::nvrtc::compile_ptx;
 
+use std::process::Command;
 use cudarc::nvrtc::{compile_ptx_with_opts, CompileOptions};
 
 use std::error::Error;
@@ -367,18 +368,26 @@ lazy_static! {
 impl Matrix {
     pub fn get_cached_kernel(&self, kernel_name: &str, ptx_source: &str) -> Result<CudaFunction, Box<dyn Error>> {
         // Return cloned function if already cached
-        let mut cache = KERNEL_CACHE.lock().unwrap();
+        let mut cache = KERNEL_CACHE.lock()?;
         if let Some(func) = cache.get(kernel_name) {
             return Ok(func.clone());
         }
+        let output = Command::new("nvidia-smi")
+            .args(["--query-gpu=compute_cap", "--format=csv,noheader"])
+            .output()
+            .expect("Failed to execute nvidia-smi. Is it installed and in PATH?");
+        let cap_str = String::from_utf8_lossy(&output.stdout);
+        let cap = cap_str.trim().replace('.', "");
+        let arch_flag = format!("-arch=sm_{}", cap);
+        let opts = CompileOptions {
+            options: vec![arch_flag],
+            ..Default::default()
+        };
         // Compile and load the function (CUDA kernel)
-        let ptx = compile_ptx(ptx_source)?;
-        // // For older NVIDIA GPUs
-        // let opts = CompileOptions {
-        //     options: vec!["-arch=sm_50".to_string()],
-        //     ..Default::default()
-        // };
-        // let ptx = compile_ptx_with_opts(ptx_source, opts)?;
+        let ptx = match compile_ptx_with_opts(ptx_source, opts) {
+            Ok(x) => x,
+            Err(_) => {compile_ptx(ptx_source)?}
+        };
         let func = self.data.context()
             .load_module(ptx)?
             .load_function(kernel_name)?;
