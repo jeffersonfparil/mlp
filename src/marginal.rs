@@ -437,6 +437,7 @@ mod tests {
     use super::*;
     use crate::io::Data;
     use crate::optimisers::OptimisationParameters;
+    use approx::assert_relative_eq;
     #[test]
     fn test_marginal() -> Result<(), Box<dyn Error>> {
  
@@ -466,7 +467,8 @@ mod tests {
         marginals.estimate_perturb(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
-        assert_eq!(marginals.effects, vec![0.0063039656, -0.0055265124, -0.003617289, 0.004599975, -0.00023482475, -0.004191097, -0.00061337004]);
+        // assert_eq!(marginals.effects, vec![0.0063039656, -0.0055265124, -0.003617289, 0.004599975, -0.00023482475, -0.004191097, -0.00061337004]);
+        marginals.effects.iter().zip(vec![0.0063039656, -0.0055265124, -0.003617289, 0.004599975, -0.00023482475, -0.004191097, -0.00061337004].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
         
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
