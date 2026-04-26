@@ -17,7 +17,7 @@ impl From<PlottingError> for TrainingError {
     }
 }
 
-// NOTE: The following methods generate quick and dirty plots not meant as final or production-grade or publication-quality plots.
+// NOTE: The following methods generate quick and dirty plots NOT meant as final or production-grade or publication-quality plots.
 
 impl Network {
     pub fn plot_loss(self: &Self, epochs: Vec<Vec<f64>>, costs: Vec<Vec<f64>>, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
@@ -143,12 +143,8 @@ impl Network {
 
 impl Marginals {
 
-    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-    // TODO: include r2s
-
     pub fn plot(self: &Self, main_only: bool) -> Result<String, Box<dyn Error>> {
+        // Note that we only plot the marginal effects and leave it to the use to plot the R2 using their preferred plotting software/library
         // Filename
         let dir: PathBuf = current_dir()?;
         let fname_main_effects_png = format!(
@@ -267,12 +263,12 @@ mod test {
         let _fname_main_effects_png = marginals.plot(true)?;
         let _fname_all_effects_png = marginals.plot(false)?;
         // Clean-up
-        // for f in std::fs::read_dir(".")? {
-        //     let f = f?.path();
-        //     if f.is_file() && (f.extension().and_then(|s| s.to_str()) == Some("png") || f.extension().and_then(|s| s.to_str()) == Some("svg")) {
-        //         std::fs::remove_file(&f)?;
-        //     }
-        // }
+        for f in std::fs::read_dir(".")? {
+            let f = f?.path();
+            if f.is_file() && (f.extension().and_then(|s| s.to_str()) == Some("png") || f.extension().and_then(|s| s.to_str()) == Some("svg")) {
+                std::fs::remove_file(&f)?;
+            }
+        }
         Ok(())
     }
 }
