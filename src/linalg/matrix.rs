@@ -372,22 +372,25 @@ impl Matrix {
         if let Some(func) = cache.get(kernel_name) {
             return Ok(func.clone());
         }
-        let output = Command::new("nvidia-smi")
-            .args(["--query-gpu=compute_cap", "--format=csv,noheader"])
-            .output()
-            .expect("Failed to execute nvidia-smi. Is it installed and in PATH?");
-        let cap_str = String::from_utf8_lossy(&output.stdout);
-        let cap = cap_str.trim().replace('.', "");
-        let arch_flag = format!("-arch=sm_{}", cap);
-        let opts = CompileOptions {
-            options: vec![arch_flag],
-            ..Default::default()
-        };
         // Compile and load the function (CUDA kernel)
-        let ptx = match compile_ptx_with_opts(ptx_source, opts) {
+        let ptx = match compile_ptx(ptx_source)  {
             Ok(x) => x,
-            Err(_) => {compile_ptx(ptx_source)?}
+            Err(_) => {
+                let output = Command::new("nvidia-smi")
+                    .args(["--query-gpu=compute_cap", "--format=csv,noheader"])
+                    .output()
+                    .expect("Failed to execute nvidia-smi. Is it installed and in PATH?");
+                let cap_str = String::from_utf8_lossy(&output.stdout);
+                let cap = cap_str.trim().replace('.', "");
+                let arch_flag = format!("-arch=sm_{}", cap);
+                let opts = CompileOptions {
+                    options: vec![arch_flag],
+                    ..Default::default()
+                };
+                compile_ptx_with_opts(ptx_source, opts)?
+            }
         };
+        // let ptx = compile_ptx(ptx_source)?;
         let func = self.data.context()
             .load_module(ptx)?
             .load_function(kernel_name)?;
