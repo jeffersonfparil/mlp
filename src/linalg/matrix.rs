@@ -377,7 +377,7 @@ impl Matrix {
         //     ..Default::default()
         // };
         // let ptx = compile_ptx_with_opts(ptx_source, opts)?;
-        Compile and load the function (CUDA kernel)
+        // Compile and load the function (CUDA kernel)
         // let ptx = compile_ptx(ptx_source)?;
         let func = self.data.context()
             .load_module(ptx)?
