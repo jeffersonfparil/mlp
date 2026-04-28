@@ -95,13 +95,13 @@ cargo build --release
 ## Tests on simulated data
 
 We simulated:
-- 35,000 observations of
+- 21,000 observations of
 - 1 response variable across 
 - 7 years
 - 20 sites
 - 2 treatments
 - 25 entries
-- 5 replications (blocks)
+- 3 replications (blocks)
 - in a multi-environment trial
 - in randomised complete block design (RCBD) per environment
 - using a multi-layer perceptron with:
@@ -112,13 +112,14 @@ We simulated:
 
 ```shell
 cd mlp/
+mkdir tests/simulated
 cd tests/simulated
 MLP=../../target/release/mlp
 N_YEARS=7
 N_SITES=20
 N_TREATMENTS=2
 N_ENTRIES=25
-N_REPLICATIONS=5
+N_REPLICATIONS=3
 for HIDDEN_LAYERS in $(seq 1 5)
 do
     # HIDDEN_LAYERS=1
@@ -210,10 +211,11 @@ model_stats = data.frame(
 z_AIC = scale(model_stats$AIC, scale=T, center=T)
 z_BIC = scale(model_stats$BIC, scale=T, center=T)
 z_logLik = -scale(model_stats$logLik, scale=T, center=T)
-model_stats$z_sum = z_AIC + z_BIC + z_logLik
+model_stats$z_sum = 0.2*z_AIC + 0.6*z_BIC + 0.2*z_logLik
 print(model_stats)
 
 # Select the best model based on z_sum
+# best_model_idx <- which.min(model_stats$BIC)
 best_model_idx <- which.min(model_stats$z_sum)
 best_model <- models[[best_model_idx]]
 best_model_name <- names(models)[best_model_idx]
@@ -261,7 +263,7 @@ do
     echo $INPUT
     OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed 's/.tsv/.json/g')
     echo $OUTPUT
-    time $MLP -f $INPUT -o $OUTPUT -v --n-epochs=1000 --f-patient-epochs=0.1 --n-batches=1 --n-hidden-layers=2 --marginals-order=1
+    time $MLP -f $INPUT -o $OUTPUT -v --n-epochs=500 --f-patient-epochs=0.1 --n-batches=1 --n-hidden-layers=1 --marginals-order=2
 done
 ```
 
