@@ -94,14 +94,26 @@ cargo build --release
 
 ## Tests on simulated data
 
-We simulated 10,000 observations of 1 response variable controlled by 500 continuous features across multi-layer perceptrons with 1, 2, 3, 4, and 5 hidden layers whose effects are normally (μ=0, σ=1) and gamma (α=2, θ=2) distributed.
+We simulated:
+- 35,000 observations of
+- 1 response variable across 
+- 7 years
+- 20 sites
+- 2 treatments
+- 25 entries
+- 5 replications (blocks)
+- in a multi-environment trial
+- in randomised complete block design (RCBD) per environment
+- using a multi-layer perceptron with:
+    + 1, 2, 3, 4, and 5 hidden layers whose effects are:
+    + normally (μ=0, σ=1) and gamma (α=2, θ=2) distributed.
 
 ### Simulate data
 
 ```shell
 cd mlp/
-cd tests/
-MLP=../target/release/mlp
+cd tests/simulated
+MLP=../../target/release/mlp
 N_YEARS=7
 N_SITES=20
 N_TREATMENTS=2
@@ -151,61 +163,88 @@ done
 
 ```R
 library("lme4")
-library("flexplot")
 
 fname_input = "input_simulated-NORMAL-1HL.tsv"
-df = read.delim(fname_input, T)
-head(df)
-ids_features = c()
-for (j in 1:ncol(df)) {
-    # j = 7
-    if (is.character(df[, j])) {
-        df[, j] = as.factor(df[, j])
-        ids_features = c(ids_features, paste0(names(df)[j], sort(levels(df[, j]))))
+
+process_features = function(df) {
+    ids_features = c()
+    for (j in 1:ncol(df)) {
+        # j = 7
+        if (is.character(df[, j])) {
+            df[, j] = as.factor(df[, j])
+            ids_features = c(ids_features, paste0(names(df)[j], sort(levels(df[, j]))))
+        }
+    }
+    for (v in c("year", "site", "treatment", "entry", "block")) {
+        if (!is.factor(df[[v]])) df[[v]] = as.factor(df[[v]])
+    }
+    return(list(
+        df=df, 
+        ids_features=ids_features
+    ))
+}
+
+input_list = process_features(df=read.delim(fname_input, T))
+df = input_list$df
+ids_features = input_list$ids_features
+
+str(df)
+length(ids_features)
+
+models = list(
+    lm_main = lm(y ~ year + site + treatment + entry + block, data=df),
+    lm_interaction = lm(y ~ year * site + treatment + entry + block, data=df),
+    lm_year_site = lm(y ~ year + site + treatment + entry + block + year:site, data=df),
+    lmer_entry_block = lmer(y ~ year + site + treatment + (1|entry) + (1|block), data=df),
+    lmer_entry_siteblock = lmer(y ~ year + site + treatment + (1|entry) + (1|site:block), data=df),
+    lmer_entry_yearsite = lmer(y ~ year + site + treatment + (1|entry) + (1|year:site) + (1|block), data=df)
+)
+
+model_stats = data.frame(
+    model = names(models),
+    AIC = sapply(models, AIC),
+    BIC = sapply(models, BIC),
+    logLik = sapply(models, function(x) as.numeric(logLik(x))),
+    df = sapply(models, function(x) attr(logLik(x), "df"))
+)
+z_AIC = scale(model_stats$AIC, scale=T, center=T)
+z_BIC = scale(model_stats$BIC, scale=T, center=T)
+z_logLik = -scale(model_stats$logLik, scale=T, center=T)
+model_stats$z_sum = z_AIC + z_BIC + z_logLik
+print(model_stats)
+
+# Select the best model based on z_sum
+best_model_idx <- which.min(model_stats$z_sum)
+best_model <- models[[best_model_idx]]
+best_model_name <- names(models)[best_model_idx]
+print(paste("Best model selected:", best_model_name))
+
+# Plot entry effects (random effects for entry)
+if (inherits(best_model, "merMod")) {
+    entry_effects <- ranef(best_model)$entry
+    barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects", xlab = "Entry", ylab = "Random Effect")
+}
+
+# Plot interaction effects if present
+if (inherits(best_model, "lm")) {
+    coefs <- coef(best_model)
+    interaction_coefs <- coefs[grep(":", names(coefs))]
+    if (length(interaction_coefs) > 0) {
+        barplot(interaction_coefs, names.arg = names(interaction_coefs), main = "Interaction Effects", xlab = "Interaction Term", ylab = "Coefficient")
+    }
+} else if (inherits(best_model, "merMod")) {
+    fixef_coefs <- fixef(best_model)
+    interaction_coefs <- fixef_coefs[grep(":", names(fixef_coefs))]
+    if (length(interaction_coefs) > 0) {
+        barplot(interaction_coefs, names.arg = names(interaction_coefs), main = "Interaction Effects", xlab = "Interaction Term", ylab = "Fixed Effect Coefficient")
+    }
+    # Plot random interaction effects for year:site if present
+    if ("year:site" %in% names(ranef(best_model))) {
+        yearsite_effects <- ranef(best_model)$`year:site`
+        barplot(yearsite_effects[,1], names.arg = rownames(yearsite_effects), main = "Year:Site Interaction Random Effects", xlab = "Year:Site", ylab = "Random Effect")
     }
 }
-str(df)
 
-
-models = list()
-
-
-mod = lm(y ~ ., df)
-summary(mod)
-df_tmp = data.frame(ids=names(coef(mod)), effects=coef(mod))
-intercept = df_tmp$effects[df_tmp$ids == "(Intercept)"]
-ids_dummy = ids_features[!(ids_features %in% df_tmp$ids)]
-effects_dummy = c()
-for (id in ids_dummy) {
-    # id = ids_dummy[1]
-    id = gsub("level-0", "", id)
-    effects_dummy = c(effects_dummy, mean(c(intercept, df_tmp$effects[grepl(id, df_tmp$ids)])))
-}
-df_coef = data.frame(
-    ids = c(
-        ids_dummy,
-        df_tmp$ids[df_tmp$ids != "(Intercept)"]
-    ),
-    effects = c(
-        effects_dummy,
-        df_tmp$effects[df_tmp$ids != "(Intercept)"]
-    )
-)
-df_coef$ids = gsub("level", "➵level", df_coef$ids)
-df_coef
-
-mod = lmer(y ~ year + site + treatment + (1|entry) + (1|row) + (1|col), df)
-summary(mod)
-fixef(mod)
-ranef(mod)
-
-library(lattice)
-
-png("test.png")
-# flexplot::visualize(mod, plot="residual")
-dotplot(ranef(mod), "entry")
-p$row
-dev.off()
 
 ```
 
@@ -213,15 +252,16 @@ dev.off()
 
 ```shell
 cd mlp/
-cd tests/
-MLP=../target/release/mlp
+cd tests/simulated
+MLP=../../target/release/mlp
 for INPUT in $(ls input_simulated-*-*.tsv)
 do
     # INPUT=$(ls input_simulated-*-*.tsv | head -n1)
+    # INPUT=input_simulated-NORMAL-1HL.tsv
     echo $INPUT
     OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed 's/.tsv/.json/g')
     echo $OUTPUT
-    $MLP -f $INPUT -o $OUTPUT
+    time $MLP -f $INPUT -o $OUTPUT -v --n-epochs=1000 --f-patient-epochs=0.1 --n-batches=1 --n-hidden-layers=2 --marginals-order=1
 done
 ```
 
