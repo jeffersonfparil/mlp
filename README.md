@@ -102,6 +102,11 @@ We simulated 10,000 observations of 1 response variable controlled by 500 contin
 cd mlp/
 cd tests/
 MLP=../target/release/mlp
+N_YEARS=7
+N_SITES=20
+N_TREATMENTS=2
+N_ENTRIES=25
+N_REPLICATIONS=5
 for HIDDEN_LAYERS in $(seq 1 5)
 do
     # HIDDEN_LAYERS=1
@@ -111,33 +116,33 @@ do
     echo "$F_NORMAL and $F_GAMMA"
     $MLP \
         --simulate-data-only \
-       --simulation-n-observations $(echo 5*4*2*50*10*20 | bc) \
-       --simulation-n-features-continuous 0 \
-       --simulation-n-features-categorical 5,4,2,50,10,20 \
-       --simulation-n-output-columns 1 \
-       --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
-       --simulation-weights-distribution normal \
-       --simulation-weights-distribution-param-1 0 \
-       --simulation-weights-distribution-param-2 1 \
-       --seed ${HIDDEN_LAYERS}
+        --simulation-n-observations $(echo "$N_YEARS*$N_SITES*$N_TREATMENTS*$N_ENTRIES*$N_REPLICATIONS" | bc) \
+        --simulation-n-features-continuous 0 \
+        --simulation-n-features-categorical "$N_YEARS,$N_SITES,$N_TREATMENTS,$N_ENTRIES,$N_REPLICATIONS" \
+        --simulation-n-output-columns 1 \
+        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
+        --simulation-weights-distribution normal \
+        --simulation-weights-distribution-param-1 0 \
+        --simulation-weights-distribution-param-2 1 \
+        --seed ${HIDDEN_LAYERS}
     F0=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
-    sed 's/target_0/y/g' $F0 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/row/g'  | sed 's/fcat_5/col/g' > tmp
+    sed 's/target_0/y/g' $F0 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/block/g'> tmp
     mv tmp $F0
+    mv $F0 $F_NORMAL
     $MLP \
         --simulate-data-only \
-       --simulation-n-observations $(echo 5*4*2*50*10*20 | bc) \
-       --simulation-n-features-continuous 0 \
-       --simulation-n-features-categorical 5,4,2,50,10,20 \
-       --simulation-n-output-columns 1 \
-       --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
-       --simulation-weights-distribution gamma \
-       --simulation-weights-distribution-param-1 2 \
-       --simulation-weights-distribution-param-2 2 \
-       --seed ${HIDDEN_LAYERS}
+        --simulation-n-observations $(echo "$N_YEARS*$N_SITES*$N_TREATMENTS*$N_ENTRIES*$N_REPLICATIONS" | bc) \
+        --simulation-n-features-continuous 0 \
+        --simulation-n-features-categorical "$N_YEARS,$N_SITES,$N_TREATMENTS,$N_ENTRIES,$N_REPLICATIONS" \
+        --simulation-n-output-columns 1 \
+        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
+        --simulation-weights-distribution gamma \
+        --simulation-weights-distribution-param-1 2 \
+        --simulation-weights-distribution-param-2 2 \
+        --seed ${HIDDEN_LAYERS}
     F1=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
-    sed 's/target_0/y/g' $F1 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/row/g'  | sed 's/fcat_5/col/g' > tmp
+    sed 's/target_0/y/g' $F1 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/block/g'> tmp
     mv tmp $F1
-    mv $F0 $F_NORMAL
     mv $F1 $F_GAMMA
 done
 ```
