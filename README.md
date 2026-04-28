@@ -164,6 +164,7 @@ done
 
 ```R
 library("lme4")
+library("asreml") # requires ```shell module load ASReml-R ```
 
 fname_input = "input_simulated-NORMAL-1HL.tsv"
 
@@ -192,21 +193,52 @@ ids_features = input_list$ids_features
 str(df)
 length(ids_features)
 
-models = list(
-    lm_main = lm(y ~ year + site + treatment + entry + block, data=df),
-    lm_interaction = lm(y ~ year * site + treatment + entry + block, data=df),
-    lm_year_site = lm(y ~ year + site + treatment + entry + block + year:site, data=df),
-    lmer_entry_block = lmer(y ~ year + site + treatment + (1|entry) + (1|block), data=df),
-    lmer_entry_siteblock = lmer(y ~ year + site + treatment + (1|entry) + (1|site:block), data=df),
-    lmer_entry_yearsite = lmer(y ~ year + site + treatment + (1|entry) + (1|year:site) + (1|block), data=df)
+lm_model_strings = c(
+    "lm(y ~ year + site + treatment + entry + block, data=df)",
+    "lm(y ~ year * site + treatment + entry + block, data=df)"
 )
+lmer_model_strings = c(
+    'lmer(y ~ year + site + treatment + block + (1|entry), df)',
+    'lmer(y ~ year * site + treatment + block + (1|entry), df)',
+    'lmer(y ~ year * site * treatment + block + (1|entry), df)',
+    'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
+    'lmer(y ~ year * site + treatment + block + (1 + site|entry), df)',
+    'lmer(y ~ year * site * treatment + block + (1 + year:site|entry), df)',
+    'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)'
+)
+asreml_model_strings = c(
+    'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
+    'asreml(y ~ year * site + treatment + block, random = ~ entry, data = df)',
+    'asreml(y ~ year * site * treatment + block, random = ~ entry, data = df)',
+    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site, entry), data = df)',
+    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year, entry), data = df)',
+    'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site, entry), data = df)',
+    'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
+)
+model_strings = c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+# Fit these models
+models_candidate = list()
+for (i in 1:length(model_strings)) {
+    # i = 1
+    # i = length(model_strings)-2
+    mod_string = model_strings[i]
+    mod_label = unlist(strsplit(mod_string, "\\("))[1]
+    print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
+    mod = tryCatch(
+        eval(parse(text=mod_string)),
+        error = function(e) {NA}
+    )
+    if ((length(mod)==1) && (!is.na(mod))) {
+        models_candidate[[paste0(mod_label, "_", i)]] = mod
+    }
+}
 
 model_stats = data.frame(
-    model = names(models),
-    AIC = sapply(models, AIC),
-    BIC = sapply(models, BIC),
-    logLik = sapply(models, function(x) as.numeric(logLik(x))),
-    df = sapply(models, function(x) attr(logLik(x), "df"))
+    model = names(models_candidate),
+    AIC = sapply(models_candidate, AIC),
+    BIC = sapply(models_candidate, BIC),
+    logLik = sapply(models_candidate, function(x) as.numeric(logLik(x))),
+    df = sapply(models_candidate, function(x) attr(logLik(x), "df"))
 )
 z_AIC = scale(model_stats$AIC, scale=T, center=T)
 z_BIC = scale(model_stats$BIC, scale=T, center=T)
@@ -217,8 +249,8 @@ print(model_stats)
 # Select the best model based on z_sum
 # best_model_idx <- which.min(model_stats$BIC)
 best_model_idx <- which.min(model_stats$z_sum)
-best_model <- models[[best_model_idx]]
-best_model_name <- names(models)[best_model_idx]
+best_model <- models_candidate[[best_model_idx]]
+best_model_name <- names(models_candidate)[best_model_idx]
 print(paste("Best model selected:", best_model_name))
 
 # Plot entry effects (random effects for entry)
