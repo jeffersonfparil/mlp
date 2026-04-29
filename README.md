@@ -173,8 +173,8 @@ do
         --simulation-n-output-columns 1 \
         --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
         --simulation-weights-distribution gamma \
-        --simulation-weights-distribution-param-1 2 \
-        --simulation-weights-distribution-param-2 2 \
+        --simulation-weights-distribution-param-1 0.25 \
+        --simulation-weights-distribution-param-2 0.50 \
         --seed ${HIDDEN_LAYERS}
     F1=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
     sed 's/target_0/y/g' $F1 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/block/g'> tmp
@@ -185,11 +185,20 @@ done
 
 ### Analysis using R
 
+#### Run the script:
+
+```shell
+cd mlp
+cd tests/simulated
+time Rscript script_LINEAR.R
+```
+
+#### See details below:
+
 ```R
+library("stringr")
 library("lme4")
 library("asreml") # requires ```shell module load ASReml-R ```
-
-fname_input = "input_simulated-NORMAL-1HL.tsv"
 
 process_features = function(df) {
     ids_features = c()
@@ -208,60 +217,6 @@ process_features = function(df) {
         ids_features=ids_features
     ))
 }
-
-input_list = process_features(df=read.delim(fname_input, T))
-df = input_list$df
-ids_features = input_list$ids_features
-
-str(df)
-length(ids_features)
-
-attach(df)
-
-lm_model_strings = c(
-    "lm(y ~ year + site + treatment + entry + block, data=df)",
-    "lm(y ~ year * site + treatment + entry + block, data=df)"
-)
-lmer_model_strings = c(
-    'lmer(y ~ year + site + treatment + block + (1|entry), df)',
-    'lmer(y ~ year * site + treatment + block + (1|entry), df)',
-    'lmer(y ~ year * site * treatment + block + (1|entry), df)',
-    'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
-    'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)'
-)
-asreml_model_strings = c(
-    'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
-    'asreml(y ~ year * site + treatment + block, random = ~ entry, data = df)',
-    'asreml(y ~ year * site * treatment + block, random = ~ entry, data = df)',
-    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
-    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
-    'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
-    'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
-)
-model_strings = c(lm_model_strings, lmer_model_strings, asreml_model_strings)
-# Fit these models
-model_candidates = list()
-for (i in 1:length(model_strings)) {
-    # i = 13
-    # i = length(model_strings)
-    mod_string = model_strings[i]
-    mod_label = unlist(strsplit(mod_string, "\\("))[1]
-    print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
-    mod = tryCatch(
-        eval(parse(text=mod_string)),
-        error = function(e) {
-            print("Unable to fit: skipped!")
-            return(NA)
-        }
-    )
-    if ((length(mod) == 1) && is.na(mod)) {
-        next
-    } else {
-        model_candidates[[paste0(mod_label, "_", i)]] = mod
-    }
-}
-length(model_strings)
-length(model_candidates)
 
 AIC_lm_lmer_asreml = function(mod) {
     # mod = model_candidates[[13]]
@@ -308,57 +263,138 @@ ndf_lm_lmer_asreml = function(mod) {
     }
 }
 
-model_stats = data.frame(
-    model = names(model_candidates),
-    AIC = sapply(model_candidates, AIC_lm_lmer_asreml),
-    BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
-    logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
-)
-z_AIC = scale(model_stats$AIC, scale=T, center=T)
-z_BIC = scale(model_stats$BIC, scale=T, center=T)
-z_logLik = -scale(model_stats$logLik, scale=T, center=T)
-model_stats$z_sum = 0.2*z_AIC + 0.6*z_BIC + 0.2*z_logLik
-print(model_stats)
+fit_extract_effects = function(df) {
+    lm_model_strings = c(
+        "lm(y ~ year + site + treatment + entry + block, data=df)",
+        "lm(y ~ year * site + treatment + entry + block, data=df)"
+    )
+    lmer_model_strings = c(
+        'lmer(y ~ year + site + treatment + block + (1|entry), df)',
+        'lmer(y ~ year * site + treatment + block + (1|entry), df)',
+        # 'lmer(y ~ year * site * treatment + block + (1|entry), df)',
+        # 'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
+        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)'
+    )
+    asreml_model_strings = c(
+        'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
+        'asreml(y ~ year * site + treatment + block, random = ~ entry, data = df)',
+        'asreml(y ~ year * site * treatment + block, random = ~ entry, data = df)',
+        'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
+        'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
+        'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
+        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
+    )
+    model_strings = c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+    # Fit these models
+    model_candidates = list()
+    for (i in 1:length(model_strings)) {
+        # i = 13
+        # i = length(model_strings)
+        mod_string = model_strings[i]
+        mod_label = unlist(strsplit(mod_string, "\\("))[1]
+        print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
+        mod = tryCatch(
+            eval(parse(text=mod_string)),
+            error = function(e) {
+                print("Unable to fit: skipped!")
+                return(NA)
+            }
+        )
+        if ((length(mod) == 1) && is.na(mod)) {
+            model_candidates[[paste0(mod_label, "_", i)]] = NA
+        } else {
+            model_candidates[[paste0(mod_label, "_", i)]] = mod
+        }
+    }
+    df_stats = data.frame(
+        model = names(model_candidates),
+        formula = model_strings,
+        AIC = sapply(model_candidates, AIC_lm_lmer_asreml),
+        BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
+        logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
+    )
+    z_AIC = scale(df_stats$AIC, scale=T, center=T)
+    z_BIC = scale(df_stats$BIC, scale=T, center=T)
+    z_logLik = -scale(df_stats$logLik, scale=T, center=T)
+    df_stats$z_sum = 0.2*z_AIC + 0.6*z_BIC + 0.2*z_logLik
+    print(df_stats)
+    # Select the best model based on z_sum
+    # best_model_idx = which.min(df_stats$BIC)
+    best_model_idx = which.min(df_stats$z_sum)
+    best_model = model_candidates[[best_model_idx]]
+    best_model_formula = df_stats$formula[best_model_idx]
+    print(paste("Best model selected:", best_model_formula))
 
-# Select the best model based on z_sum
-# best_model_idx <- which.min(model_stats$BIC)
-best_model_idx <- which.min(model_stats$z_sum)
-best_model <- model_candidates[[best_model_idx]]
-best_model_name <- names(model_candidates)[best_model_idx]
-print(paste("Best model selected:", best_model_name))
-
-# Plot entry effects (random effects for entry)
-# best_model = model_candidates[[12]]
-svg("test.svg")
-if (class(best_model) == "lm") {
-    effects = coef(best_model)
-    ids = names(effects)
-    intercept = effects[ids == "(Intercept)"]
-    entry_effects = c(intercept, intercept + effects[grepl("entry", ids)])
-    entry_names = c(as.character(levels(df$entry)[1]), ids[grepl("entry", ids)])
-    entry_names = gsub("entry", "", entry_names)
-    barplot(entry_effects, names.arg=entry_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
-}else if (class(best_model) == "lmerMod") {
-    entry_effects <- ranef(best_model)$entry
-    barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
-} else if (class(best_model) == "asreml") {
-    df_ranef = data.frame(
-        ids = rownames(coef(best_model)$random),
-        effects = as.vector(coef(best_model)$random)
-    ); row.names(df_ranef) = NULL
-    # str(df_ranef)
-    df_sub = df_ranef[grepl("entry", df_ranef$ids) & !grepl(":", df_ranef$ids), ]
-    df_sub$ids = gsub("entry_", "", df_sub$ids)
-    barplot(df_sub$effects, names.arg = df_sub$ids, main = "Estimated Entry Effects (asreml model)", xlab = "Entry", ylab = "Random Effect")
-} else {
-    plot(0, 0)
-    print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+    # Plot entry effects (random effects for entry)
+    # best_model = model_candidates[[1]]
+    df_effects = if (class(best_model) == "lm") {
+        # best_model = model_candidates[[1]]
+        effects = coef(best_model)
+        ids = names(effects)
+        intercept = effects[ids == "(Intercept)"]
+        entry_effects = c(intercept, intercept + effects[grepl("entry", ids)])
+        entry_names = c(as.character(levels(df$entry)[1]), ids[grepl("entry", ids)])
+        entry_names = gsub("entry", "", entry_names)
+        df_effects = data.frame(ids=entry_names, effects=entry_effects)
+        rownames(df_effects) = NULL
+        df_effects
+        # barplot(entry_effects, names.arg=entry_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
+    } else if (class(best_model) == "lmerMod") {
+        # best_model = model_candidates[[3]]
+        entry_effects <- ranef(best_model)$entry
+        df_effects = data.frame(ids=rownames(entry_effects), effects=entry_effects[,1])
+        rownames(df_effects) = NULL
+        df_effects
+        # barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
+    } else if (class(best_model) == "asreml") {
+        # best_model = model_candidates[[13]]
+        df_effects = data.frame(
+            ids = rownames(coef(best_model)$random),
+            effects = as.vector(coef(best_model)$random)
+        ); row.names(df_effects) = NULL
+        # str(df_effects)
+        df_sub = df_effects[grepl("entry", df_effects$ids) & !grepl(":", df_effects$ids), ]
+        df_sub$ids = gsub("entry_", "", df_sub$ids)
+        df_effects
+        # barplot(df_sub$effects, names.arg = df_sub$ids, main = "Estimated Entry Effects (asreml model)", xlab = "Entry", ylab = "Random Effect")
+    } else {
+        data.frame()
+        # plot(0, 0)
+        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+    }
+    # Add the expected delimiters for these "marginal" effects
+    df_effects$ids = gsub("_level", "➵level", df_effects$ids)
+    df_effects$ids = gsub(":", "▓", df_effects$ids)
+    # Sort sensibly
+    df_effects = df_effects[stringr::str_order(df_effects$ids, numeric=TRUE), ]
+    return(list(
+        df_effects=df_effects,
+        formula=best_model_formula
+    ))
 }
-dev.off()
 
-detach(df)
-
-
+### Fit and extract entry effects
+fnames = list.files(path=".", pattern="input_simulated")
+output = list()
+for (fname_input in fnames) {
+    # fname_input = "input_simulated-NORMAL-1HL.tsv"
+    input_list = process_features(df=read.delim(fname_input, T))
+    df = input_list$df
+    ids_features = input_list$ids_features
+    attach(df)
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    print(fname_input)
+    out = fit_extract_effects(df)
+    fname_output = paste0(
+        gsub("^input", "output", gsub(".tsv", "", fname_input)),
+        "-LINEAR_",
+        gsub(" ", "", out$formula), 
+        ".tsv"
+    )
+    write.table(out$df_effects, file=fname_output, row.names=FALSE, col.names=TRUE, sep="\t")
+    output[[fname_input]] = out
+    detach(df)
+}
 ```
 
 ### Analysis using mlp
@@ -366,15 +402,28 @@ detach(df)
 ```shell
 cd mlp/
 cd tests/simulated
+mkdir mlp_misc_output
 MLP=../../target/release/mlp
+N_EPOCHS=500
+F_PATIENT_EPOCHS=0.05
+N_BATCHES=1
+N_HIDDEN_LAYERS=1
+MARGINALS_ORDER=1
 for INPUT in $(ls input_simulated-*-*.tsv)
 do
-    # INPUT=$(ls input_simulated-*-*.tsv | head -n1)
+    # INPUT=$(ls input_simulated-*-*.tsv | head -n3 | tail -n1)
     # INPUT=input_simulated-NORMAL-1HL.tsv
     echo $INPUT
-    OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed 's/.tsv/.json/g')
+    # N_EPOCHS=$(echo "500 * ($N_HIDDEN_LAYERS / 2)" | bc)
+    # N_HIDDEN_LAYERS=$(echo $(echo ${INPUT%.tsv*} | rev | cut -d'-' -f1 | rev | sed 's/HL//g') + 1 | bc)
+    OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
     echo $OUTPUT
-    time $MLP -f $INPUT -o $OUTPUT -v --n-epochs=500 --f-patient-epochs=0.1 --n-batches=1 --n-hidden-layers=1 --marginals-order=2
+    time ${MLP} -f ${INPUT} -o ${OUTPUT} -v --n-epochs=${N_EPOCHS} --f-patient-epochs=${F_PATIENT_EPOCHS} --n-batches=${N_BATCHES} --n-hidden-layers=${N_HIDDEN_LAYERS} --marginals-order=${MARGINALS_ORDER}
+    TMP_OUTDIR=mlp_misc_output/${OUTPUT%.*}
+    mkdir $TMP_OUTDIR
+    mv $OUTPUT mlp_misc_output/${OUTPUT%.*}
+    mv *.svg mlp_misc_output/${OUTPUT%.*}
+    mv *.png mlp_misc_output/${OUTPUT%.*}
 done
 ```
 
