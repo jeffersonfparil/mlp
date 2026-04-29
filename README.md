@@ -216,6 +216,8 @@ ids_features = input_list$ids_features
 str(df)
 length(ids_features)
 
+attach(df)
+
 lm_model_strings = c(
     "lm(y ~ year + site + treatment + entry + block, data=df)",
     "lm(y ~ year * site + treatment + entry + block, data=df)"
@@ -225,43 +227,92 @@ lmer_model_strings = c(
     'lmer(y ~ year * site + treatment + block + (1|entry), df)',
     'lmer(y ~ year * site * treatment + block + (1|entry), df)',
     'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
-    'lmer(y ~ year * site + treatment + block + (1 + site|entry), df)',
-    'lmer(y ~ year * site * treatment + block + (1 + year:site|entry), df)',
     'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)'
 )
 asreml_model_strings = c(
     'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
     'asreml(y ~ year * site + treatment + block, random = ~ entry, data = df)',
     'asreml(y ~ year * site * treatment + block, random = ~ entry, data = df)',
-    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site, entry), data = df)',
-    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year, entry), data = df)',
-    'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site, entry), data = df)',
+    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
+    'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
+    'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
     'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
 )
-model_strings = c(lm_model_strings, asreml_model_strings, lmer_model_strings)
+model_strings = c(lm_model_strings, lmer_model_strings, asreml_model_strings)
 # Fit these models
-models_candidate = list()
+model_candidates = list()
 for (i in 1:length(model_strings)) {
-    # i = 1
+    # i = 13
     # i = length(model_strings)
     mod_string = model_strings[i]
     mod_label = unlist(strsplit(mod_string, "\\("))[1]
     print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
     mod = tryCatch(
         eval(parse(text=mod_string)),
-        error = function(e) {NA}
+        error = function(e) {
+            print("Unable to fit: skipped!")
+            return(NA)
+        }
     )
-    if ((length(mod)==1) && (!is.na(mod))) {
-        models_candidate[[paste0(mod_label, "_", i)]] = mod
+    if ((length(mod) == 1) && is.na(mod)) {
+        next
+    } else {
+        model_candidates[[paste0(mod_label, "_", i)]] = mod
+    }
+}
+length(model_strings)
+length(model_candidates)
+
+AIC_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[13]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(AIC(mod))
+    } else if (class(mod) == "asreml") {
+        return(-2*mod$loglik + 2*nrow(summary(mod)$varcomp))
+    } else {
+        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        NA
+    }
+}
+BIC_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[13]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(BIC(mod))
+    } else if (class(mod) == "asreml") {
+        return(-2*mod$loglik + nrow(summary(mod)$varcomp)*log(summary(mod)$nedf))
+    } else {
+        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        NA
+    }
+}
+logLik_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[1]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(as.numeric(logLik(mod)))
+    } else if (class(mod) == "asreml") {
+        return(mod$loglik)
+    } else {
+        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        NA
+    }
+}
+ndf_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[13]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(attr(logLik(mod), "df"))
+    } else if (class(mod) == "asreml") {
+        return(summary(mod)$nedf)
+    } else {
+        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        NA
     }
 }
 
 model_stats = data.frame(
-    model = names(models_candidate),
-    AIC = sapply(models_candidate, AIC),
-    BIC = sapply(models_candidate, BIC),
-    logLik = sapply(models_candidate, function(x) as.numeric(logLik(x))),
-    df = sapply(models_candidate, function(x) attr(logLik(x), "df"))
+    model = names(model_candidates),
+    AIC = sapply(model_candidates, AIC_lm_lmer_asreml),
+    BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
+    logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
 )
 z_AIC = scale(model_stats$AIC, scale=T, center=T)
 z_BIC = scale(model_stats$BIC, scale=T, center=T)
@@ -272,35 +323,40 @@ print(model_stats)
 # Select the best model based on z_sum
 # best_model_idx <- which.min(model_stats$BIC)
 best_model_idx <- which.min(model_stats$z_sum)
-best_model <- models_candidate[[best_model_idx]]
-best_model_name <- names(models_candidate)[best_model_idx]
+best_model <- model_candidates[[best_model_idx]]
+best_model_name <- names(model_candidates)[best_model_idx]
 print(paste("Best model selected:", best_model_name))
 
 # Plot entry effects (random effects for entry)
-if (inherits(best_model, "merMod")) {
+# best_model = model_candidates[[12]]
+svg("test.svg")
+if (class(best_model) == "lm") {
+    effects = coef(best_model)
+    ids = names(effects)
+    intercept = effects[ids == "(Intercept)"]
+    entry_effects = c(intercept, intercept + effects[grepl("entry", ids)])
+    entry_names = c(as.character(levels(df$entry)[1]), ids[grepl("entry", ids)])
+    entry_names = gsub("entry", "", entry_names)
+    barplot(entry_effects, names.arg=entry_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
+}else if (class(best_model) == "lmerMod") {
     entry_effects <- ranef(best_model)$entry
-    barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects", xlab = "Entry", ylab = "Random Effect")
+    barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
+} else if (class(best_model) == "asreml") {
+    df_ranef = data.frame(
+        ids = rownames(coef(best_model)$random),
+        effects = as.vector(coef(best_model)$random)
+    ); row.names(df_ranef) = NULL
+    # str(df_ranef)
+    df_sub = df_ranef[grepl("entry", df_ranef$ids) & !grepl(":", df_ranef$ids), ]
+    df_sub$ids = gsub("entry_", "", df_sub$ids)
+    barplot(df_sub$effects, names.arg = df_sub$ids, main = "Estimated Entry Effects (asreml model)", xlab = "Entry", ylab = "Random Effect")
+} else {
+    plot(0, 0)
+    print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
 }
+dev.off()
 
-# Plot interaction effects if present
-if (inherits(best_model, "lm")) {
-    coefs <- coef(best_model)
-    interaction_coefs <- coefs[grep(":", names(coefs))]
-    if (length(interaction_coefs) > 0) {
-        barplot(interaction_coefs, names.arg = names(interaction_coefs), main = "Interaction Effects", xlab = "Interaction Term", ylab = "Coefficient")
-    }
-} else if (inherits(best_model, "merMod")) {
-    fixef_coefs <- fixef(best_model)
-    interaction_coefs <- fixef_coefs[grep(":", names(fixef_coefs))]
-    if (length(interaction_coefs) > 0) {
-        barplot(interaction_coefs, names.arg = names(interaction_coefs), main = "Interaction Effects", xlab = "Interaction Term", ylab = "Fixed Effect Coefficient")
-    }
-    # Plot random interaction effects for year:site if present
-    if ("year:site" %in% names(ranef(best_model))) {
-        yearsite_effects <- ranef(best_model)$`year:site`
-        barplot(yearsite_effects[,1], names.arg = rownames(yearsite_effects), main = "Year:Site Interaction Random Effects", xlab = "Year:Site", ylab = "Random Effect")
-    }
-}
+detach(df)
 
 
 ```
@@ -325,6 +381,7 @@ done
 </details>
 
 ## Tests on empirical data
+
 
 **NOTES:** 
 Explanatory variables can be numeric or categorical which means that
