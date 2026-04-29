@@ -1,5 +1,6 @@
 use chrono::Utc;
 use clap::Parser;
+use rand_distr::num_traits::Pow;
 use std::env::current_dir;
 use std::error::Error;
 use std::fs;
@@ -85,9 +86,9 @@ struct Args {
     #[arg(long, default_value_t = 2)]
     n_batches: usize,
 
-    /// Learning rate (η)
-    #[arg(long, default_value_t = 0.001)]
-    learning_rate: f32,
+    /// Learning rate (η; e.g. η=0.001)
+    #[arg(long)]
+    learning_rate: Option<f32>,
 
     /// First moment decay (β₁)
     #[arg(long, default_value_t = 0.001)]
@@ -678,7 +679,16 @@ fn train_with_fixed_hyperparameters(
     optimisation_parameters.n_epochs = args.n_epochs;
     optimisation_parameters.f_patient_epochs = args.f_patient_epochs;
     optimisation_parameters.n_batches = args.n_batches;
-    optimisation_parameters.learning_rate = args.learning_rate;
+    optimisation_parameters.learning_rate = match args.learning_rate {
+        Some(x) => x,
+        None => {
+            let y: Vec<f32> = network.targets.to_host()?;
+            let n: usize = y.len();
+            let u: f32 = y.iter().fold(0.0, |sum, x| sum + x) / (n as f32);
+            let v = y.iter().map(|x| (x - u).pow(2.0)).fold(0.0, |sum, x| sum + x) / (n as f32);
+            v.sqrt() / 1_000.0
+        }
+    };
     optimisation_parameters.first_moment_decay = args.first_moment_decay;
     optimisation_parameters.second_moment_decay = args.second_moment_decay;
     optimisation_parameters.epsilon = args.epsilon;
