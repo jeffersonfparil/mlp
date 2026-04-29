@@ -190,6 +190,7 @@ done
 ```shell
 cd mlp
 cd tests/simulated
+module load ASReml-R # if ASReml-R is available
 time Rscript script_LINEAR.R
 ```
 
