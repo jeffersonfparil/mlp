@@ -1,6 +1,8 @@
 library("stringr")
 library("lme4")
-library("asreml") # requires ```shell module load ASReml-R ```
+if (nzchar(system.file(package = "asreml"))) {
+    library("asreml") # requires ```shell module load ASReml-R ```
+}
 
 process_features = function(df) {
     ids_features = c()
@@ -86,7 +88,11 @@ fit_extract_effects = function(df) {
         'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
         'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
     )
-    model_strings = c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+    model_strings = if (nzchar(system.file(package = "asreml"))) {
+        c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+    } else {
+        c(lm_model_strings, lmer_model_strings)
+    }
     # Fit these models
     model_candidates = list()
     for (i in 1:length(model_strings)) {
@@ -174,7 +180,6 @@ fit_extract_effects = function(df) {
         formula=best_model_formula
     ))
 }
-
 
 ### Fit and extract entry effects
 fnames = list.files(path=".", pattern="input_simulated")
