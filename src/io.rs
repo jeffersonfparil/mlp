@@ -135,7 +135,8 @@ impl Data {
         // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
         // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
         // seed = randomisation seed for repeatability
-        let n_features = p + q.iter().fold(0, |sum, &x| sum + x);
+        let n_features_categorical = q.iter().fold(0, |sum, &x| sum + x);
+        let n_features = p + n_features_categorical;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         // Features simulation
         let mut feature_names: Vec<String> = Vec::with_capacity(n_features);
@@ -148,25 +149,27 @@ impl Data {
             }
         }
         // Categorical features (one-hot encoded) exploring all level combinations
-        let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
-        let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
-        for i in 0..n { // For each observation
-            let mut combo_index = i % n_combinations; // Get the combination index for this observation, cycling through all combinations if n > n_combinations
-            for (id, &n_levels) in q.iter().enumerate() { // For each categorical variable
-                categorical_levels[id][i] = combo_index % n_levels; // Assign the level for this variable in this observation by taking modulo of the current combo_index
-                // println!("i={}' combo_index={} id={} n_levels={} level={}", i, combo_index, id, n_levels, categorical_levels[id][i]);
-                combo_index /= n_levels; // Divide combo_index by n_levels to shift to the next variable's level (like mixed radix conversion)
+        if n_features_categorical > 0 {
+            let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
+            let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
+            for i in 0..n { // For each observation
+                let mut combo_index = i % n_combinations; // Get the combination index for this observation, cycling through all combinations if n > n_combinations
+                for (id, &n_levels) in q.iter().enumerate() { // For each categorical variable
+                    categorical_levels[id][i] = combo_index % n_levels; // Assign the level for this variable in this observation by taking modulo of the current combo_index
+                    // println!("i={}' combo_index={} id={} n_levels={} level={}", i, combo_index, id, n_levels, categorical_levels[id][i]);
+                    combo_index /= n_levels; // Divide combo_index by n_levels to shift to the next variable's level (like mixed radix conversion)
+                }
             }
-        }
-        for (id, &n_levels) in q.iter().enumerate() {
-            for j in 0..n_levels {
-                feature_names.push(format!("fcat_{}➵{}", id, j));
-                for i in 0..n {
-                    features_host.push(if categorical_levels[id][i] == j {
-                        1.0
-                    } else {
-                        0.0
-                    });
+            for (id, &n_levels) in q.iter().enumerate() {
+                for j in 0..n_levels {
+                    feature_names.push(format!("fcat_{}➵{}", id, j));
+                    for i in 0..n {
+                        features_host.push(if categorical_levels[id][i] == j {
+                            1.0
+                        } else {
+                            0.0
+                        });
+                    }
                 }
             }
         }
