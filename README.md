@@ -157,17 +157,18 @@ cd mlp
 pixi shell
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo run -- -h
-# time cargo run -- -s -n100 -p1000 -v
 time cargo run -- -s -n1000 -p10 -v
+# time cargo run -- -s -n100 -p10000 -q0 -v
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-head $INPUT
+head $INPUT | cut -f1-10
+head -n1 $INPUT | awk '{print NF}'
 time cargo run -- -f $INPUT -v --n-batches=1 --n-epochs=1000 --skip-marginals
 MODEL=$(ls -t1 | grep "output.*.json" | head -n1)
-head $MODEL
-tail $MODEL
+head $MODEL | cut -f1-10
+tail $MODEL | cut -f1-10
 time cargo run -- -f $INPUT -v -m $MODEL --predict-only
 PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
-head $PREDICTED
+head $PREDICTED | cut -f1-10
 time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=1
 MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 mv $MARGINALS marginal_main.tsv
@@ -184,7 +185,6 @@ head marginal_main.tsv
 head marginal_2nd.tsv
 head marginal_3rd.tsv
 head deep_shap.tsv
-
 ```
 
 # Compile for release

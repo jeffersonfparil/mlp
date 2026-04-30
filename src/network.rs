@@ -312,14 +312,9 @@ impl Network {
         for i in 0..(n_nodes.len() - 1) {
             let n: usize = n_nodes[i + 1];
             let p: usize = n_nodes[i];
-            println!("i={};p={}; n*p={}", i, p, n*p);
+            // println!("i={};p={}; n*p={}", i, p, n*p);
             let normal = Normal::new(0.0, 2.0/(p as f32))?; // He initialisation
-            
-            
             // let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
-
-            
-
             let mut weights_host: Vec<f32> = Vec::with_capacity(n * p);
             // let mut pb = ProgressBar::new(n*p, 50, format!("He initialisation of weights in the {} layer: ", i));
             // for _ in 0..(n*p) {
@@ -337,11 +332,7 @@ impl Network {
                 let tmp: Vec<f32> = (&mut rng).sample_iter(normal).take(m).collect();
                 weights_host.extend(&tmp);
             }
-
-
-            println!("weights_host[0..10]={:?}", &weights_host[0..10]);
-            
-            
+            // println!("weights_host[0..10]={:?}", &weights_host[0..10]);
             let dweights_host: Vec<f32> = vec![0f32; n * p];
             let biases_host: Vec<f32> = vec![0f32; n * 1];
             let dbiases_host: Vec<f32> = vec![0f32; n * 1];
