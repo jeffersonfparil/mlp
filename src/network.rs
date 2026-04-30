@@ -17,7 +17,8 @@ pub struct Network {
     pub n_hidden_layers: usize,                   // number of hidden layers (k)
     pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer
     pub dropout_rates: Vec<f32>,                  // dropout rates per hidden layer
-    pub targets: Matrix,                          // observed values (n_output_nodes x n_observations)
+    pub targets: Matrix,                          // observed values (n_output_nodes x n_observations; standardised, i.e. standard normal with mean 0.0 and standard deviation 1.0)
+    pub targets_mean_sd: (f32,f32),               // mean and standard deviation of the targets matrix across all values (i.e. not per row nor per column)
     pub predictions: Matrix,                      // predictions (n_output_nodes x n_observations)
     pub weights_per_layer: Vec<Matrix>,           // weights (n_nodes[i+1] x n_nodes[i]) for each layer
     pub biases_per_layer: Vec<Matrix>,            // biases (n_nodes[i+1] x 1) for each layer
@@ -42,6 +43,7 @@ impl fmt::Display for Network {
             n_hidden_nodes = [{}, ..., {}]
             dropout_rates = [{}, ..., {}]
             targets = {}
+            targets_mean_sd = {:?}
             predictions = {}
             activation = {:?}
             cost = {:?}
@@ -84,6 +86,7 @@ impl fmt::Display for Network {
             self.dropout_rates[0],
             self.dropout_rates[self.dropout_rates.len() - 1],
             self.targets,
+            self.targets_mean_sd,
             self.predictions,
             self.activation,
             self.cost,
@@ -336,11 +339,23 @@ impl Network {
             biases_gradients_per_layer.push(dbiases_matrix);
             weights_x_biases_per_layer.push(weights_x_biases_matrix);
         }
+        // Standardise the output data for optimisation efficiency
+        let mut targets_host: Vec<f32> = output_data.to_host()?;
+        let n: f32 = targets_host.len() as f32;
+        let mean: f32 = targets_host.iter().fold(0.0, |sum, x| sum + x) / n;
+        let sd: f32 = (targets_host.iter().fold(0.0, |sum, x| sum + (x - mean).powf(2.0)) / n).sqrt();
+        for i in 0..(n as usize) {
+            targets_host[i] = (targets_host[i] - mean) / sd;
+        }
+        let targets_dev: CudaSlice<f32> = stream.clone_htod(&targets_host)?;
+        let targets: Matrix = Matrix::new(targets_dev, output_data.n_rows, output_data.n_cols)?;
+        // Output
         let out = Self {
             n_hidden_layers: n_hidden_layers,
             n_hidden_nodes: n_hidden_nodes,
             dropout_rates: dropout_rates,
-            targets: output_data,
+            targets: targets,
+            targets_mean_sd: (mean, sd),
             predictions: predictions,
             weights_per_layer: weights_per_layer,
             weights_gradients_per_layer: weights_gradients_per_layer,

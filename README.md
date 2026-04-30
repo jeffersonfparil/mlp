@@ -53,23 +53,23 @@ time cargo run -- -h
 time cargo run -- -s --verbose
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
 head $INPUT
-time cargo run -- -f $INPUT -v --n-batches=2 --n-epochs=10
+time cargo run -- -f $INPUT -v --n-batches=2 --n-epochs=1000
 MODEL=$(ls -t1 | grep "output.*.json" | head -n1)
 MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 head $MODEL
 tail $MODEL
 head $MARGINALS
-time cargo run -- -f $INPUT -v -m $MODEL --predict
+time cargo run -- -f $INPUT -v -m $MODEL --predict-only
 PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
 head $PREDICTED
 mv $MARGINALS marginal_main.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals --marginals-order=2
+time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=2
 MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 mv $MARGINALS marginal_2nd.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals --marginals-order=3
+time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=3
 MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 mv $MARGINALS marginal_3rd.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals --deep-shap --deep-shap-reps=100
+time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --deep-shap --deep-shap-reps=100
 MARGINALs=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
 mv $MARGINALS deep_shap.tsv
 head marginal_main.tsv

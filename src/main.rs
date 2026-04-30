@@ -1,6 +1,5 @@
 use chrono::Utc;
 use clap::Parser;
-use rand_distr::num_traits::Pow;
 use std::env::current_dir;
 use std::error::Error;
 use std::fs;
@@ -86,9 +85,9 @@ struct Args {
     #[arg(long, default_value_t = 2)]
     n_batches: usize,
 
-    /// Learning rate (η; e.g. η=0.001)
-    #[arg(long)]
-    learning_rate: Option<f32>,
+    /// Learning rate (η)
+    #[arg(long, default_value_t = 0.001)]
+    learning_rate: f32,
 
     /// First moment decay (β₁)
     #[arg(long, default_value_t = 0.001)]
@@ -187,7 +186,7 @@ struct Args {
     ////////////////////////////////////////////////////////////////////////////////
     /// Predict using a fitted network (fitted MLP model)
     #[arg(long, action)]
-    predict: bool,
+    predict_only: bool,
 
     /// File name of the MLP model in JSON format
     #[arg(short = 'm', long)]
@@ -196,7 +195,12 @@ struct Args {
     ////////////////////////////////////////////////////////////////////////////////
     /// Marginal effects estimation only
     #[arg(short = 'M', long, action)]
-    marginals: bool,
+    marginals_only: bool,
+
+    // Skip marginal effects estimation
+    #[arg(long, action)]
+    skip_marginals: bool,
+
     
     /// Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on
     #[arg(long, default_value_t = 1)]
@@ -478,6 +482,10 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
         current_dir()?.display(),
         fname_marginals
     );
+
+    println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+    println!("`marginals_only(...)` | network.targets: {} | network.targets_mean_sd: {:?}", network.targets, network.targets_mean_sd);
+
     Ok(())
 }
 
@@ -679,16 +687,7 @@ fn train_with_fixed_hyperparameters(
     optimisation_parameters.n_epochs = args.n_epochs;
     optimisation_parameters.f_patient_epochs = args.f_patient_epochs;
     optimisation_parameters.n_batches = args.n_batches;
-    optimisation_parameters.learning_rate = match args.learning_rate {
-        Some(x) => x,
-        None => {
-            let y: Vec<f32> = network.targets.to_host()?;
-            let n: usize = y.len();
-            let u: f32 = y.iter().fold(0.0, |sum, x| sum + x) / (n as f32);
-            let v = y.iter().map(|x| (x - u).pow(2.0)).fold(0.0, |sum, x| sum + x) / (n as f32);
-            v.sqrt() / 1_000.0
-        }
-    };
+    optimisation_parameters.learning_rate = args.learning_rate;
     optimisation_parameters.first_moment_decay = args.first_moment_decay;
     optimisation_parameters.second_moment_decay = args.second_moment_decay;
     optimisation_parameters.epsilon = args.epsilon;
@@ -758,6 +757,10 @@ fn marginals_after_training(
         current_dir()?.display(),
         fname_marginals
     );
+
+    println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+    println!("`marginals_after_training(...)` | network.targets: {} | network.targets_mean_sd: {:?}", network.targets, network.targets_mean_sd);
+
     Ok(())
 }
 
@@ -789,11 +792,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         return simulate_only(&args)
     }
     // Predict only (using pre-trained model, i.e. in json format)
-    if args.predict {
+    if args.predict_only {
         return predict_only(&args)
     }
     // Marginal effects estimation only (using pre-trained model, i.e. in json format)
-    if args.marginals {
+    if args.marginals_only {
         return marginals_only(&args)
     }
     // Load the data including targets and features
@@ -810,6 +813,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     // println!("network before saving and reloading: {}", network);
     // Estimate marginal effects after training
-    marginals_after_training(&args, &data, &mut network, fname_network_output)?;
+    if !args.skip_marginals {
+        marginals_after_training(&args, &data, &mut network, fname_network_output)?;
+    }
     Ok(())
 }
