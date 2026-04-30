@@ -643,7 +643,8 @@ pub struct SerdifiableNetwork {
     n_hidden_layers: usize, // number of hidden layers
     n_hidden_nodes: Vec<usize>, // number of nodes per hidden layer (k)
     dropout_rates: Vec<f32>, // soft dropout rates per hidden layer (k)
-    targets: Vec<f32>, // observed values (k x n)
+    targets: Vec<f32>, // observed values (k x n; standardised)
+    targets_mean_sd: (f32,f32), // mean and standard deviation of the target values across k rows
     predictions: Vec<f32>, // predictions (k x n)
     weights_per_layer: Vec<Vec<f32>>, // weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
     biases_per_layer: Vec<Vec<f32>>,  // biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
@@ -668,6 +669,7 @@ impl Network {
             n_hidden_nodes: self.n_hidden_nodes.clone(),
             dropout_rates: self.dropout_rates.clone(),
             targets: self.targets.to_host()?,
+            targets_mean_sd: self.targets_mean_sd,
             predictions: self.predictions.to_host()?,
             weights_per_layer: self
                 .weights_per_layer
@@ -736,7 +738,8 @@ impl Network {
             p,
             n,
         )?;
-        let output_data = Matrix::new(stream.clone_htod(&serdifiable_network.targets)?, k, n)?;
+        let unstandardised_output_data: Vec<f32> = serdifiable_network.targets.iter().map(|&x| (x * serdifiable_network.targets_mean_sd.1) + serdifiable_network.targets_mean_sd.0).collect();
+        let output_data = Matrix::new(stream.clone_htod(&unstandardised_output_data)?, k, n)?;
         let predictions = Matrix::new(stream.clone_htod(&serdifiable_network.predictions)?, k, n)?;
 
         let mut network: Network = Network::new(
