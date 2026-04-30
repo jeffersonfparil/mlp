@@ -575,16 +575,21 @@ for (fname_input in fnames_INPUT) {
 
 ## Tests on empirical data
 
+Using agridat data... details: how many? types?
+
+<details>
+
+### Prepare test data
 
 **NOTES:** 
 Explanatory variables can be numeric or categorical which means that
 explanatory variables which are written as numeric but are meant to be categorical 
 need to be converted into strings, 
-e.g. convert `reps=[1, 1, 1, 2, 2, 2, 3, 3]` into `reps=["R1", "R1", "R1", "R2", "R2", "R2", "R3", "R3"]`.
+e.g. convert `rep=[1, 1, 1, 2, 2, 2, 3, 3]` into `rep=["rep➵1", "rep➵1", "rep➵1", "rep➵2", "rep➵2", "rep➵2", "rep➵3", "rep➵3"]`.
 
-<details>
+Prepare one file with a single response variable named `y` for ease.
 
-### Prepare test data
+#### Download agridat data:
 
 ```shell
 cd mlp/
@@ -594,57 +599,22 @@ cd agridat/
 curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
 ```
 
-### File checker and formatter prior to run
+#### Prepare the data, i.e. make sure categorical variables are interpretted as strings
 
-Save the following as `mlp/tests/agridat/scripts/prep_agridat.jl`:
-
-```julia
-using DataFrames, CSV
-# ARGS = ["australia.soybean.txt", "0.1"]
-# ARGS = ["henderson.milkfat.txt", "0.1"]
-# ARGS = ["yates.oats.txt", "0.1"]
-# ARGS = ["archbold.apple.txt", "0.1"]
-# ARGS = ["acorsi.grayleafspot.txt", "0.1"]
-
-"""
-    prep_agridat_data(ARGS::Vector{String})::Nothing
-
-Prepare agricultural dataset by identifying explanatory and response variables, 
-and generating separate TSV files for each response variable.
-
-# Arguments
-- `ARGS::Vector{String}`: Command-line arguments where:
-  - `ARGS[1]`: Path to input CSV file
-  - `ARGS[2]`: Threshold ratio for determining if numeric columns are explanatory 
-    (value between 0 and 1; columns are explanatory if unique values < threshold × nrow)
-
-# Description
-This function processes an agricultural dataset by:
-1. Reading a CSV file, treating empty strings and various NA representations as missing
-2. Classifying columns as explanatory or response variables based on:
-   - Column names matching predefined lists
-   - Data type (numeric vs. categorical)
-   - Unique value count threshold for numerics
-3. Converting numeric explanatory variables to categorical (prefixed with column name)
-4. Filtering out rows with missing/NaN/Inf values in response variables
-5. Creating separate TSV output files for each response variable with all explanatory variables
-
-# Output
-- Writes TSV files with pattern `{original_filename}-{response_variable_name}.tsv`
-- Prints path of each generated output file to stdout
-- Returns `nothing`
-
-# Recognized Variable Names
-- **Explanatory**: gen, pop, var, entry, env, year, loc, harvest, season, plot, rep, 
-  row, col, blk, genotype, population, variety, cultivar, replication, column, block, 
-  pos, position, spacing, stock, trt, treatment (and plural forms)
-- **Response**: yield, grain, straw, height, size, lodging, protein, oil
-"""
-function prep_agridat_data(ARGS::Vector{String})::Nothing
-    fname = ARGS[1]
-    threshold_for_explanatory_numerics = parse(Float64, ARGS[2])
-    df = CSV.read(fname, DataFrame, missingstring=["", "NA", "NAN", "NaN", "na", "nan"])
-    potential_explanatory_names::Vector{String} = [
+```R
+fnames = list.files(path=".", pattern=".txt$")
+fnames = fnames[!grepl(".covs.txt", fnames)]
+fnames = fnames[!grepl(".uniformity.txt", fnames)]
+for (fname in fnames) {
+    # fname = fnames[261]
+    # fname = "archbold.apple.txt"
+    # fname = "acorsi.grayleafspot.txt"
+    # fname = "alwan.lamb.txt"
+    df = read.table(fname, header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
+    # print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    # print(fname)
+    # print(str(df))
+    potential_explanatory_names = c(
         "gen", "gens",
         "pop", "pops",
         "var", "vars",
@@ -670,9 +640,9 @@ function prep_agridat_data(ARGS::Vector{String})::Nothing
         "spacing", "spacings",
         "stock", "stocks",
         "trt", "trts",
-        "treatment", "treatments",
-    ]
-    potential_response_names::Vector{String} = [
+        "treatment", "treatments"
+    )
+    potential_response_names = c(
         "yield",
         "grain",
         "straw",
@@ -680,103 +650,80 @@ function prep_agridat_data(ARGS::Vector{String})::Nothing
         "size",
         "lodging",
         "protein",
-        "oil",
-    ]
-    # Identity explanatory and response variables
-    (explanatory_names, response_names) = let
-        explanatory_names::Vector{String} = []
-        response_names::Vector{String} = []
-        for j in 1:ncol(df)
-            # j = 4
-            id = names(df)[j]
-            col = df[:, j]
-            if id ∈ potential_explanatory_names
-                # If the explanatory variable but it is not supposed to, i.e. all elements of potential_explanatory_names are assumed to be categorical
-                # then we convert the numerics into categoricals
-                if isa(col, Vector) && isa(col[1], Number)
-                    df[!, id] = string.(id, "|", df[!, id])
-                end
-                push!(explanatory_names, id)
-            elseif id ∈ potential_response_names
-                if isa(col, Vector) && isa(col[1], Number)
-                    push!(response_names, id)
-                else
-                    # We expect the response variables to be numeric if they are not then we skip
-                    continue
-                end
-            elseif isa(col, Vector) # Numerics are Vectors in DataFrames
-                if length(unique(col)) < threshold_for_explanatory_numerics*nrow(df) # likely not a response variable because of the limited (controlled by threshold_for_explanatory_numerics) number of unique values
-                    push!(explanatory_names, id)
-                else
-                    push!(response_names, id)
-                end
-            else # Strings are not Vectors in DataFrames
-                push!(explanatory_names, id)
-            end
-        end
-        # In cases where there are no response variables detected because the response variable is numeric but with limited number of unique values,
-        # then we arbitrarily relax the `threshold_for_explanatory_numerics` so that `threshold_for_explanatory_numerics*nrow(df) == 10`
-        if length(response_names) == 0
-            explanatory_names_repeat::Vector{String} = []
-            response_names_repeat::Vector{String} = []
-            RELAXED_THRESHOLD = 10
-            for j in 1:ncol(df)
-                # j = 4
-                id = names(df)[j]
-                col = df[:, j]
-                if id ∈ potential_explanatory_names
-                    # If the explanatory variable but it is not supposed to, i.e. all elements of potential_explanatory_names are assumed to be categorical
-                    # then we convert the numerics into categoricals
-                    if isa(col, Vector) && isa(col[1], Number)
-                        df[!, id] = string.(id, "|", df[!, id])
-                    end
-                    push!(explanatory_names_repeat, id)
-                elseif id ∈ potential_response_names
-                    if isa(col, Vector) && isa(col[1], Number)
-                        push!(response_names_repeat, id)
-                    else
-                        # We expect the response variables to be numeric if they are not then we skip
-                        continue
-                    end
-                elseif isa(col, Vector) # Numerics are Vectors in DataFrames
-                    if length(unique(col)) < RELAXED_THRESHOLD
-                        push!(explanatory_names_repeat, id)
-                    else
-                        push!(response_names_repeat, id)
-                    end
-                else # Strings are not Vectors in DataFrames
-                    push!(explanatory_names_repeat, id)
-                end
-            end
-            (explanatory_names_repeat, response_names_repeat)
-        else
-            (explanatory_names, response_names)
-        end
-    end
-
-    # Subset the data so that the first column corresponds to a single response variable and the rest are the explanatory variables
-    if (length(explanatory_names) == 0) || (length(response_names) == 0)
-        # No explanatory or response variables detected automatically just emit an empty string
-        println("")
-        return nothing
-    else
-        # Save each dataset with one response variable each
-        for y_name in response_names
-            # y_name = response_names[1]
-            idx::Vector{Int64} = findall(.!ismissing.(df[!, y_name]) .&& .!isnan.(df[!, y_name]) .&& .!isinf.(df[!, y_name]))
-            df_sub::DataFrame = select(df, vcat([y_name], explanatory_names))[idx, :]
-            # We use the length of the explanatory_names as marker for where to start the indices of the response variable for mlp
-            fname_out_tsv = string(join(split(fname, ".")[1:(end-1)], "."), "-", y_name, ".tsv")
-            CSV.write(fname_out_tsv, df_sub, delim="\t")
-            # println("explanatory_names: $explanatory_names")
-            # println("response_names: $response_names")
-            println(fname_out_tsv)
-        end
-    end
-    nothing
-end
-prep_agridat_data(ARGS)
+        "oil"
+    )
+    explanatory_names = c()
+    response_names = c()
+    for (j in 1:ncol(df)) {
+        # j = 1
+        id = names(df)[j]
+        y = df[, j]
+        n = length(y)
+        if (id %in% potential_explanatory_names) {
+            explanatory_names = c(explanatory_names, id)
+            if (!is.character(y)) {
+                df[, j] = paste0(id, "➵", y)
+            }
+        } else {
+            if (id %in% potential_response_names) {
+                response_names = c(response_names, id)
+            } else {
+                if (is.character(y)) {
+                    explanatory_names = c(explanatory_names, id)
+                } else if ((length(unique(y)) < 5) | (var(y, na.rm=TRUE) < 1e-7)) {
+                    explanatory_names = c(explanatory_names, id)
+                    df[, j] = paste0(id, "➵", y)
+                } else {
+                    response_names = c(response_names, id)
+                }
+            }
+        }
+    }
+    idx_explanatories = which(names(df) %in% explanatory_names)
+    if (length(idx_explanatories) == 0) {
+        next
+    }
+    df_explanatories = df[, idx_explanatories]
+    for (y_name in response_names) {
+        # y_name = response_names[1]
+        df_out = cbind(data.frame(y=df[, which(names(df) == y_name)]), df_explanatories)
+        fname_out = gsub(".txt", paste0("-", y_name, ".tsv"), fname)
+        write.table(df_out, file=fname_out, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+        print(paste0("Processed: `", fname_out, "`"))
+    }
+}
 ```
+
+### R
+
+Linear models, lm, lmer, and asreml...
+
+#### Generic model selection
+
+```R
+fnames = list.files(path=".", pattern=".tsv$")
+length(fnames)
+
+for (fname in fnames) {
+    # fname = fnames[19]
+    df = read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    print(fname)
+    print(str(df))
+}
+
+
+```
+
+#### Dataset-specific analyses
+
+##### ...
+##### ...
+##### ...
+##### ...
+##### ...
+
+### mlp
 
 ### Run tests on empirical data
 
