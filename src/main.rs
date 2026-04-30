@@ -482,10 +482,6 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
         current_dir()?.display(),
         fname_marginals
     );
-
-    println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-    println!("`marginals_only(...)` | network.targets: {} | network.targets_mean_sd: {:?}", network.targets, network.targets_mean_sd);
-
     Ok(())
 }
 
@@ -757,10 +753,6 @@ fn marginals_after_training(
         current_dir()?.display(),
         fname_marginals
     );
-
-    println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-    println!("`marginals_after_training(...)` | network.targets: {} | network.targets_mean_sd: {:?}", network.targets, network.targets_mean_sd);
-
     Ok(())
 }
 
