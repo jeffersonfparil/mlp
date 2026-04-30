@@ -1,6 +1,8 @@
 use crate::activations;
 use crate::costs;
 use crate::linalg::matrix::Matrix;
+use crate::progress_bar;
+use crate::progress_bar::ProgressBar;
 use cudarc::driver::{CudaSlice, CudaStream};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -251,6 +253,7 @@ impl Network {
         n_hidden_nodes: Vec<usize>,
         dropout_rates: Vec<f32>,
         seed: usize,
+        // verbose: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let n_observations: usize = input_data.n_cols;
         let n_input_nodes: usize = input_data.n_rows;
@@ -309,9 +312,36 @@ impl Network {
         for i in 0..(n_nodes.len() - 1) {
             let n: usize = n_nodes[i + 1];
             let p: usize = n_nodes[i];
-            // println!("i={};p={}", i, p);
+            println!("i={};p={}; n*p={}", i, p, n*p);
             let normal = Normal::new(0.0, 2.0/(p as f32))?; // He initialisation
-            let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
+            
+            
+            // let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
+
+            
+
+            let mut weights_host: Vec<f32> = Vec::with_capacity(n * p);
+            // let mut pb = ProgressBar::new(n*p, 50, format!("He initialisation of weights in the {} layer: ", i));
+            // for _ in 0..(n*p) {
+            //     weights_host.push(normal.sample(&mut rng) as f32);
+            //     pb.next();
+            // }
+            // pb.finish();
+            let step_size: usize = 1_000_000;
+            for j in (0..(n*p)).step_by(step_size) {
+                let m = if j+step_size > (n*p) {
+                    n*p - j
+                } else {
+                    step_size
+                };
+                let tmp: Vec<f32> = (&mut rng).sample_iter(normal).take(m).collect();
+                weights_host.extend(&tmp);
+            }
+
+
+            println!("weights_host[0..10]={:?}", &weights_host[0..10]);
+            
+            
             let dweights_host: Vec<f32> = vec![0f32; n * p];
             let biases_host: Vec<f32> = vec![0f32; n * 1];
             let dbiases_host: Vec<f32> = vec![0f32; n * 1];

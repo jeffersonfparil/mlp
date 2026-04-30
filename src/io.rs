@@ -184,7 +184,9 @@ impl Data {
         let stream = data.features.data.context().default_stream();
         // Instantiate the Network
         let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, n_features, n)?;
+        // println!("features={}", features);
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
+        // println!("targets={}", targets);
         let n_hidden_layers: usize = d;
         let n_hidden_nodes: Vec<usize> = vec![(n_features as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
@@ -208,6 +210,7 @@ impl Data {
             let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
             let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
             let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
+            // println!("i={}; weights={}", i, weights);
             network.weights_per_layer[i] = weights;
         }
         // Extract non-dummy targets

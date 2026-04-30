@@ -157,6 +157,7 @@ cd mlp
 pixi shell
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo run -- -h
+# time cargo run -- -s -n100 -p1000 -v
 time cargo run -- -s -n1000 -p10 -v
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
 head $INPUT
@@ -221,6 +222,12 @@ Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimis
 - Used as delimiters in marginals' combinations: `▓`
 
 # Field trial analysis
+
+Evaluation of the performance of MLP model on yield trial data:
+
+- simulated multi-environment field trials datasets (multiple years, sites, treatments, entries, and replications in RCBD)
+- empirical data from *agridat*
+- comparison against linear models in R: selecting the best model among `lm`, `lmer`, and `asreml` models
 
 ## Tests on simulated data
 
@@ -690,13 +697,12 @@ Using agridat data... details: how many? types?
 
 ### Prepare test data
 
-**NOTES:** 
 Explanatory variables can be numeric or categorical which means that
 explanatory variables which are written as numeric but are meant to be categorical 
 need to be converted into strings, 
 e.g. convert `rep=[1, 1, 1, 2, 2, 2, 3, 3]` into `rep=["rep➵1", "rep➵1", "rep➵1", "rep➵2", "rep➵2", "rep➵2", "rep➵3", "rep➵3"]`.
 
-Prepare one file with a single response variable named `y` for ease.
+We then generate one file with a single response variable named `y` in the first column followed by the explanatory variables.
 
 #### Download agridat data:
 
@@ -833,8 +839,6 @@ for (fname in fnames) {
 ##### ...
 
 ### mlp
-
-### Run tests on empirical data
 
 ```shell
 cd mlp/
