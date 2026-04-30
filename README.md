@@ -173,8 +173,8 @@ do
         --simulation-n-output-columns 1 \
         --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
         --simulation-weights-distribution gamma \
-        --simulation-weights-distribution-param-1 0.25 \
-        --simulation-weights-distribution-param-2 0.50 \
+        --simulation-weights-distribution-param-1 0.5 \
+        --simulation-weights-distribution-param-2 1.5 \
         --seed ${HIDDEN_LAYERS}
     F1=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
     sed 's/target_0/y/g' $F1 | sed 's/fcat_0/year/g' | sed 's/fcat_1/site/g' | sed 's/fcat_2/treatment/g' | sed 's/fcat_3/entry/g' | sed 's/fcat_4/block/g'> tmp
@@ -194,7 +194,7 @@ module load ASReml-R # if ASReml-R is available
 time Rscript script_LINEAR.R
 ```
 
-#### See details below:
+#### See details below (`tests/simulated/script_LINEAR.R`):
 
 ```R
 library("stringr")
@@ -215,6 +215,9 @@ process_features = function(df) {
     for (v in c("year", "site", "treatment", "entry", "block")) {
         if (!is.factor(df[[v]])) df[[v]] = as.factor(df[[v]])
     }
+    # Include an env variable merging years, sites, and treatments into 1 factor
+    df$env = paste0("year_", df$year, "|site_", df$site, "|treatment_", df$treatment)
+    df$env = as.factor(df$env)
     return(list(
         df=df, 
         ids_features=ids_features
@@ -228,7 +231,7 @@ AIC_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(-2*mod$loglik + 2*nrow(summary(mod)$varcomp))
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -239,7 +242,7 @@ BIC_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(-2*mod$loglik + nrow(summary(mod)$varcomp)*log(summary(mod)$nedf))
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -250,7 +253,7 @@ logLik_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(mod$loglik)
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -261,7 +264,7 @@ ndf_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(summary(mod)$nedf)
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -269,14 +272,17 @@ ndf_lm_lmer_asreml = function(mod) {
 fit_extract_effects = function(df) {
     lm_model_strings = c(
         "lm(y ~ year + site + treatment + entry + block, data=df)",
-        "lm(y ~ year * site + treatment + entry + block, data=df)"
+        "lm(y ~ year * site + treatment + entry + block, data=df)",
+        "lm(y ~ env + entry + block, data=df)"
     )
     lmer_model_strings = c(
         'lmer(y ~ year + site + treatment + block + (1|entry), df)',
         'lmer(y ~ year * site + treatment + block + (1|entry), df)',
         # 'lmer(y ~ year * site * treatment + block + (1|entry), df)',
         # 'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
-        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)'
+        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)',
+        'lmer(y ~ env + block + (1|entry), df)',
+        'lmer(y ~ env + block + (1|entry) + (1|entry:env), df)'
     )
     asreml_model_strings = c(
         'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
@@ -285,7 +291,10 @@ fit_extract_effects = function(df) {
         'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
         'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
         'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
-        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
+        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)',
+        'asreml(y ~ env + block, random = ~ entry, data = df)',
+        'asreml(y ~ env + block, random = ~ entry + fa(env):entry, data = df)'
+
     )
     model_strings = if (nzchar(system.file(package = "asreml"))) {
         c(lm_model_strings, lmer_model_strings, asreml_model_strings)
@@ -295,7 +304,7 @@ fit_extract_effects = function(df) {
     # Fit these models
     model_candidates = list()
     for (i in 1:length(model_strings)) {
-        # i = 13
+        # i = 1
         # i = length(model_strings)
         mod_string = model_strings[i]
         mod_label = unlist(strsplit(mod_string, "\\("))[1]
@@ -310,7 +319,22 @@ fit_extract_effects = function(df) {
         if ((length(mod) == 1) && is.na(mod)) {
             model_candidates[[paste0(mod_label, "_", i)]] = NA
         } else {
-            model_candidates[[paste0(mod_label, "_", i)]] = mod
+            if (class(mod) == "lmerMod") {
+                if (mod@optinfo$conv$opt == 0) {
+                    # Failed to converge
+                    model_candidates[[paste0(mod_label, "_", i)]] = NA
+                } else {
+                    model_candidates[[paste0(mod_label, "_", i)]] = mod
+                }
+            } else if (class(mod) == "asreml") {
+                if (mod$converge == FALSE) {
+                    model_candidates[[paste0(mod_label, "_", i)]] = NA
+                } else {
+                    model_candidates[[paste0(mod_label, "_", i)]] = mod
+                }
+            } else {
+                model_candidates[[paste0(mod_label, "_", i)]] = mod
+            }
         }
     }
     df_stats = data.frame(
@@ -367,7 +391,7 @@ fit_extract_effects = function(df) {
     } else {
         data.frame()
         # plot(0, 0)
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
     }
     # Add the expected delimiters for these "marginal" effects
     df_effects$ids = gsub("_level", "➵level", df_effects$ids)
@@ -384,7 +408,7 @@ fit_extract_effects = function(df) {
 fnames = list.files(path=".", pattern="input_simulated")
 output = list()
 for (fname_input in fnames) {
-    # fname_input = "input_simulated-NORMAL-1HL.tsv"
+    # fname_input = fnames[1]
     input_list = process_features(df=read.delim(fname_input, T))
     df = input_list$df
     ids_features = input_list$ids_features
@@ -406,9 +430,21 @@ for (fname_input in fnames) {
 
 ### Analysis using mlp
 
+#### Run the script:
+
 ```shell
-cd mlp/
+cd mlp
 cd tests/simulated
+time sh script_MLP.sh
+```
+
+#### See details below (`tests/simulated/script_MLP.sh`):
+
+```shell
+#!/bin/bash
+
+# cd mlp/
+# cd tests/simulated
 mkdir mlp_misc_output
 MLP=../../target/release/mlp
 N_EPOCHS=500
@@ -435,7 +471,107 @@ do
 done
 ```
 
+### Comparison between linear mixed model and mlp
+
+#### Run the script:
+
+```shell
+cd mlp
+cd tests/simulated
+time Rscript script_COMPARISON.R
+```
+
+#### See details below (`tests/simulated/script_COMPARISON.R`):
+
+```R
+fnames_INPUT = list.files(".", pattern="input")
+fnames_LINEAR = list.files(".", pattern="output_.*-LINEAR")
+fnames_MLP = list.files(".", pattern="output_.*-MLP")
+for (fname_input in fnames_INPUT) {
+    # fname_input = fnames_INPUT[1]
+    id = gsub("input_simulated-", "", gsub(".tsv", "", fname_input))
+    fname_linear = fnames_LINEAR[grep(id, fnames_LINEAR)]
+    fname_mlp = fnames_MLP[grep(id, fnames_MLP)]
+    # Load the effects from the best linear model
+    df_linear = read.delim(fname_linear, T)
+    if (length(grep("➵", df_linear$ids)) > 0) {
+        df_linear = df_linear[grep("^entry", df_linear$ids), ]
+        df_linear$ids = gsub("entry➵", "", df_linear$ids)
+    }
+    colnames(df_linear)[2] = "linear"
+    # Load the marginal effects from mlp
+    df_mlp = read.delim(fname_mlp, T)
+    df_mlp = df_mlp[grep("^entry", df_mlp$ids), 1:2]
+    df_mlp$ids = gsub("entry➵", "", df_mlp$ids)
+    colnames(df_mlp)[2] = "mlp"
+    # Merge
+    df = merge(df_linear, df_mlp, by="ids")
+    # Calculate the correlation and R2
+    cortest = cor.test(df$linear, df$mlp)
+    annot = if (cortest$p.value < 0.0001) {
+        "***"
+    } else if (cortest$p.value < 0.001) {
+        "**"
+    } else if (cortest$p.value < 0.01) {
+        "*"
+    } else {
+        "ns"
+    }
+    R2 = mean(c(1 - (sum((df$linear - df$mlp)^2) / sum((df$linear - mean(df$linear))^2)), 1 - (sum((df$linear - df$mlp)^2) / sum((df$mlp - mean(df$mlp))^2))))
+    # Plot
+    fname_png = paste0("comparison-", id, ".png")
+    linear_model_formula = gsub(paste0("output_simulated-", id, "-LINEAR_"), "", gsub(".tsv", "", fname_linear))
+    png(fname_png)
+    plot(df$linear, df$mlp, xlab=paste0("Linear Model Estimated Effects\n(", linear_model_formula, ")"), ylab="Multi-layer Perceptron\nMarginal Effects", main=id)
+    grid()
+    text(min(df$linear), max(df$mlp), label=paste0("\n\ncor=", round(100*cortest$estimate, 2), "%", annot, "\nR²=", round(R2, 2)), pos=c(4, 1))
+    dev.off()
+}
+```
+
 </details>
+
+#### GAMMA-1HL
+
+![](./tests/simulated/comparison-GAMMA-1HL.png)
+
+#### GAMMA-2HL
+
+![](./tests/simulated/comparison-GAMMA-2HL.png)
+
+#### GAMMA-3HL
+
+![](./tests/simulated/comparison-GAMMA-3HL.png)
+
+#### GAMMA-4HL
+
+![](./tests/simulated/comparison-GAMMA-4HL.png)
+
+#### GAMMA-5HL
+
+![](./tests/simulated/comparison-GAMMA-5HL.png)
+
+#### NORMAL-1HL
+
+![](./tests/simulated/comparison-NORMAL-1HL.png)
+
+#### NORMAL-2HL
+
+![](./tests/simulated/comparison-NORMAL-2HL.png)
+
+#### NORMAL-3HL
+
+![](./tests/simulated/comparison-NORMAL-3HL.png)
+
+#### NORMAL-4HL
+
+![](./tests/simulated/comparison-NORMAL-4HL.png)
+
+#### NORMAL-5HL
+
+![](./tests/simulated/comparison-NORMAL-5HL.png)
+
+
 
 ## Tests on empirical data
 
