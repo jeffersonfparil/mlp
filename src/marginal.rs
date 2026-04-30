@@ -115,6 +115,16 @@ impl Marginals {
         Ok(())
     }
 
+    pub fn unstandaridise(self: &mut Self, network: &Network) -> Result<(), Box<dyn Error>> {
+        self.check_dimensions()?;
+        let mean: f32 = network.targets_mean_sd.0;
+        let sd: f32 = network.targets_mean_sd.1;
+        for i in 0..self.effects.len() {
+            self.effects[i] = (sd*self.effects[i]) + mean;
+        }
+        Ok(())
+    }
+    
     pub fn estimate_perturb(self: &mut Self, network_orig: &Network, n_interpolate_min_max: usize, verbose: bool) -> Result<(), Box<dyn Error>> {
         self.check_dimensions()?;
         // Find the range of values for each input node
@@ -304,6 +314,8 @@ impl Marginals {
         // }
         self.effects = effects.into_inner().unwrap();
         self.r2s = r2s.into_inner().unwrap();
+        // Unstandardise the effects to be more straightforward to interpret
+        self.unstandaridise(network_orig)?;
         if verbose {
             // let progress_text: String = (0..progress_width).map(|_| "█").collect();
             // print!("\rEstimating {} marginal effects | 100.00% | {} |", self.ids.len(), progress_text);
@@ -422,6 +434,8 @@ impl Marginals {
         for i in 0..shap.n_rows {
             self.effects[i] = shap_feature_means[i];
         }
+        // Unstandardise the effects to be more straightforward to interpret
+        self.unstandaridise(network)?;
         if verbose {
             let fname_marginals_effects_png: String = self.plot(true)?;
             println!("===============================================");
@@ -448,7 +462,18 @@ mod tests {
         println!("marginals_order_2: {:?}", marginals_order_2);
         let marginals_order_3 = Marginals::new(feature_names.clone(), 3)?;
         println!("marginals_order_3: {:?}", marginals_order_3);
- 
+        // Check dimensions
+        let mut marginals_tmp = Marginals::new(feature_names.clone(), 1)?;
+        match marginals_tmp.check_dimensions() {
+            Ok(_) => assert!(true),
+            Err(_) => assert!(false),
+        };
+        marginals_tmp.ids.pop();
+        match marginals_tmp.check_dimensions() {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true),
+        };
+        // Simulate the data and network
         let n: usize = 50; // number of observations
         let p: usize = 2; // number of continuous input features
         let q: Vec<usize> = vec![2,3]; // number of levels for each categorical feature variable
@@ -460,6 +485,19 @@ mod tests {
         let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         network.train(&mut optimisation_parameters, true)?;
+        // Unstandardisation
+        let y: Vec<f32> = data.targets.to_host()?;
+        let n: f32 = y.len() as f32;
+        let mean: f32 = y.iter().fold(0.0, |sum, x| sum + x) / n;
+        let sd: f32 = (y.iter().fold(0.0, |sum, x| sum + (x - mean).powf(2.0)) / n).sqrt();
+        let mut z: Vec<f32> = Vec::with_capacity(n as usize);
+        for i in 0..(n as usize) {
+            z.push((y[i] - mean) / sd);
+        }
+        let mut marginals_dummy = Marginals::new((0..(n as usize)).map(|x| x.to_string()).collect(), 1)?;
+        marginals_dummy.effects = z;
+        marginals_dummy.unstandaridise(&network)?;
+        marginals_dummy.effects.iter().zip(y.iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
         
         // Order: 1
         let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;
@@ -467,7 +505,7 @@ mod tests {
         marginals.estimate_perturb(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
-        marginals.effects.iter().zip(vec![0.004095865, -0.0020814873, -0.0017735906, 0.0031237782, -0.0009116016, -0.002408652, 0.00048868655].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals.effects.iter().zip(vec![0.009141404, 0.009156859, 0.00908426, 0.009254695, 0.009257625, 0.009228475, 0.009141026].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
         
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;

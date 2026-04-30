@@ -186,7 +186,7 @@ struct Args {
     ////////////////////////////////////////////////////////////////////////////////
     /// Predict using a fitted network (fitted MLP model)
     #[arg(long, action)]
-    predict: bool,
+    predict_only: bool,
 
     /// File name of the MLP model in JSON format
     #[arg(short = 'm', long)]
@@ -195,7 +195,12 @@ struct Args {
     ////////////////////////////////////////////////////////////////////////////////
     /// Marginal effects estimation only
     #[arg(short = 'M', long, action)]
-    marginals: bool,
+    marginals_only: bool,
+
+    // Skip marginal effects estimation
+    #[arg(long, action)]
+    skip_marginals: bool,
+
     
     /// Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on
     #[arg(long, default_value_t = 1)]
@@ -779,11 +784,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         return simulate_only(&args)
     }
     // Predict only (using pre-trained model, i.e. in json format)
-    if args.predict {
+    if args.predict_only {
         return predict_only(&args)
     }
     // Marginal effects estimation only (using pre-trained model, i.e. in json format)
-    if args.marginals {
+    if args.marginals_only {
         return marginals_only(&args)
     }
     // Load the data including targets and features
@@ -800,6 +805,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     // println!("network before saving and reloading: {}", network);
     // Estimate marginal effects after training
-    marginals_after_training(&args, &data, &mut network, fname_network_output)?;
+    if !args.skip_marginals {
+        marginals_after_training(&args, &data, &mut network, fname_network_output)?;
+    }
     Ok(())
 }

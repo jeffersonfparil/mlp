@@ -1,6 +1,8 @@
 library("stringr")
 library("lme4")
-library("asreml") # requires ```shell module load ASReml-R ```
+if (nzchar(system.file(package = "asreml"))) {
+    library("asreml") # requires ```shell module load ASReml-R ```
+}
 
 process_features = function(df) {
     ids_features = c()
@@ -14,6 +16,9 @@ process_features = function(df) {
     for (v in c("year", "site", "treatment", "entry", "block")) {
         if (!is.factor(df[[v]])) df[[v]] = as.factor(df[[v]])
     }
+    # Include an env variable merging years, sites, and treatments into 1 factor
+    df$env = paste0("year_", df$year, "|site_", df$site, "|treatment_", df$treatment)
+    df$env = as.factor(df$env)
     return(list(
         df=df, 
         ids_features=ids_features
@@ -27,7 +32,7 @@ AIC_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(-2*mod$loglik + 2*nrow(summary(mod)$varcomp))
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -38,7 +43,7 @@ BIC_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(-2*mod$loglik + nrow(summary(mod)$varcomp)*log(summary(mod)$nedf))
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -49,7 +54,7 @@ logLik_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(mod$loglik)
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -60,7 +65,7 @@ ndf_lm_lmer_asreml = function(mod) {
     } else if (class(mod) == "asreml") {
         return(summary(mod)$nedf)
     } else {
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
 }
@@ -68,14 +73,17 @@ ndf_lm_lmer_asreml = function(mod) {
 fit_extract_effects = function(df) {
     lm_model_strings = c(
         "lm(y ~ year + site + treatment + entry + block, data=df)",
-        "lm(y ~ year * site + treatment + entry + block, data=df)"
+        "lm(y ~ year * site + treatment + entry + block, data=df)",
+        "lm(y ~ env + entry + block, data=df)"
     )
     lmer_model_strings = c(
         'lmer(y ~ year + site + treatment + block + (1|entry), df)',
         'lmer(y ~ year * site + treatment + block + (1|entry), df)',
         # 'lmer(y ~ year * site * treatment + block + (1|entry), df)',
         # 'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
-        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)'
+        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)',
+        'lmer(y ~ env + block + (1|entry), df)',
+        'lmer(y ~ env + block + (1|entry) + (1|entry:env), df)'
     )
     asreml_model_strings = c(
         'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
@@ -84,13 +92,20 @@ fit_extract_effects = function(df) {
         'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
         'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
         'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
-        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)'
+        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)',
+        'asreml(y ~ env + block, random = ~ entry, data = df)',
+        'asreml(y ~ env + block, random = ~ entry + fa(env):entry, data = df)'
+
     )
-    model_strings = c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+    model_strings = if (nzchar(system.file(package = "asreml"))) {
+        c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+    } else {
+        c(lm_model_strings, lmer_model_strings)
+    }
     # Fit these models
     model_candidates = list()
     for (i in 1:length(model_strings)) {
-        # i = 13
+        # i = 1
         # i = length(model_strings)
         mod_string = model_strings[i]
         mod_label = unlist(strsplit(mod_string, "\\("))[1]
@@ -105,7 +120,22 @@ fit_extract_effects = function(df) {
         if ((length(mod) == 1) && is.na(mod)) {
             model_candidates[[paste0(mod_label, "_", i)]] = NA
         } else {
-            model_candidates[[paste0(mod_label, "_", i)]] = mod
+            if (class(mod) == "lmerMod") {
+                if (mod@optinfo$conv$opt == 0) {
+                    # Failed to converge
+                    model_candidates[[paste0(mod_label, "_", i)]] = NA
+                } else {
+                    model_candidates[[paste0(mod_label, "_", i)]] = mod
+                }
+            } else if (class(mod) == "asreml") {
+                if (mod$converge == FALSE) {
+                    model_candidates[[paste0(mod_label, "_", i)]] = NA
+                } else {
+                    model_candidates[[paste0(mod_label, "_", i)]] = mod
+                }
+            } else {
+                model_candidates[[paste0(mod_label, "_", i)]] = mod
+            }
         }
     }
     df_stats = data.frame(
@@ -162,7 +192,7 @@ fit_extract_effects = function(df) {
     } else {
         data.frame()
         # plot(0, 0)
-        print("Unknown model class. We expect 'lm', 'lme4' or 'asreml'.")
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
     }
     # Add the expected delimiters for these "marginal" effects
     df_effects$ids = gsub("_level", "➵level", df_effects$ids)
@@ -175,12 +205,11 @@ fit_extract_effects = function(df) {
     ))
 }
 
-
 ### Fit and extract entry effects
 fnames = list.files(path=".", pattern="input_simulated")
 output = list()
 for (fname_input in fnames) {
-    # fname_input = "input_simulated-NORMAL-1HL.tsv"
+    # fname_input = fnames[1]
     input_list = process_features(df=read.delim(fname_input, T))
     df = input_list$df
     ids_features = input_list$ids_features
