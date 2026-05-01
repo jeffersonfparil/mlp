@@ -165,8 +165,8 @@ impl Data {
             }
         }
         // Categorical features (one-hot encoded) exploring all level combinations
+        if verbose {println!("(2/8) Simulating categorical features (if any) ...")}
         if n_features_categorical > 0 {
-            if verbose {println!("(2/8) Simulating categorical features...")}
             let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
             let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
             for i in 0..n { // For each observation
