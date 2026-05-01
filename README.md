@@ -928,6 +928,9 @@ ndf_lm_lmer_asreml = function(mod) {
 
 fit_extract_effects = function(df) {
 
+    # fname = list.files(path=".", pattern=".tsv$")[20]; df = process_features(read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan")))[["df"]]
+    str(df)
+
     x_names = colnames(df)[2:ncol(df)]
     x_names_except_gen_and_dummy_env = x_names[(x_names != "gen") & (x_names != "dummy_env")]
 
