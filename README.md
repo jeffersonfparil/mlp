@@ -158,7 +158,7 @@ pixi shell
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo run -- -h
 time cargo run -- -s -n1000 -p10 -v
-# time cargo run -- -s -n100 -p10000 -q0 -v
+# time cargo run -- -s -n1024 -p32768 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
 head $INPUT | cut -f1-10
 head -n1 $INPUT | awk '{print NF}'
@@ -697,12 +697,10 @@ Using agridat data... details: how many? types?
 
 ### Prepare test data
 
-Explanatory variables can be numeric or categorical which means that
-explanatory variables which are written as numeric but are meant to be categorical 
-need to be converted into strings, 
-e.g. convert `rep=[1, 1, 1, 2, 2, 2, 3, 3]` into `rep=["rep➵1", "rep➵1", "rep➵1", "rep➵2", "rep➵2", "rep➵2", "rep➵3", "rep➵3"]`.
-
-We then generate one file with a single response variable named `y` in the first column followed by the explanatory variables.
+- Explanatory variables can be numeric or categorical which means that explanatory variables which are written as numeric but are meant to be categorical need to be converted into strings, e.g. convert `rep=[1, 1, 1, 2, 2, 2, 3, 3]` into `rep=["rep➵1", "rep➵1", "rep➵1", "rep➵2", "rep➵2", "rep➵2", "rep➵3", "rep➵3"]`.
+- We exclude covariance and uniformity datasets.
+- We only include datasets with the genotype (`gen`) variable because we are testing `mlp`'s applicability for breeding, i.e. we want to rank the genotypes for selection.
+- We then generate one file with a single response variable named `y` in the first column followed by the explanatory variables.
 
 #### Download agridat data:
 
@@ -717,6 +715,7 @@ curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip
 #### Prepare the data, i.e. make sure categorical variables are interpretted as strings
 
 ```R
+setwd("tests/agridat")
 fnames = list.files(path=".", pattern=".txt$")
 fnames = fnames[!grepl(".covs.txt", fnames)]
 fnames = fnames[!grepl(".uniformity.txt", fnames)]
@@ -725,15 +724,31 @@ for (fname in fnames) {
     # fname = "archbold.apple.txt"
     # fname = "acorsi.grayleafspot.txt"
     # fname = "alwan.lamb.txt"
+    # fname = "aastveit.barley.height.txt"
     df = read.table(fname, header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
     # print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
     # print(fname)
     # print(str(df))
+    # readline(prompt="Press [enter] to proceed")
+    # }
     potential_explanatory_names = c(
         "gen", "gens",
+        "genotype", "genotypes",
+        "entry", "entries",
+        "pig", "pigs",
+        "animal", "animals",
+        "id", "ids",
+        "breed", "breeds",
+        "sire", "sires",
+        "male", "males",
+        "female", "females",
+        "tree", "trees",
+        "group", "groups",
+        "zone", "zones",
+        "isle", "isles",
+        "sex",
         "pop", "pops",
         "var", "vars",
-        "entry", "entries",
         "env", "envs",
         "year", "years",
         "loc", "locs",
@@ -775,9 +790,15 @@ for (fname in fnames) {
         y = df[, j]
         n = length(y)
         if (id %in% potential_explanatory_names) {
-            explanatory_names = c(explanatory_names, id)
-            if (!is.character(y)) {
-                df[, j] = paste0(id, "➵", y)
+            if (is.numeric(y)) {
+                if ((length(unique(y)) > 5) && (var(y, na.rm=TRUE) > 1e-7)) {
+                    response_names = c(response_names, id)
+                } else {
+                    explanatory_names = c(explanatory_names, id)
+                    df[, j] = paste0(id, "➵", y)
+                }
+            } else {
+                explanatory_names = c(explanatory_names, id)
             }
         } else {
             if (id %in% potential_response_names) {
@@ -795,10 +816,18 @@ for (fname in fnames) {
         }
     }
     idx_explanatories = which(names(df) %in% explanatory_names)
+    # print(colnames(df[idx_explanatories]))
     if (length(idx_explanatories) == 0) {
         next
     }
-    df_explanatories = df[, idx_explanatories]
+    # FOR SIMPLICITY WE ARE ONLY INCLUDING THOSE DATASETS WITH `gen` because we are ultimately interested in ranking genotypes for breeding purposes
+    if (!("gen" %in% colnames(df)[idx_explanatories])) {
+        next
+    }
+    if (max(unique(table(df$gen))) == 1) {
+        next
+    }
+    df_explanatories = df[, idx_explanatories, drop=FALSE]
     for (y_name in response_names) {
         # y_name = response_names[1]
         df_out = cbind(data.frame(y=df[, which(names(df) == y_name)]), df_explanatories)
@@ -811,13 +840,281 @@ for (fname in fnames) {
 
 ### R
 
-Linear models, lm, lmer, and asreml...
+Fit linear models in R using `lm`, `lmer` and `asreml` (if available)
 
 #### Generic model selection
 
+##### Run:
+
+```shell
+cd tests/agridat
+time Rscript ...
+```
+
+##### Details (`...`):
+
 ```R
+library("stringr")
+library("lme4")
+if (nzchar(system.file(package = "asreml"))) {
+    library("asreml") # requires ```shell module load ASReml-R ```
+}
+
+# length(list.files(path=".", pattern=".tsv$"))
+
+process_features = function(df) {
+    # fname = list.files(path=".", pattern=".tsv$")[19]; df = read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
+    # Assuming only the first column is the numeric response variable and the rest are non-numeric explanatory variables
+    ids_features = colnames(df)[2:ncol(df)]
+    for (j in 2:ncol(df)) {
+        df[, j] = as.factor(df[, j])
+    }
+    if (length(ids_features) > 2) {
+        idx = which((names(df) != "y") & (names(df) != "gen"))
+        df$dummy_env = apply(df[, idx, drop=FALSE], MARGIN=1, FUN=function(x){paste(x, collapse="|")})
+        ids_features = c(ids_features, "dummy_env")
+    }
+    # str(df)
+    return(list(
+        df=df, 
+        ids_features=ids_features
+    ))
+}
+
+AIC_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[13]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(AIC(mod))
+    } else if (class(mod) == "asreml") {
+        return(-2*mod$loglik + 2*nrow(summary(mod)$varcomp))
+    } else {
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
+        NA
+    }
+}
+BIC_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[13]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(BIC(mod))
+    } else if (class(mod) == "asreml") {
+        return(-2*mod$loglik + nrow(summary(mod)$varcomp)*log(summary(mod)$nedf))
+    } else {
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
+        NA
+    }
+}
+logLik_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[1]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(as.numeric(logLik(mod)))
+    } else if (class(mod) == "asreml") {
+        return(mod$loglik)
+    } else {
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
+        NA
+    }
+}
+ndf_lm_lmer_asreml = function(mod) {
+    # mod = model_candidates[[13]]
+    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
+        return(attr(logLik(mod), "df"))
+    } else if (class(mod) == "asreml") {
+        return(summary(mod)$nedf)
+    } else {
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
+        NA
+    }
+}
+
+fit_extract_effects = function(df) {
+
+    x_names = colnames(df)[2:ncol(df)]
+    x_names_except_gen_and_dummy_env = x_names[(x_names != "gen") & (x_names != "dummy_env")]
+
+
+# TODO: define a bunch of sensible models
+
+lm_model_strings = c(
+    "lm(y ~ ., data=df)",
+    "lm(y ~ gen, data=df)",
+    "lm(y ~ dummy_env + gen, data=df)",
+    paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + gen, data=df)"),
+    paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + gen, data=df)"),
+    paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env*gen, data=df)"),
+    unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, " + gen, data=df)")})),
+    unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, "*gen, data=df)")}))
+)
+m = length(x_names_except_gen_and_dummy_env)
+for (i in 1:(m-1)) {
+    x1 = x_names_except_gen_and_dummy_env[i]
+    for (j in 2:m) {
+        x2 = x_names_except_gen_and_dummy_env[j]
+        lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen, data=df)"))
+        lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen + ", x1, ":gen, data=df)"))
+        lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, "*", x2, " + gen, data=df)"))
+    }
+}
+lm_model_strings
+
+
+
+
+
+    lmer_model_strings = c(
+        'lmer(y ~ year + site + treatment + block + (1|entry), df)',
+        'lmer(y ~ year * site + treatment + block + (1|entry), df)',
+        # 'lmer(y ~ year * site * treatment + block + (1|entry), df)',
+        # 'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
+        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)',
+        'lmer(y ~ env + block + (1|entry), df)',
+        'lmer(y ~ env + block + (1|entry) + (1|entry:env), df)'
+    )
+    asreml_model_strings = c(
+        'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
+        'asreml(y ~ year * site + treatment + block, random = ~ entry, data = df)',
+        'asreml(y ~ year * site * treatment + block, random = ~ entry, data = df)',
+        'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
+        'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
+        'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
+        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)',
+        'asreml(y ~ env + block, random = ~ entry, data = df)',
+        'asreml(y ~ env + block, random = ~ entry + fa(env):entry, data = df)'
+
+    )
+    model_strings = if (nzchar(system.file(package = "asreml"))) {
+        c(lm_model_strings, lmer_model_strings, asreml_model_strings)
+    } else {
+        c(lm_model_strings, lmer_model_strings)
+    }
+    # Fit these models
+    model_candidates = list()
+    for (i in 1:length(model_strings)) {
+        # i = 1
+        # i = length(model_strings)
+        mod_string = model_strings[i]
+        mod_label = unlist(strsplit(mod_string, "\\("))[1]
+        print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
+        mod = tryCatch(
+            eval(parse(text=mod_string)),
+            error = function(e) {
+                print("Unable to fit: skipped!")
+                return(NA)
+            }
+        )
+        if ((length(mod) == 1) && is.na(mod)) {
+            model_candidates[[paste0(mod_label, "_", i)]] = NA
+        } else {
+            if (class(mod) == "lmerMod") {
+                if (mod@optinfo$conv$opt == 0) {
+                    # Failed to converge
+                    model_candidates[[paste0(mod_label, "_", i)]] = NA
+                } else {
+                    model_candidates[[paste0(mod_label, "_", i)]] = mod
+                }
+            } else if (class(mod) == "asreml") {
+                if (mod$converge == FALSE) {
+                    model_candidates[[paste0(mod_label, "_", i)]] = NA
+                } else {
+                    model_candidates[[paste0(mod_label, "_", i)]] = mod
+                }
+            } else {
+                model_candidates[[paste0(mod_label, "_", i)]] = mod
+            }
+        }
+    }
+    df_stats = data.frame(
+        model = names(model_candidates),
+        formula = model_strings,
+        AIC = sapply(model_candidates, AIC_lm_lmer_asreml),
+        BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
+        logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
+    )
+    z_AIC = scale(df_stats$AIC, scale=T, center=T)
+    z_BIC = scale(df_stats$BIC, scale=T, center=T)
+    z_logLik = -scale(df_stats$logLik, scale=T, center=T)
+    df_stats$z_sum = 0.2*z_AIC + 0.6*z_BIC + 0.2*z_logLik
+    print(df_stats)
+    # Select the best model based on z_sum
+    # best_model_idx = which.min(df_stats$BIC)
+    best_model_idx = which.min(df_stats$z_sum)
+    best_model = model_candidates[[best_model_idx]]
+    best_model_formula = df_stats$formula[best_model_idx]
+    print(paste("Best model selected:", best_model_formula))
+
+    # Plot entry effects (random effects for entry)
+    # best_model = model_candidates[[1]]
+    df_effects = if (class(best_model) == "lm") {
+        # best_model = model_candidates[[1]]
+        effects = coef(best_model)
+        ids = names(effects)
+        intercept = effects[ids == "(Intercept)"]
+        entry_effects = c(intercept, intercept + effects[grepl("entry", ids)])
+        entry_names = c(as.character(levels(df$entry)[1]), ids[grepl("entry", ids)])
+        entry_names = gsub("entry", "", entry_names)
+        df_effects = data.frame(ids=entry_names, effects=entry_effects)
+        rownames(df_effects) = NULL
+        df_effects
+        # barplot(entry_effects, names.arg=entry_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
+    } else if (class(best_model) == "lmerMod") {
+        # best_model = model_candidates[[3]]
+        entry_effects <- ranef(best_model)$entry
+        df_effects = data.frame(ids=rownames(entry_effects), effects=entry_effects[,1])
+        rownames(df_effects) = NULL
+        df_effects
+        # barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
+    } else if (class(best_model) == "asreml") {
+        # best_model = model_candidates[[13]]
+        df_effects = data.frame(
+            ids = rownames(coef(best_model)$random),
+            effects = as.vector(coef(best_model)$random)
+        ); row.names(df_effects) = NULL
+        # str(df_effects)
+        df_sub = df_effects[grepl("entry", df_effects$ids) & !grepl(":", df_effects$ids), ]
+        df_sub$ids = gsub("entry_", "", df_sub$ids)
+        df_effects
+        # barplot(df_sub$effects, names.arg = df_sub$ids, main = "Estimated Entry Effects (asreml model)", xlab = "Entry", ylab = "Random Effect")
+    } else {
+        data.frame()
+        # plot(0, 0)
+        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
+    }
+    # Add the expected delimiters for these "marginal" effects
+    df_effects$ids = gsub("_level", "➵level", df_effects$ids)
+    df_effects$ids = gsub(":", "▓", df_effects$ids)
+    # Sort sensibly
+    df_effects = df_effects[stringr::str_order(df_effects$ids, numeric=TRUE), ]
+    return(list(
+        df_effects=df_effects,
+        formula=best_model_formula
+    ))
+}
+
+### Fit and extract entry effects
+# fnames = list.files(path=".", pattern="input_simulated")
+# output = list()
+# for (fname_input in fnames) {
+#     # fname_input = fnames[1]
+#     input_list = process_features(df=read.delim(fname_input, T))
+#     df = input_list$df
+#     ids_features = input_list$ids_features
+#     attach(df)
+#     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+#     print(fname_input)
+#     out = fit_extract_effects(df)
+#     fname_output = paste0(
+#         gsub("^input", "output", gsub(".tsv", "", fname_input)),
+#         "-LINEAR_",
+#         gsub(" ", "", out$formula), 
+#         ".tsv"
+#     )
+#     write.table(out$df_effects, file=fname_output, row.names=FALSE, col.names=TRUE, sep="\t")
+#     output[[fname_input]] = out
+#     detach(df)
+# }
+
+setwd("tests/agridat")
 fnames = list.files(path=".", pattern=".tsv$")
-length(fnames)
+stopifnot(length(fnames) == 319)
 
 for (fname in fnames) {
     # fname = fnames[19]
@@ -825,6 +1122,9 @@ for (fname in fnames) {
     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
     print(fname)
     print(str(df))
+
+
+
 }
 
 
