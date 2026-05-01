@@ -282,6 +282,7 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
                 args.simulation_weights_distribution_param_1,
                 args.simulation_weights_distribution_param_2,
                 args.seed,
+                args.verbose,
             )?;
             let fname_simulated =
                 format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
@@ -325,6 +326,7 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
         args.simulation_weights_distribution_param_1,
         args.simulation_weights_distribution_param_2,
         args.seed,
+        args.verbose,
     )?;
     let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
     data_simulated.write_delimited(&fname_simulated, "\t")?;
