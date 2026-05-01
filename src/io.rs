@@ -13,6 +13,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, Write};
 use std::io::{BufReader, BufWriter};
+use std::time::Instant;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -150,7 +151,7 @@ impl Data {
         // seed = randomisation seed for repeatability
 
         if verbose {println!("(1/8) Simulating feature ids...")}
-
+        let time = Instant::now();
         let n_features_categorical = q.iter().fold(0, |sum, &x| sum + x);
         let n_features = p + n_features_categorical;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
@@ -164,8 +165,10 @@ impl Data {
                 features_host.push(rng.random());
             }
         }
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Categorical features (one-hot encoded) exploring all level combinations
         if verbose {println!("(2/8) Simulating categorical features (if any) ...")}
+        let time = Instant::now();
         if n_features_categorical > 0 {
             let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
             let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
@@ -190,8 +193,10 @@ impl Data {
                 }
             }
         }
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
         if verbose {println!("(3/8) Simulating dummy targets...")}
+        let time = Instant::now();
         let targets_host: Vec<f32> = (0..(k*n)).map(|_| rng.random()).collect();
         // println!("n = {}", n);
         // println!("p = {}", p);
@@ -200,11 +205,14 @@ impl Data {
         // println!("q = {:?}", q);
         // println!("features_host.len() = {}", features_host.len());
         // println!("targets_host.len() = {}", targets_host.len());
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Instantiate the Data and extract the CUDA device stream for instantiating the features and target matrices
         if verbose {println!("(4/8) Simulating Data struct...")}
+        let time = Instant::now();
         let mut data = Data::new(n, n_features, k)?;
-        let stream = data.features.data.context().default_stream();
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Instantiate the Network
+        let stream = data.features.data.context().default_stream();
         let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, n_features, n)?;
         // println!("features={}", features);
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
@@ -212,12 +220,8 @@ impl Data {
         let n_hidden_layers: usize = d;
         let n_hidden_nodes: Vec<usize> = vec![(n_features as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
-        // println!("features: {}", features);
-        // println!("targets: {}", targets);
-        // println!("n_hidden_layers: {}", n_hidden_layers);
-        // println!("n_hidden_nodes: {:?}", n_hidden_nodes);
-        // println!("dropout_rates: {:?}", dropout_rates);
         if verbose {println!("(5/8) Simulating Network struct...")}
+        let time = Instant::now();
         let mut network = Network::new(
             &stream,
             features,
@@ -228,8 +232,10 @@ impl Data {
             seed,
         )?;
         // println!("network: {}", network);
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Redefine the weights
         if verbose {println!("(6/8) Simulating weights and replacing the ones initialised in the Network struct...")}
+        let time = Instant::now();
         for i in 0..(network.n_hidden_layers+1) {
             let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
             let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
@@ -237,15 +243,20 @@ impl Data {
             // println!("i={}; weights={}", i, weights);
             network.weights_per_layer[i] = weights;
         }
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Extract non-dummy targets
         if verbose {println!("(7/8) Simulating non-dummy targets...")}
+        let time = Instant::now();
         network.predict()?;
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Update the feature names
         if verbose {println!("(8/8) Outputing the final simulated Data struct...")}
+        let time = Instant::now();
         data.feature_names = feature_names.clone();
         // Update the features and targets with the simulated data
         data.features = network.activations_per_layer[0].clone();
         data.targets = network.predictions.clone();
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         Ok(data)
     }
 
