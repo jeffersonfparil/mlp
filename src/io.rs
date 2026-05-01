@@ -87,11 +87,23 @@ fn simulate_weights(dist: &str, par1: f64, par2: f64, p: usize, seed: usize) -> 
         },
         _ => {
             let distribution = Normal::new(par1, par2)?;
-            (&mut rng)
-                .sample_iter(distribution)
-                .take(p)
-                .map(|x| x as f32)
-                .collect::<Vec<f32>>()
+            // (&mut rng)
+            //     .sample_iter(distribution)
+            //     .take(p)
+            //     .map(|x| x as f32)
+            //     .collect::<Vec<f32>>()
+            let mut b: Vec<f32> = Vec::with_capacity(p);
+            let step_size: usize = 1_000_000;
+            for j in (0..p).step_by(step_size) {
+                let m = if j+step_size > p {
+                    p - j
+                } else {
+                    step_size
+                };
+                let tmp: Vec<f32> = (&mut rng).sample_iter(distribution).take(m) .map(|x| x as f32).collect();
+                b.extend(&tmp);
+            }
+            b
         },
     };
     Ok(weights)
@@ -125,6 +137,7 @@ impl Data {
         par1: f64,
         par2: f64,
         seed: usize,
+        verbose: bool,
     ) -> Result<Self, Box<dyn Error>> {
         // n = total number of observations
         // p = number of continuous explanatory variables or features
@@ -135,6 +148,9 @@ impl Data {
         // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
         // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
         // seed = randomisation seed for repeatability
+
+        if verbose {println!("Simulating feature ids...")}
+
         let n_features_categorical = q.iter().fold(0, |sum, &x| sum + x);
         let n_features = p + n_features_categorical;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
@@ -150,6 +166,7 @@ impl Data {
         }
         // Categorical features (one-hot encoded) exploring all level combinations
         if n_features_categorical > 0 {
+            if verbose {println!("Simulating categorical features...")}
             let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
             let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
             for i in 0..n { // For each observation
@@ -174,6 +191,7 @@ impl Data {
             }
         }
         // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
+        if verbose {println!("Simulating dummy targets...")}
         let targets_host: Vec<f32> = (0..(k*n)).map(|_| rng.random()).collect();
         // println!("n = {}", n);
         // println!("p = {}", p);
@@ -183,6 +201,7 @@ impl Data {
         // println!("features_host.len() = {}", features_host.len());
         // println!("targets_host.len() = {}", targets_host.len());
         // Instantiate the Data and extract the CUDA device stream for instantiating the features and target matrices
+        if verbose {println!("Simulating Data struct...")}
         let mut data = Data::new(n, n_features, k)?;
         let stream = data.features.data.context().default_stream();
         // Instantiate the Network
@@ -198,6 +217,7 @@ impl Data {
         // println!("n_hidden_layers: {}", n_hidden_layers);
         // println!("n_hidden_nodes: {:?}", n_hidden_nodes);
         // println!("dropout_rates: {:?}", dropout_rates);
+        if verbose {println!("Simulating Network struct...")}
         let mut network = Network::new(
             &stream,
             features,
@@ -209,6 +229,7 @@ impl Data {
         )?;
         // println!("network: {}", network);
         // Redefine the weights
+        if verbose {println!("Simulating weights and replacing the ones initialised in the Network struct...")}
         for i in 0..(network.n_hidden_layers+1) {
             let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
             let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
@@ -217,8 +238,10 @@ impl Data {
             network.weights_per_layer[i] = weights;
         }
         // Extract non-dummy targets
+        if verbose {println!("Simulating non-dummy targets...")}
         network.predict()?;
         // Update the feature names
+        if verbose {println!("Outputing the final simulated Data struct...")}
         data.feature_names = feature_names.clone();
         // Update the features and targets with the simulated data
         data.features = network.activations_per_layer[0].clone();
@@ -894,7 +917,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let data_simulated = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42)?;
+        let data_simulated = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42, true)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);
