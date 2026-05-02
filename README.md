@@ -926,64 +926,124 @@ ndf_lm_lmer_asreml = function(mod) {
     }
 }
 
+hasConverged <- function (mm) {
+  
+  if ( !inherits(mm, "merMod")) stop("Error: must pass a lmerMod object")
+  
+  retval <- NULL
+  
+  if(is.null(unlist(mm@optinfo$conv$lme4))) {
+    retval = 1
+  }
+  else {
+    if (isSingular(mm)) {
+      retval = 0
+    } else {
+      retval = -1
+    }
+  }
+  return(retval)
+}
+
 fit_extract_effects = function(df) {
 
-    # fname = list.files(path=".", pattern=".tsv$")[20]; df = process_features(read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan")))[["df"]]
+    # fname = list.files(path=".", pattern=".tsv$")[22]; df = process_features(read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan")))[["df"]]
     str(df)
 
     x_names = colnames(df)[2:ncol(df)]
     x_names_except_gen_and_dummy_env = x_names[(x_names != "gen") & (x_names != "dummy_env")]
 
 
-# TODO: define a bunch of sensible models
+    # TODO: define a bunch of sensible models
 
-lm_model_strings = c(
-    "lm(y ~ ., data=df)",
-    "lm(y ~ gen, data=df)",
-    "lm(y ~ dummy_env + gen, data=df)",
-    paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + gen, data=df)"),
-    paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + gen, data=df)"),
-    paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env*gen, data=df)"),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, " + gen, data=df)")})),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, "*gen, data=df)")}))
-)
-m = length(x_names_except_gen_and_dummy_env)
-for (i in 1:(m-1)) {
-    x1 = x_names_except_gen_and_dummy_env[i]
-    for (j in 2:m) {
-        x2 = x_names_except_gen_and_dummy_env[j]
-        lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen, data=df)"))
-        lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen + ", x1, ":gen, data=df)"))
-        lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, "*", x2, " + gen, data=df)"))
+    lm_model_strings = c(
+        "lm(y ~ ., data=df)",
+        "lm(y ~ gen, data=df)",
+        "lm(y ~ dummy_env + gen, data=df)",
+        "lm(y ~ dummy_env*gen, data=df)",
+        paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + gen, data=df)"),
+        paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + gen, data=df)"),
+        paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env*gen, data=df)"),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, " + gen, data=df)")})),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, "*gen, data=df)")}))
+    )
+    m = length(x_names_except_gen_and_dummy_env)
+    if (m > 1) {
+        for (i in 1:(m-1)) {
+            x1 = x_names_except_gen_and_dummy_env[i]
+            for (j in (i+1):m) {
+                x2 = x_names_except_gen_and_dummy_env[j]
+                lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen, data=df)"))
+                lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen + ", x1, ":gen, data=df)"))
+                lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, "*", x2, " + gen, data=df)"))
+            }
+        }
     }
-}
-lm_model_strings
-
-
-
-
+    lm_model_strings
 
     lmer_model_strings = c(
-        'lmer(y ~ year + site + treatment + block + (1|entry), df)',
-        'lmer(y ~ year * site + treatment + block + (1|entry), df)',
-        # 'lmer(y ~ year * site * treatment + block + (1|entry), df)',
-        # 'lmer(y ~ year * site + treatment + block + (1 + year|entry), df)',
-        'lmer(y ~ year + site + treatment + block + (1|entry) + (1|entry:year) + (1|entry:site), df)',
-        'lmer(y ~ env + block + (1|entry), df)',
-        'lmer(y ~ env + block + (1|entry) + (1|entry:env), df)'
+        "lmer(y ~ (1|gen), data=df)",
+        "lmer(y ~ dummy_env + (1|gen), data=df)",
+        "lmer(y ~ dummy_env + (1|gen:dummy_env), data=df)",
+        "lmer(y ~ (1|gen:dummy_env), data=df)",
+        "lmer(y ~ (1|dummy_env) + (1|gen:dummy_env), data=df)",
+        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + (1|gen), data=df)"),
+        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + (1|gen), data=df)"),
+        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + (1|gen:dummy_env), data=df)"),
+        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + (1|gen:dummy_env), data=df)"),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lmer(y ~ ", x, " + (1|gen), data=df)")})),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lmer(y ~ ", x, " + (1|gen:", x, "), data=df)")})),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lmer(y ~ (1|gen:", x, "), data=df)")}))
     )
-    asreml_model_strings = c(
-        'asreml(y ~ year + site + treatment + block, random = ~ entry, data = df)',
-        'asreml(y ~ year * site + treatment + block, random = ~ entry, data = df)',
-        'asreml(y ~ year * site * treatment + block, random = ~ entry, data = df)',
-        'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(site):entry, data = df)',
-        'asreml(y ~ year * site + treatment + block, random = ~ entry + fa(year):entry, data = df)',
-        'asreml(y ~ year * site * treatment + block, random = ~ entry + fa(year:site):entry, data = df)',
-        'asreml(y ~ year + site + treatment + block, random = ~ entry + entry:year + entry:site, data = df)',
-        'asreml(y ~ env + block, random = ~ entry, data = df)',
-        'asreml(y ~ env + block, random = ~ entry + fa(env):entry, data = df)'
+    m = length(x_names_except_gen_and_dummy_env)
+    if (m > 1) {
+        for (i in 1:(m-1)) {
+            x1 = x_names_except_gen_and_dummy_env[i]
+            for (j in (i+1):m) {
+                x2 = x_names_except_gen_and_dummy_env[j]
+                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen), data=df)"))
+                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen:", x1, "), data=df)"))
+                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen:", x2, "), data=df)"))
+                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen:", x1, ") + (1|gen:", x2, "), data=df)"))
+            }
+        }
+    }
+    lmer_model_strings
 
+
+    asreml_model_strings = c(
+        "asreml(y ~ 1, random = ~ gen, data=df)",
+        "asreml(y ~ dummy_env, random = ~ gen, data=df)",
+        "asreml(y ~ dummy_env, random = ~ gen:dummy_env, data=df)",
+        "asreml(y ~ 1, random = ~ gen:dummy_env, data=df)",
+        "asreml(y ~ 1, random = ~ dummy_env + gen:dummy_env, data=df)",
+        paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), ", random = ~ gen, data=df)"),
+        paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), ", random = ~ gen + fa(dummy_env):gen, data=df)"),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("asreml(y ~ ", x, ", random = ~ gen, data=df)")})),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("asreml(y ~ ", x, ", random = ~ ", x, ":gen, data=df)")})),
+        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("asreml(y ~ ", x, ", random = ~ fa(", x, "):gen, data=df)")}))
     )
+    m = length(x_names_except_gen_and_dummy_env)
+    if (m > 1) {
+        for (i in 1:(m-1)) {
+            x1 = x_names_except_gen_and_dummy_env[i]
+            for (j in (i+1):m) {
+                x2 = x_names_except_gen_and_dummy_env[j]
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x1, ":gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x2, ":gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x1, ":gen + ", x2, ":gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x1, "):gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x2, "):gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x1, "):gen + ", x2, ":gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x1, ":gen + fa(", x2, "):gen, data=df)"))
+                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x1, "):gen + fa(", x2, "):gen, data=df)"))
+
+            }
+        }
+    }
+    asreml_model_strings
+
     model_strings = if (nzchar(system.file(package = "asreml"))) {
         c(lm_model_strings, lmer_model_strings, asreml_model_strings)
     } else {
@@ -993,12 +1053,16 @@ lm_model_strings
     model_candidates = list()
     for (i in 1:length(model_strings)) {
         # i = 1
+        # i = 40
         # i = length(model_strings)
         mod_string = model_strings[i]
         mod_label = unlist(strsplit(mod_string, "\\("))[1]
         print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
         mod = tryCatch(
-            eval(parse(text=mod_string)),
+            {
+                setTimeLimit(30)
+                eval(parse(text=mod_string))
+            },
             error = function(e) {
                 print("Unable to fit: skipped!")
                 return(NA)
@@ -1008,7 +1072,7 @@ lm_model_strings
             model_candidates[[paste0(mod_label, "_", i)]] = NA
         } else {
             if (class(mod) == "lmerMod") {
-                if (mod@optinfo$conv$opt == 0) {
+                if (mod@optinfo$conv$opt != 0) {
                     # Failed to converge
                     model_candidates[[paste0(mod_label, "_", i)]] = NA
                 } else {
@@ -1032,6 +1096,8 @@ lm_model_strings
         BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
         logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
     )
+    df_stats = df_stats[!is.na(df_stats$AIC) & is.finite(df_stats$AIC), ]
+    print(df_stats)
     z_AIC = scale(df_stats$AIC, scale=T, center=T)
     z_BIC = scale(df_stats$BIC, scale=T, center=T)
     z_logLik = -scale(df_stats$logLik, scale=T, center=T)
@@ -1039,7 +1105,8 @@ lm_model_strings
     print(df_stats)
     # Select the best model based on z_sum
     # best_model_idx = which.min(df_stats$BIC)
-    best_model_idx = which.min(df_stats$z_sum)
+    # best_model_idx = which.min(df_stats$z_sum)
+    best_model_idx = tail(which(df_stats$z_sum == min(df_stats$z_sum)), 1)
     best_model = model_candidates[[best_model_idx]]
     best_model_formula = df_stats$formula[best_model_idx]
     print(paste("Best model selected:", best_model_formula))
