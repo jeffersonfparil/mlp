@@ -842,6 +842,11 @@ for (fname in fnames) {
 
 Fit linear models in R using `lm`, `lmer` and `asreml` (if available)
 
+#### TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+#### TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+#### TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+
+
 #### Generic model selection
 
 ##### Run:
@@ -924,25 +929,6 @@ ndf_lm_lmer_asreml = function(mod) {
         # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
         NA
     }
-}
-
-hasConverged <- function (mm) {
-  
-  if ( !inherits(mm, "merMod")) stop("Error: must pass a lmerMod object")
-  
-  retval <- NULL
-  
-  if(is.null(unlist(mm@optinfo$conv$lme4))) {
-    retval = 1
-  }
-  else {
-    if (isSingular(mm)) {
-      retval = 0
-    } else {
-      retval = -1
-    }
-  }
-  return(retval)
 }
 
 fit_extract_effects = function(df) {
@@ -1096,7 +1082,10 @@ fit_extract_effects = function(df) {
         BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
         logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
     )
-    df_stats = df_stats[!is.na(df_stats$AIC) & is.finite(df_stats$AIC), ]
+    idx_filter = which(!is.na(df_stats$AIC) & is.finite(df_stats$AIC))
+    df_stats = df_stats[idx_filter, ]
+    model_candidates_ORIG = model_candidates
+    model_candidates = model_candidates[idx_filter]
     print(df_stats)
     z_AIC = scale(df_stats$AIC, scale=T, center=T)
     z_BIC = scale(df_stats$BIC, scale=T, center=T)
@@ -1111,27 +1100,39 @@ fit_extract_effects = function(df) {
     best_model_formula = df_stats$formula[best_model_idx]
     print(paste("Best model selected:", best_model_formula))
 
-    # Plot entry effects (random effects for entry)
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+## TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+## TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+## TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+    # Plot gen effects (random effects for gen)
     # best_model = model_candidates[[1]]
     df_effects = if (class(best_model) == "lm") {
         # best_model = model_candidates[[1]]
         effects = coef(best_model)
         ids = names(effects)
         intercept = effects[ids == "(Intercept)"]
-        entry_effects = c(intercept, intercept + effects[grepl("entry", ids)])
-        entry_names = c(as.character(levels(df$entry)[1]), ids[grepl("entry", ids)])
-        entry_names = gsub("entry", "", entry_names)
-        df_effects = data.frame(ids=entry_names, effects=entry_effects)
+        gen_effects = c(intercept, intercept + effects[grepl("gen", ids)])
+        gen_names = c(as.character(levels(df$gen)[1]), ids[grepl("gen", ids)])
+        gen_names = gsub("gen", "", gen_names)
+        df_effects = data.frame(ids=gen_names, effects=gen_effects)
         rownames(df_effects) = NULL
         df_effects
-        # barplot(entry_effects, names.arg=entry_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
+        # barplot(gen_effects, names.arg=gen_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
     } else if (class(best_model) == "lmerMod") {
         # best_model = model_candidates[[3]]
-        entry_effects <- ranef(best_model)$entry
-        df_effects = data.frame(ids=rownames(entry_effects), effects=entry_effects[,1])
+        gen_effects <- ranef(best_model)$gen
+        df_effects = data.frame(ids=rownames(gen_effects), effects=gen_effects[,1])
         rownames(df_effects) = NULL
         df_effects
-        # barplot(entry_effects[,1], names.arg = rownames(entry_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
+        # barplot(gen_effects[,1], names.arg = rownames(gen_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
     } else if (class(best_model) == "asreml") {
         # best_model = model_candidates[[13]]
         df_effects = data.frame(
@@ -1139,8 +1140,8 @@ fit_extract_effects = function(df) {
             effects = as.vector(coef(best_model)$random)
         ); row.names(df_effects) = NULL
         # str(df_effects)
-        df_sub = df_effects[grepl("entry", df_effects$ids) & !grepl(":", df_effects$ids), ]
-        df_sub$ids = gsub("entry_", "", df_sub$ids)
+        df_sub = df_effects[grepl("gen", df_effects$ids) & !grepl(":", df_effects$ids), ]
+        df_sub$ids = gsub("gen_", "", df_sub$ids)
         df_effects
         # barplot(df_sub$effects, names.arg = df_sub$ids, main = "Estimated Entry Effects (asreml model)", xlab = "Entry", ylab = "Random Effect")
     } else {
