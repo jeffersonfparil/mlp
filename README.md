@@ -158,7 +158,31 @@ pixi shell
 # export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
 time cargo run -- -h
 time cargo run -- -s -n1000 -p10 -v
-# time cargo run -- -s -n1024 -p32768 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
+
+
+# TESTING CROSS-VALIDATION FOR N << P DATASETS
+time cargo run -- -s -n1100 -p42000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
+INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
+head -n292 $INPUT > training_data.tsv
+head -n1 $INPUT > validation_data.tsv
+tail -n100 $INPUT >> validation_data.tsv
+time cargo run -- -f training_data.tsv -o output.json -v --n-batches=1 --n-epochs=1000 --skip-marginals
+time cargo run -- -f validation_data.tsv -m output.json -v --predict-only
+PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
+
+cut -f1 validation_data.tsv > true.tmp
+cut -f1 $PREDICTED > pred.tmp
+paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
+head true_vs_pred.tsv
+
+# R --> ...
+# df = read.table("true_vs_pred.tsv", T)
+# cor(df)
+# plot(df[, 1], df[, 2])
+# dev.off()
+
+
+
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
 head $INPUT | cut -f1-10
 head -n1 $INPUT | awk '{print NF}'
