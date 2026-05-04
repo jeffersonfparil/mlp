@@ -362,6 +362,9 @@ impl Network {
         Ok(final_cost_value)
     }
 
+    //////////////////////////////////////////////////////////////////////
+    // TODO: include frac_validation in hyperparameter optimisation???
+    //////////////////////////////////////////////////////////////////////
     pub fn hyperoptimise(
         self: &Self,
         range_hidden_layers: Option<(usize, usize, usize)>,

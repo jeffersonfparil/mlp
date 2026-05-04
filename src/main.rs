@@ -502,7 +502,9 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+//////////////////////////////////////////////////////////////////////
 // TODO: include frac_validation in hyperparameter optimisation???
+//////////////////////////////////////////////////////////////////////
 fn train_with_hyperparameter_optimisation(
     args: &Args,
     network: &mut Network,
