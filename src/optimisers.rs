@@ -39,6 +39,7 @@ pub struct OptimisationParameters {
     pub optimiser: Optimiser,     // Adam by default
     pub n_epochs: usize,          // t = 10
     pub f_patient_epochs: f32,    // f = 0.25 // fraction of n_epochs to wait before early stopping
+    pub f_validation: f32,     // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
     pub n_batches: usize,         // b = 1
     pub learning_rate: f32,       // η = 0.001
     pub first_moment_decay: f32,  // β₁ = 0.900
@@ -49,7 +50,6 @@ pub struct OptimisationParameters {
     pub second_moments_of_weights_per_layer: Vec<Matrix>,
     pub first_moments_of_biases_per_layer: Vec<Matrix>,
     pub second_moments_of_biases_per_layer: Vec<Matrix>,
-    // pub frac_validation: f32,     // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
 }
 
 impl fmt::Display for OptimisationParameters {
@@ -60,6 +60,7 @@ impl fmt::Display for OptimisationParameters {
                 - optimiser = {:?}
                 - number of epochs = {}
                 - fraction of patient epochs = {}
+                - fraction of observations used as validation set on every epoch = {}
                 - number of batches = {}
                 - base learning rate = {}
                 - first moment decay coefficient = {}
@@ -74,6 +75,7 @@ impl fmt::Display for OptimisationParameters {
             self.optimiser,
             self.n_epochs,
             self.f_patient_epochs,
+            self.f_validation,
             self.n_batches,
             self.learning_rate,
             self.first_moment_decay,
@@ -294,6 +296,7 @@ impl OptimisationParameters {
             optimiser: Optimiser::Adam,
             n_epochs: 10,
             f_patient_epochs: 0.25,
+            f_validation: 0.00,
             n_batches: 1,
             learning_rate: 0.001,
             first_moment_decay: 0.900,
