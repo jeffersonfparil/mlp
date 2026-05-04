@@ -82,6 +82,10 @@ struct Args {
     #[arg(long, default_value_t = 0.25)]
     f_patient_epochs: f32,
 
+    /// Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs)
+    #[arg(long, default_value_t = 0.00)]
+    f_validation: f32,
+
     /// Number of training batches to split the input data into
     #[arg(long, default_value_t = 2)]
     n_batches: usize,
@@ -498,6 +502,7 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// TODO: include frac_validation in hyperparameter optimisation???
 fn train_with_hyperparameter_optimisation(
     args: &Args,
     network: &mut Network,
@@ -695,6 +700,7 @@ fn train_with_fixed_hyperparameters(
     };
     optimisation_parameters.n_epochs = args.n_epochs;
     optimisation_parameters.f_patient_epochs = args.f_patient_epochs;
+    optimisation_parameters.f_validation = args.f_validation;
     optimisation_parameters.n_batches = args.n_batches;
     optimisation_parameters.learning_rate = args.learning_rate;
     optimisation_parameters.first_moment_decay = args.first_moment_decay;

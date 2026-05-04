@@ -225,13 +225,9 @@ impl Network {
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
-        ///////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////
-        // With cross-validation
-        const FRAC_VALIDATION: f32 = 0.0;
+        // With or without cross-validation
         let n: usize = self.targets.n_cols;
-        let n_validation: usize = (n as f32 * FRAC_VALIDATION).floor() as usize;
+        let n_validation: usize = (n as f32 * optimisation_parameters.f_validation).floor() as usize;
         let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
         let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
         let training_indexes: Vec<usize> = (0..n)
@@ -270,24 +266,6 @@ impl Network {
         // Update the network after training the training network
         self.replace_model(&network_training)?;
         pb.finish();
-        // ///////////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////////
-        // // No cross-validation
-        // let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches", n_batches));
-        // for epoch in 0..optimisation_parameters.n_epochs {
-        //     self.forwardpass()?;
-        //     self.backpropagation()?;
-        //     self.optimise(optimisation_parameters)?;
-        //     self.predict()?;
-        //     epochs.push(epoch as f64);
-        //     costs.push(self.loss()? as f64);
-        //     pb.next();
-        //     if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
-        //         break;
-        //     }
-        // }
-        // pb.finish();
         self.predict()?;
         self.n_epochs = epochs.len();
         Ok((epochs, costs))
