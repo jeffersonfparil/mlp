@@ -161,14 +161,23 @@ time cargo run -- -s -n1000 -p10 -v
 
 
 # TESTING CROSS-VALIDATION FOR N << P DATASETS
-time cargo run -- -s -n1100 -p42000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
+time cargo run -- -s -n500 -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-head -n292 $INPUT > training_data.tsv
+N=$(cat $INPUT | wc -l)
+V=$(printf %.0f $(echo  "scale=0; $N * 0.1" | bc))
+T=$(echo  "$N - $V" | bc)
+
+echo $N
+echo $V
+echo $T
+
+head -n$T $INPUT > training_data.tsv
 head -n1 $INPUT > validation_data.tsv
-tail -n100 $INPUT >> validation_data.tsv
-time cargo run -- -f training_data.tsv -o output.json -v --n-batches=1 --n-epochs=1000 --skip-marginals
+tail -n$V $INPUT >> validation_data.tsv
+time cargo run -- -f training_data.tsv -o output.json -v --n-batches=1 --n-epochs=1000 --f-patient-epochs=0.5 --skip-marginals
 time cargo run -- -f validation_data.tsv -m output.json -v --predict-only
 PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
+echo $PREDICTED
 
 cut -f1 validation_data.tsv > true.tmp
 cut -f1 $PREDICTED > pred.tmp
