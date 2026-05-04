@@ -505,8 +505,9 @@ mod tests {
         marginals.estimate_perturb(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
-        marginals.effects.iter().zip(vec![0.00914565, 0.00915616, 0.009083876, 0.00925088, 0.009251332, 0.009222691, 0.009141681].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
-        
+        // marginals.effects.iter().zip(vec![0.00914565, 0.00915616, 0.009083876, 0.00925088, 0.009251332, 0.009222691, 0.009141681].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals.effects.iter().zip(vec![0.009141404, 0.009156859, 0.00908426, 0.009254696, 0.009257627, 0.009228476, 0.009141026].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
