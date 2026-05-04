@@ -365,14 +365,14 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     }
     // Prepare the network
     // Load input data
-    if args.verbose {println!("Loading input data...")}; let time = Instant::now();
+    if args.verbose {println!("(1/5) Loading input data...")}; let time = Instant::now();
     let data = read_data(&args)?;
     if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
-    if args.verbose {println!("Loading model...")}; let time = Instant::now();
+    if args.verbose {println!("(2/5) Loading model...")}; let time = Instant::now();
     let network_fitted = Network::read_network(&model)?;
     if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     // Initialise the network containing the input data and fitted model
-    if args.verbose {println!("Preparing the network...")}; let time = Instant::now();
+    if args.verbose {println!("(3/5) Preparing the network...")}; let time = Instant::now();
     let mut network = data.init_network(
         network_fitted.n_hidden_layers,
         network_fitted.n_hidden_nodes.clone(),
@@ -382,11 +382,11 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     network.replace_model(&network_fitted)?;
     if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     // Predict
-    if args.verbose {println!("Predicting...")}; let time = Instant::now();
+    if args.verbose {println!("(4/5) Predicting...")}; let time = Instant::now();
     network.predict()?;
     if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     // Define the output Data struct containing the prediction
-    if args.verbose {println!("Saving the predictions...")}; let time = Instant::now();
+    if args.verbose {println!("(5/5) Saving the predictions...")}; let time = Instant::now();
     let n = data.features.n_cols;
     let p = data.features.n_rows;
     let k = data.targets.n_rows + network.predictions.n_rows;

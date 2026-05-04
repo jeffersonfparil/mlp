@@ -229,20 +229,20 @@ impl Network {
         ///////////////////////////////////////////////////////////////////////////////
         ///////////////////////////////////////////////////////////////////////////////
         // With cross-validation
-        const FRAC_VALIDATION: f32 = 0.05;
+        const FRAC_VALIDATION: f32 = 0.0;
         let n: usize = self.targets.n_cols;
-        let n_validation: usize = if (n as f32 * FRAC_VALIDATION).floor() < 1.0 {
-            3
-        } else {
-            (n as f32 * FRAC_VALIDATION).floor() as usize
-        };
+        let n_validation: usize = (n as f32 * FRAC_VALIDATION).floor() as usize;
         let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
         let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
         let training_indexes: Vec<usize> = (0..n)
             .filter(|&x| !validation_indexes.contains(&x))
             .collect();
-        let mut network_validation = self.slice(&validation_indexes)?;
-        let mut network_training = self.slice(&training_indexes)?;
+
+        let (mut network_validation, mut network_training) = if n_validation > 0 {
+            (self.slice(&validation_indexes)?,  self.slice(&training_indexes)?)
+        } else {
+            (self.slice(&vec![0])?, self.slice(&training_indexes)?)
+        };
         let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
         for epoch in 0..optimisation_parameters.n_epochs {
             network_training.forwardpass()?;
@@ -251,9 +251,13 @@ impl Network {
             network_training.predict()?;
             epochs.push(epoch as f64);
             // Validate
-            network_validation.replace_model(&network_training)?;
-            network_validation.predict()?;
-            costs.push(network_validation.loss()? as f64);
+            if n_validation > 0 {
+                network_validation.replace_model(&network_training)?;
+                network_validation.predict()?;
+                costs.push(network_validation.loss()? as f64);
+            } else {
+                costs.push(network_training.loss()? as f64);
+            }
             // // Update the network after training the training network
             // self.replace_model(&network_training)?;
             pb.next();
@@ -265,47 +269,24 @@ impl Network {
        }
         // Update the network after training the training network
         self.replace_model(&network_training)?;
-
         pb.finish();
-
         // ///////////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////////
         // ///////////////////////////////////////////////////////////////////////////////
         // // No cross-validation
-        // // let start_time = Instant::now();
-        // // let progress_width: usize = 50;
         // let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches", n_batches));
         // for epoch in 0..optimisation_parameters.n_epochs {
-        //     // let perc: f64 = (((progress_width * 100 * (epoch+1)) as f64)/(optimisation_parameters.n_epochs as f64)).round() / (progress_width as f64);
-        //     // let n_progress: usize = (((progress_width * (epoch+1)) as f64) / (optimisation_parameters.n_epochs as f64)).round() as usize;
-        //     // let progress_text: String = (0..n_progress).map(|_| "█").collect();
-        //     // let no_progress_text: String = (0..(progress_width-n_progress)).map(|_| " ").collect();
-        //     // let t_remaining: f64 = {
-        //     //     let dp: f64 = n_progress as f64;
-        //     //     let dt: f64 = start_time.elapsed().as_millis() as f64 / 60_000.0;
-        //     //     let v: f64 = dp/dt;
-        //     //     let t_total: f64 = (progress_width as f64) / v;
-        //     //     t_total - dt
-        //     // };
-        //     // print!("\rTraining {} batches | {:.2}% | {}{} | {:.2} minutes remaining | ", n_batches, perc, progress_text, no_progress_text, t_remaining);
-        //     // io::stdout().flush().expect("Failed to flush stdout");
-        //     pb.next();
         //     self.forwardpass()?;
         //     self.backpropagation()?;
         //     self.optimise(optimisation_parameters)?;
         //     self.predict()?;
         //     epochs.push(epoch as f64);
         //     costs.push(self.loss()? as f64);
-        //     // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
+        //     pb.next();
         //     if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
-        //         // println!("Early stopping at epoch {}", epoch);
         //         break;
         //     }
         // }
-        // // let progress_text: String = (0..progress_width).map(|_| "█").collect();
-        // // print!("\rTraining {} batches | 100.00% | {} |", n_batches, progress_text);
-        // // io::stdout().flush().expect("Failed to flush stdout");
-        // // println!(" Duration: {:.2} minutes", start_time.elapsed().as_millis() as f64 / 60_000.0);
         // pb.finish();
         self.predict()?;
         self.n_epochs = epochs.len();
