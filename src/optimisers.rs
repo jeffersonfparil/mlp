@@ -49,6 +49,7 @@ pub struct OptimisationParameters {
     pub second_moments_of_weights_per_layer: Vec<Matrix>,
     pub first_moments_of_biases_per_layer: Vec<Matrix>,
     pub second_moments_of_biases_per_layer: Vec<Matrix>,
+    // pub frac_validation: f32,     // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
 }
 
 impl fmt::Display for OptimisationParameters {
