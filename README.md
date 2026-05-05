@@ -284,9 +284,9 @@ We simulated:
 
 ```shell
 cd mlp/
-mkdir tests/simulated
-cd tests/simulated
-MLP=../../target/release/mlp
+mkdir tests/trials/simulated
+cd tests/trials/simulated
+MLP=../../../target/release/mlp
 N_YEARS=7
 N_SITES=20
 N_TREATMENTS=2
@@ -338,12 +338,12 @@ done
 
 ```shell
 cd mlp
-cd tests/simulated
+cd tests/trials/simulated
 module load ASReml-R # if ASReml-R is available
 time Rscript script_LINEAR.R
 ```
 
-#### See details below (`tests/simulated/script_LINEAR.R`):
+#### See details below (`tests/trials/simulated/script_LINEAR.R`):
 
 ```R
 library("stringr")
@@ -583,19 +583,19 @@ for (fname_input in fnames) {
 
 ```shell
 cd mlp
-cd tests/simulated
+cd tests/trials/simulated
 time sh script_MLP.sh
 ```
 
-#### See details below (`tests/simulated/script_MLP.sh`):
+#### See details below (`tests/trials/simulated/script_MLP.sh`):
 
 ```shell
 #!/bin/bash
 
 # cd mlp/
-# cd tests/simulated
+# cd tests/trials/simulated
 mkdir mlp_misc_output
-MLP=../../target/release/mlp
+MLP=../../../target/release/mlp
 N_EPOCHS=500
 F_PATIENT_EPOCHS=0.01
 N_BATCHES=2
@@ -626,11 +626,11 @@ done
 
 ```shell
 cd mlp
-cd tests/simulated
+cd tests/trials/simulated
 time Rscript script_COMPARISON.R
 ```
 
-#### See details below (`tests/simulated/script_COMPARISON.R`):
+#### See details below (`tests/trials/simulated/script_COMPARISON.R`):
 
 ```R
 fnames_INPUT = list.files(".", pattern="input")
@@ -682,43 +682,43 @@ for (fname_input in fnames_INPUT) {
 
 #### GAMMA-1HL
 
-![](./tests/simulated/comparison-GAMMA-1HL.png)
+![](./tests/trials/simulated/comparison-GAMMA-1HL.png)
 
 #### GAMMA-2HL
 
-![](./tests/simulated/comparison-GAMMA-2HL.png)
+![](./tests/trials/simulated/comparison-GAMMA-2HL.png)
 
 #### GAMMA-3HL
 
-![](./tests/simulated/comparison-GAMMA-3HL.png)
+![](./tests/trials/simulated/comparison-GAMMA-3HL.png)
 
 #### GAMMA-4HL
 
-![](./tests/simulated/comparison-GAMMA-4HL.png)
+![](./tests/trials/simulated/comparison-GAMMA-4HL.png)
 
 #### GAMMA-5HL
 
-![](./tests/simulated/comparison-GAMMA-5HL.png)
+![](./tests/trials/simulated/comparison-GAMMA-5HL.png)
 
 #### NORMAL-1HL
 
-![](./tests/simulated/comparison-NORMAL-1HL.png)
+![](./tests/trials/simulated/comparison-NORMAL-1HL.png)
 
 #### NORMAL-2HL
 
-![](./tests/simulated/comparison-NORMAL-2HL.png)
+![](./tests/trials/simulated/comparison-NORMAL-2HL.png)
 
 #### NORMAL-3HL
 
-![](./tests/simulated/comparison-NORMAL-3HL.png)
+![](./tests/trials/simulated/comparison-NORMAL-3HL.png)
 
 #### NORMAL-4HL
 
-![](./tests/simulated/comparison-NORMAL-4HL.png)
+![](./tests/trials/simulated/comparison-NORMAL-4HL.png)
 
 #### NORMAL-5HL
 
-![](./tests/simulated/comparison-NORMAL-5HL.png)
+![](./tests/trials/simulated/comparison-NORMAL-5HL.png)
 
 
 
@@ -739,7 +739,7 @@ Using agridat data... details: how many? types?
 
 ```shell
 cd mlp/
-cd tests/
+cd tests/trials
 mkdir agridat/
 cd agridat/
 curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
@@ -748,7 +748,7 @@ curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip
 #### Prepare the data, i.e. make sure categorical variables are interpretted as strings
 
 ```R
-setwd("tests/agridat")
+setwd("tests/trials/agridat")
 fnames = list.files(path=".", pattern=".txt$")
 fnames = fnames[!grepl(".covs.txt", fnames)]
 fnames = fnames[!grepl(".uniformity.txt", fnames)]
@@ -885,7 +885,7 @@ Fit linear models in R using `lm`, `lmer` and `asreml` (if available)
 ##### Run:
 
 ```shell
-cd tests/agridat
+cd tests/trials/agridat
 time Rscript ...
 ```
 
@@ -1216,7 +1216,7 @@ fit_extract_effects = function(df) {
 #     detach(df)
 # }
 
-setwd("tests/agridat")
+setwd("tests/trials/agridat")
 fnames = list.files(path=".", pattern=".tsv$")
 stopifnot(length(fnames) == 319)
 
@@ -1246,8 +1246,8 @@ for (fname in fnames) {
 
 ```shell
 cd mlp/
-cd tests/agridat/
-MLP=../../target/release/mlp
+cd tests/trials/agridat/
+MLP=../../../target/release/mlp
 
 for FILE in $(find . -name "*.txt")
 do
@@ -1303,7 +1303,362 @@ done
 
 # Genomic prediction
 
-TODO
+## Tests on simulated data
+
+### Simulate data
+
+```shell
+cd mlp/
+mkdir tests/gp/simulated
+cd tests/gp/simulated
+MLP=../../../target/release/mlp
+N=700
+P=42000
+for HIDDEN_LAYERS in $(seq 1 3) # cannot have more hidden layers because of GPU memory limitations (H100s and V100s)
+do
+    # HIDDEN_LAYERS=3
+    F_CONTINUOUS=input_simulated-CONTINUOUS-${HIDDEN_LAYERS}HL.tsv
+    F_BINARY=input_simulated-BINARY-${HIDDEN_LAYERS}HL.tsv
+    echo "######################"
+    echo "$F_CONTINUOUS and $F_BINARY"
+    $MLP \
+        --simulate-data-only \
+        --simulation-n-observations $N \
+        --simulation-n-features-continuous $P \
+        --simulation-n-features-categorical 0 \
+        --simulation-n-output-columns 1 \
+        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
+        --simulation-weights-distribution normal \
+        --simulation-weights-distribution-param-1 0 \
+        --simulation-weights-distribution-param-2 1 \
+        --seed ${HIDDEN_LAYERS} \
+        --verbose
+    F0=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
+    mv $F0 $F_CONTINUOUS
+    # Convert into binary genotype data
+    head -n1 $F_CONTINUOUS > $F_BINARY
+    tail -n+2 $F_CONTINUOUS | 
+      awk '{
+          FS="\t"; OFS="\t"; 
+          for (i=2; i<=NF; i++) {
+              $i = sprintf("%.0f", $i)
+          }
+      }{print}' - >> $F_BINARY
+done
+```
+
+### BGLR??
+
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+
+Starting to draft Bayes A, B and C and also simple OLS down under MLP...
+
+### MLP
+
+```shell
+cd tests/gp/simulated
+MLP=../../../target/release/mlp
+N_EPOCHS=1000
+F_PATIENT_EPOCHS=0.50
+F_VALIDATION=0.0
+N_BATCHES=1
+N_HIDDEN_LAYERS=1
+N_HIDDEN_NODES=256
+
+N_REPS=3
+N_FOLDS=10
+
+
+
+for INPUT in $(ls input_simulated-*-*.tsv)
+do
+    # INPUT=$(ls input_simulated-*-*.tsv | head -n4 | tail -n1)
+    OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
+    N=$(echo $(cut -f1 $INPUT | wc -l) - 1 | bc)
+    M=$(echo "scale=0; $N / $N_FOLDS" | bc)
+    echo "$INPUT -->  $OUTPUT (N=$N; M=$M)"
+
+
+    for REP in $(seq 0 $N_REPS)
+    do
+        IDX_SHUFFLED=($(shuf -e $(seq 2 $(echo $N + 1 | bc))))
+        echo ${IDX_SHUFFLED[@]}
+        for FOLD in $(seq 0 $N_FOLDS)
+        do
+            # FOLD=1
+            IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
+            IDX_FIN=$(echo "$FOLD * $M" | bc)
+            IDX_TRAINING=()
+            IDX_VALIDATION=()
+            for i in $(seq 0 $N)
+            do
+                if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]
+                then
+                    # echo "$i; ${IDX_SHUFFLED[i]}"
+                    IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
+                else
+                    IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
+                fi
+            done
+            echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+            echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
+            echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
+
+            TRAINING_IDX=${IDX_TRAINING[@]}
+            VALIDATION_IDX=${IDX_VALIDATION[@]}
+            head -n1 $INPUT > TRAINING_SET.tmp
+            head -n1 $INPUT > VALIDATION_SET.tmp
+            awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> TRAINING_SET.tmp
+            awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> VALIDATION_SET.tmp
+            time ${MLP} \
+                -f TRAINING_SET.tmp \
+                -o OUTPUT.tmp.json \
+                -v \
+                --n-epochs=${N_EPOCHS} \
+                --f-patient-epochs=${F_PATIENT_EPOCHS} \
+                --f-validation=${F_VALIDATION} \
+                --n-batches=${N_BATCHES} \
+                --n-hidden-layers=${N_HIDDEN_LAYERS} \
+                --n-hidden-nodes=${N_HIDDEN_NODES} \
+                --skip-marginals
+            time ${MLP} \
+                -f VALIDATION_SET.tmp \
+                -m OUTPUT.tmp.json \
+                -v \
+                --predict-only
+
+
+            cut -f1 VALIDATION_SET.tmp > true.tmp
+            cut -f1 OUTPUT.tmp-predictions.tsv > pred.tmp
+            paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
+            head true_vs_pred.tsv
+            R
+            df_mlp = read.table("true_vs_pred.tsv", T)
+            str(df_mlp)
+            cor(df_mlp)
+
+            df_training = read.table("TRAINING_SET.tmp", T)
+            df_validation = read.table("VALIDATION_SET.tmp", T)
+            X = as.matrix(df_training[, 2:ncol(df_training)])
+            y = df_training[, 1]
+            
+            # OLS
+            b_hat = t(X) %*% solve(X %*% t(X)) %*% y
+            y_hat = as.matrix(df_validation[, 2:ncol(df_validation)]) %*% b_hat
+            cor(df_validation[, 1], y_hat)
+
+            # Bayesian models
+            library(BGLR)
+            df = rbind(df_training, df_validation)
+            X = as.matrix(df[, 2:ncol(df)])
+            y = df[, 1]
+            yNA = y
+            idx_validation = nrow(df_training):nrow(df)
+            yNA[idx_validation] = NA
+            nIter=6000; burnIn=1000
+
+            # Bayes A
+            time = Sys.time()
+            fmBA=BGLR(y=yNA,ETA=list( list(X=X,model='BayesA')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
+            print(Sys.time() - t)
+            yHat=fmBA$yHat[idx_validation]
+            cor(yHat, y[idx_validation])
+
+            # Bayes B
+            time = Sys.time()
+            fmBB=BGLR(y=yNA,ETA=list( list(X=X,model='BayesB')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
+            print(Sys.time() - t)
+            yHat=fmBB$yHat[idx_validation]
+            cor(yHat, y[idx_validation])
+
+            # Bayes C
+            time = Sys.time()
+            fmBC=BGLR(y=yNA,ETA=list( list(X=X,model='BayesC')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
+            print(Sys.time() - t)
+            yHat=fmBC$yHat[idx_validation]
+            cor(yHat, y[idx_validation])
+
+
+            
+
+
+
+        done
+    done
+
+
+    
+done
+
+
+
+
+```
+
+
+
+## Tests on empirical data
+
+### BGLR??
+
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+
+### MLP
+
+```shell
+cd tests/gp/azodi_2019
+MLP=../../../target/release/mlp
+N_EPOCHS=1000
+F_PATIENT_EPOCHS=0.50
+F_VALIDATION=0.0
+N_BATCHES=1
+N_HIDDEN_LAYERS=1
+N_HIDDEN_NODES=256
+
+N_REPS=3
+N_FOLDS=10
+
+
+
+for SPECIES in ("maize" "rice" "sorghum" "soy" "spruce" "switchgrass")
+do
+    # SPECIES=maize
+
+    cut -d, -f1 ${SPECIES}_pheno.csv > ids_pheno.tmp
+    cut -d, -f1 ${SPECIES}_geno.csv > ids_geno.tmp
+    if [[ $(diff ids_pheno.tmp ids_geno.tmp | wc -l) -ne 0 ]]
+    then
+        echo "ERROR"
+    fi
+
+    T=$(head -n1 ${SPECIES}_pheno.csv | awk -F, '{print NF}')
+    for j in $(seq 2 $T)
+    do
+        # j=2
+        cut -d, -f$j ${SPECIES}_pheno.csv > y.tmp
+        cut -d, -f2- ${SPECIES}_geno.csv > X.tmp
+        paste -d, y.tmp X.tmp | sed -z 's/,/\t/g' > ${SPECIES}.tsv
+        # wc -l ${SPECIES}.tsv
+        # head -n1 ${SPECIES}.tsv | awk '{print NF}'
+        # bat --wrap never -l tsv ${SPECIES}.tsv
+        INPUT=${SPECIES}.tsv
+        OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
+        N=$(echo $(cut -f1 $INPUT | wc -l) - 1 | bc)
+        M=$(echo "scale=0; $N / $N_FOLDS" | bc)
+        echo "$INPUT -->  $OUTPUT (N=$N; M=$M)"
+        for REP in $(seq 0 $N_REPS)
+        do
+            IDX_SHUFFLED=($(shuf -e $(seq 2 $(echo $N + 1 | bc))))
+            echo ${IDX_SHUFFLED[@]}
+            for FOLD in $(seq 0 $N_FOLDS)
+            do
+                # FOLD=1
+                IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
+                IDX_FIN=$(echo "$FOLD * $M" | bc)
+                IDX_TRAINING=()
+                IDX_VALIDATION=()
+                for i in $(seq 0 $N)
+                do
+                    if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]
+                    then
+                        # echo "$i; ${IDX_SHUFFLED[i]}"
+                        IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
+                    else
+                        IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
+                    fi
+                done
+                echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+                echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
+                echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
+
+                TRAINING_IDX=${IDX_TRAINING[@]}
+                VALIDATION_IDX=${IDX_VALIDATION[@]}
+                head -n1 $INPUT > TRAINING_SET.tmp
+                head -n1 $INPUT > VALIDATION_SET.tmp
+                awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> TRAINING_SET.tmp
+                awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> VALIDATION_SET.tmp
+                wc -l TRAINING_SET.tmp
+                wc -l VALIDATION_SET.tmp
+                time ${MLP} \
+                    -f TRAINING_SET.tmp \
+                    -o OUTPUT.tmp.json \
+                    -v \
+                    --n-epochs=${N_EPOCHS} \
+                    --f-patient-epochs=${F_PATIENT_EPOCHS} \
+                    --f-validation=${F_VALIDATION} \
+                    --n-batches=${N_BATCHES} \
+                    --n-hidden-layers=${N_HIDDEN_LAYERS} \
+                    --n-hidden-nodes=${N_HIDDEN_NODES} \
+                    --skip-marginals
+                time ${MLP} \
+                    -f VALIDATION_SET.tmp \
+                    -m OUTPUT.tmp.json \
+                    -v \
+                    --predict-only
+
+
+                cut -f1 VALIDATION_SET.tmp > true.tmp
+                cut -f1 OUTPUT.tmp-predictions.tsv > pred.tmp
+                paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
+                head true_vs_pred.tsv
+                R
+                df_mlp = read.table("true_vs_pred.tsv", T)
+                str(df_mlp)
+                cor(df_mlp)
+
+                df_training = read.table("TRAINING_SET.tmp", T)
+                df_validation = read.table("VALIDATION_SET.tmp", T)
+                X = as.matrix(df_training[, 2:ncol(df_training)])
+                y = df_training[, 1]
+                
+                # OLS
+                b_hat = t(X) %*% solve(X %*% t(X)) %*% y
+                y_hat = as.matrix(df_validation[, 2:ncol(df_validation)]) %*% b_hat
+                cor(df_validation[, 1], y_hat)
+
+                # Bayesian models
+                library(BGLR)
+                df = rbind(df_training, df_validation)
+                X = as.matrix(df[, 2:ncol(df)])
+                y = df[, 1]
+                yNA = y
+                idx_validation = nrow(df_training):nrow(df)
+                yNA[idx_validation] = NA
+                nIter=6000; burnIn=1000
+
+                # Bayes A
+                time = Sys.time()
+                fmBA=BGLR(y=yNA,ETA=list( list(X=X,model='BayesA')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
+                print(Sys.time() - t)
+                yHat=fmBA$yHat[idx_validation]
+                cor(yHat, y[idx_validation])
+
+                # Bayes B
+                time = Sys.time()
+                fmBB=BGLR(y=yNA,ETA=list( list(X=X,model='BayesB')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
+                print(Sys.time() - t)
+                yHat=fmBB$yHat[idx_validation]
+                cor(yHat, y[idx_validation])
+
+                # Bayes C
+                time = Sys.time()
+                fmBC=BGLR(y=yNA,ETA=list( list(X=X,model='BayesC')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
+                print(Sys.time() - t)
+                yHat=fmBC$yHat[idx_validation]
+                cor(yHat, y[idx_validation])
+            done
+        done
+    done
+done
+
+
+
+
+```
 
 # Remote-sensing modelling
 
