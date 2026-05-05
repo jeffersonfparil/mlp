@@ -236,12 +236,16 @@ impl Data {
         // Redefine the weights
         if verbose {println!("(6/8) Simulating weights and replacing the ones initialised in the Network struct...")}
         let time = Instant::now();
+        let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
         for i in 0..(network.n_hidden_layers+1) {
-            let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
+            let n_rows = network.weights_per_layer[i].n_rows;
+            let n_cols = network.weights_per_layer[i].n_cols;
+            let m = n_rows * n_cols;
             let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
-            let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
+            // let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
             // println!("i={}; weights={}", i, weights);
-            network.weights_per_layer[i] = weights;
+            network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
+            network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
         }
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Extract non-dummy targets
