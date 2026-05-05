@@ -167,6 +167,15 @@ struct Args {
     )]
     range_f_patient_epochs: Vec<f32>,
 
+    /// Range of proportions of the observations to be used in within training validation set
+    #[arg(
+        long,
+        value_parser,
+        value_delimiter = ',',
+        default_value = "0.0,0.25,0.01"
+    )]
+    range_f_validation: Vec<f32>,
+
     /// Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2,1")]
     range_n_batches: Vec<usize>,
@@ -502,9 +511,6 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-//////////////////////////////////////////////////////////////////////
-// TODO: include frac_validation in hyperparameter optimisation???
-//////////////////////////////////////////////////////////////////////
 fn train_with_hyperparameter_optimisation(
     args: &Args,
     network: &mut Network,
@@ -599,6 +605,21 @@ fn train_with_hyperparameter_optimisation(
             args.range_f_patient_epochs[2],
         )),
     };
+    let range_f_validation = match args.range_f_validation.len() != 3 {
+        true => {
+            return Err(Box::new(OptimiserError::OptimisationParameterError(
+                format!(
+                    "Range of proportions of the observations to be used in within training validation for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_f_validation={:?})",
+                    args.range_f_validation
+                ),
+            )));
+        }
+        false => Some((
+            args.range_f_validation[0],
+            args.range_f_validation[1],
+            args.range_f_validation[2],
+        )),
+    };
     let range_n_batches = match args.range_n_batches.len() != 3 {
         true => {
             return Err(Box::new(OptimiserError::OptimisationParameterError(
@@ -657,6 +678,7 @@ fn train_with_hyperparameter_optimisation(
         range_learning_rates,
         range_n_epochs,
         range_f_patient_epochs,
+        range_f_validation,
         range_n_batches,
         selection_activations,
         selection_costs,

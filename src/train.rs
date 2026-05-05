@@ -73,6 +73,7 @@ fn prep_all_hyperparams(
     range_learning_rate: Option<(f32, f32, f32)>,
     range_n_epochs: Option<(usize, usize, usize)>,
     range_f_patient_epochs: Option<(f32, f32, f32)>,
+    range_f_validation: Option<(f32, f32, f32)>,
     range_n_batches: Option<(usize, usize, usize)>,
     selection_activations: Option<Vec<Activation>>,
     selection_costs: Option<Vec<Cost>>,
@@ -84,6 +85,7 @@ fn prep_all_hyperparams(
         f32,
         f32,
         usize,
+        f32,
         f32,
         usize,
         Activation,
@@ -116,6 +118,10 @@ fn prep_all_hyperparams(
         Some(x) => prep_each_hyperparam(x)?,
         None => prep_each_hyperparam((0.5, 1.0, 0.5))?,
     };
+    let selection_f_validation: Vec<f32> = match range_f_validation {
+        Some(x) => prep_each_hyperparam(x)?,
+        None => prep_each_hyperparam((0.0, 0.5, 0.01))?,
+    };
     let selection_n_batches: Vec<usize> = match range_n_batches {
         Some(x) => prep_each_hyperparam(x)?,
         None => prep_each_hyperparam((1, 3, 1))?,
@@ -143,6 +149,7 @@ fn prep_all_hyperparams(
         f32,
         usize,
         f32,
+        f32,
         usize,
         Activation,
         Cost,
@@ -154,22 +161,25 @@ fn prep_all_hyperparams(
                 for learning_rate in &selection_learning_rates {
                     for n_epochs in &selection_n_epochs {
                         for f_patient_epochs in &selection_f_patient_epochs {
-                            for n_batches in &selection_n_batches {
-                                for activation in &selection_activations {
-                                    for cost in &selection_costs {
-                                        for optimiser in &selection_optimisers {
-                                            param_combinations.push((
-                                                *n_hidden_layers,
-                                                *n_hidden_nodes,
-                                                *dropout_rate,
-                                                *learning_rate,
-                                                *n_epochs,
-                                                *f_patient_epochs,
-                                                *n_batches,
-                                                activation.clone(),
-                                                cost.clone(),
-                                                optimiser.clone(),
-                                            ));
+                            for f_validation in &selection_f_validation {
+                                for n_batches in &selection_n_batches {
+                                    for activation in &selection_activations {
+                                        for cost in &selection_costs {
+                                            for optimiser in &selection_optimisers {
+                                                param_combinations.push((
+                                                    *n_hidden_layers,
+                                                    *n_hidden_nodes,
+                                                    *dropout_rate,
+                                                    *learning_rate,
+                                                    *n_epochs,
+                                                    *f_patient_epochs,
+                                                    *f_validation,
+                                                    *n_batches,
+                                                    activation.clone(),
+                                                    cost.clone(),
+                                                    optimiser.clone(),
+                                                ));
+                                            }
                                         }
                                     }
                                 }
@@ -362,9 +372,6 @@ impl Network {
         Ok(final_cost_value)
     }
 
-    //////////////////////////////////////////////////////////////////////
-    // TODO: include frac_validation in hyperparameter optimisation???
-    //////////////////////////////////////////////////////////////////////
     pub fn hyperoptimise(
         self: &Self,
         range_hidden_layers: Option<(usize, usize, usize)>,
@@ -373,6 +380,7 @@ impl Network {
         range_learning_rate: Option<(f32, f32, f32)>,
         range_n_epochs: Option<(usize, usize, usize)>,
         range_f_patient_epochs: Option<(f32, f32, f32)>,
+        range_f_validation: Option<(f32, f32, f32)>,
         range_n_batches: Option<(usize, usize, usize)>,
         selection_activations: Option<Vec<Activation>>,
         selection_costs: Option<Vec<Cost>>,
@@ -387,6 +395,7 @@ impl Network {
             range_learning_rate,
             range_n_epochs,
             range_f_patient_epochs,
+            range_f_validation,
             range_n_batches,
             selection_activations,
             selection_costs,
@@ -399,6 +408,7 @@ impl Network {
             f32,
             f32,
             usize,
+            f32,
             f32,
             usize,
             Activation,
@@ -428,6 +438,7 @@ impl Network {
                 learning_rate,
                 n_epochs,
                 f_patient_epochs,
+                f_validation,
                 n_batches,
                 activation,
                 cost,
@@ -452,6 +463,7 @@ impl Network {
             optimisation_parameters.learning_rate = learning_rate;
             optimisation_parameters.n_epochs = n_epochs;
             optimisation_parameters.f_patient_epochs = f_patient_epochs;
+            optimisation_parameters.f_validation = f_validation;
             optimisation_parameters.n_batches = n_batches;
             optimisation_parameters.optimiser = optimiser.clone();
             // Train the network with the current hyperparameters
@@ -471,6 +483,7 @@ impl Network {
                 learning_rate,
                 n_epochs,
                 f_patient_epochs,
+                f_validation,
                 n_batches,
                 activation.clone(),
                 cost.clone(),
@@ -482,7 +495,7 @@ impl Network {
         if verbose {
             println!("Hyper-parameter Optimisation Results:");
             println!(
-                "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Batches | Activation | Cost | Optimiser | Final_Cost |"
+                "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Validation_Set | Batches | Activation | Cost | Optimiser | Final_Cost |"
             );
             for (
                 n_hidden_layers,
@@ -491,6 +504,7 @@ impl Network {
                 learning_rate,
                 n_epochs,
                 f_patient_epochs,
+                f_validation,
                 n_batches,
                 activation,
                 cost,
@@ -499,13 +513,14 @@ impl Network {
             ) in &results
             {
                 println!(
-                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
+                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:14} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
                     n_hidden_layers,
                     n_hidden_nodes,
                     dropout_rate,
                     learning_rate,
                     n_epochs,
                     f_patient_epochs,
+                    f_validation,
                     n_batches,
                     activation,
                     cost,
@@ -524,6 +539,7 @@ impl Network {
                 learning_rate,
                 n_epochs,
                 f_patient_epochs,
+                f_validation,
                 n_batches,
                 activation,
                 cost,
@@ -540,6 +556,10 @@ impl Network {
             println!(
                 "\t- Patient Epochs: {}",
                 (f_patient_epochs * n_epochs as f32).ceil() as usize
+            );
+            println!(
+                "\t- Validation Set: {}",
+                (f_validation * self.targets.n_cols as f32).ceil() as usize
             );
             println!("\t- Batches: {}", n_batches);
             println!("\t- Activation: {:?}", activation);
@@ -565,6 +585,7 @@ impl Network {
         optimisation_parameters.learning_rate = learning_rate;
         optimisation_parameters.n_epochs = n_epochs;
         optimisation_parameters.f_patient_epochs = f_patient_epochs;
+        optimisation_parameters.f_validation = f_validation;
         optimisation_parameters.n_batches = n_batches;
         optimisation_parameters.optimiser = optimiser.clone();
         // Train the network using the best hyperparameters
@@ -648,6 +669,7 @@ mod tests {
         let range_learning_rate = Some((0.0001, 0.0001, 0.0001));
         let range_n_epochs = Some((1, 3, 1));
         let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
+        let range_f_validation = Some((0.0, 0.1, 0.1));
         let range_n_batches = Some((1, 2, 1));
         let selection_activations = Some(vec![Activation::ReLU]);
         let selection_costs = Some(vec![Cost::MSE]);
@@ -660,6 +682,7 @@ mod tests {
             range_learning_rate,
             range_n_epochs,
             range_f_patient_epochs,
+            range_f_validation,
             range_n_batches,
             selection_activations,
             selection_costs,
