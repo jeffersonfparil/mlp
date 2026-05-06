@@ -288,12 +288,14 @@ We simulated:
 cd mlp/
 cd tests/trials/simulated
 MLP=../../../target/release/mlp
-N_YEARS_SMALL=3
+N_YEARS_SMALL=2
 N_YEARS_LARGE=7
 N_SITES_SMALL=2
 N_SITES_LARGE=20
-N_TREATMENTS=2
-N_ENTRIES=25
+N_TREATMENTS_SMALL=2
+N_TREATMENTS_LARGE=5
+N_ENTRIES_SMALL=25
+N_ENTRIES_LARGE=100
 N_REPLICATIONS=3
 for HIDDEN_LAYERS in $(seq 1 5)
 do
@@ -304,9 +306,9 @@ do
     echo "$F_SMALL and $F_LARGE"
     $MLP \
         --simulate-data-only \
-        --simulation-n-observations $(echo "$N_YEARS_SMALL*$N_SITES_SMALL*$N_TREATMENTS*$N_ENTRIES*$N_REPLICATIONS" | bc) \
+        --simulation-n-observations $(echo "$N_YEARS_SMALL*$N_SITES_SMALL*$N_TREATMENTS_SMALL*$N_ENTRIES_SMALL*$N_REPLICATIONS" | bc) \
         --simulation-n-features-continuous 0 \
-        --simulation-n-features-categorical "$N_YEARS_SMALL,$N_SITES_SMALL,$N_TREATMENTS,$N_ENTRIES,$N_REPLICATIONS" \
+        --simulation-n-features-categorical "$N_YEARS_SMALL,$N_SITES_SMALL,$N_TREATMENTS_SMALL,$N_ENTRIES_SMALL,$N_REPLICATIONS" \
         --simulation-n-output-columns 1 \
         --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
         --simulation-weights-distribution normal \
@@ -324,9 +326,9 @@ do
     mv $F $F_SMALL
     $MLP \
         --simulate-data-only \
-        --simulation-n-observations $(echo "$N_YEARS_LARGE*$N_SITES_LARGE*$N_TREATMENTS*$N_ENTRIES*$N_REPLICATIONS" | bc) \
+        --simulation-n-observations $(echo "$N_YEARS_LARGE*$N_SITES_LARGE*$N_TREATMENTS_SMALL*$N_ENTRIES_SMALL*$N_REPLICATIONS" | bc) \
         --simulation-n-features-continuous 0 \
-        --simulation-n-features-categorical "$N_YEARS_LARGE,$N_SITES_LARGE,$N_TREATMENTS,$N_ENTRIES,$N_REPLICATIONS" \
+        --simulation-n-features-categorical "$N_YEARS_LARGE,$N_SITES_LARGE,$N_TREATMENTS_SMALL,$N_ENTRIES_SMALL,$N_REPLICATIONS" \
         --simulation-n-output-columns 1 \
         --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
         --simulation-weights-distribution normal \
@@ -356,48 +358,14 @@ module load ASReml-R # if ASReml-R is available
 time Rscript script_LINEAR.R
 ```
 
-
 ### Analysis using mlp
 
-#### Run the script:
+Run `tests/trials/simulated/script_MLP.sh`:
 
 ```shell
 cd mlp
 cd tests/trials/simulated
 time sh script_MLP.sh
-```
-
-#### See details below (`tests/trials/simulated/script_MLP.sh`):
-
-```shell
-#!/bin/bash
-
-# cd mlp/
-# cd tests/trials/simulated
-mkdir mlp_misc_output
-MLP=../../../target/release/mlp
-N_EPOCHS=500
-F_PATIENT_EPOCHS=0.01
-N_BATCHES=2
-N_HIDDEN_LAYERS=1
-N_HIDDEN_NODES=64
-MARGINALS_ORDER=1
-for INPUT in $(ls input_simulated-*-*.tsv)
-do
-    # INPUT=$(ls input_simulated-*-*.tsv | head -n2 | tail -n1)
-    # INPUT=input_simulated-NORMAL-1HL.tsv
-    echo $INPUT
-    # N_EPOCHS=$(echo "500 * ($N_HIDDEN_LAYERS / 2)" | bc)
-    # N_HIDDEN_LAYERS=$(echo $(echo ${INPUT%.tsv*} | rev | cut -d'-' -f1 | rev | sed 's/HL//g') + 1 | bc)
-    OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
-    echo $OUTPUT
-    time ${MLP} -f ${INPUT} -o ${OUTPUT} -v --n-epochs=${N_EPOCHS} --f-patient-epochs=${F_PATIENT_EPOCHS} --n-batches=${N_BATCHES} --n-hidden-layers=${N_HIDDEN_LAYERS} --n-hidden-nodes=${N_HIDDEN_NODES} --marginals-order=${MARGINALS_ORDER}
-    TMP_OUTDIR=mlp_misc_output/${OUTPUT%.*}
-    mkdir $TMP_OUTDIR
-    mv $OUTPUT mlp_misc_output/${OUTPUT%.*}
-    mv *.svg mlp_misc_output/${OUTPUT%.*}
-    mv *.png mlp_misc_output/${OUTPUT%.*}
-done
 ```
 
 ### Comparison between linear mixed model and mlp
