@@ -370,7 +370,7 @@ time sh script_MLP.sh
 
 ### Comparison between linear mixed model and mlp
 
-#### Run the script:
+Run `tests/trials/simulated/script_COMPARISON.R`:
 
 ```shell
 cd mlp
@@ -378,95 +378,45 @@ cd tests/trials/simulated
 time Rscript script_COMPARISON.R
 ```
 
-#### See details below (`tests/trials/simulated/script_COMPARISON.R`):
+#### SMALL-1HL
 
-```R
-fnames_INPUT = list.files(".", pattern="input")
-fnames_LINEAR = list.files(".", pattern="output_.*-LINEAR")
-fnames_MLP = list.files(".", pattern="output_.*-MLP")
-for (fname_input in fnames_INPUT) {
-    # fname_input = fnames_INPUT[1]
-    id = gsub("input_simulated-", "", gsub(".tsv", "", fname_input))
-    fname_linear = fnames_LINEAR[grep(id, fnames_LINEAR)]
-    fname_mlp = fnames_MLP[grep(id, fnames_MLP)]
-    # Load the effects from the best linear model
-    df_linear = read.delim(fname_linear, T)
-    if (length(grep("➵", df_linear$ids)) > 0) {
-        df_linear = df_linear[grep("^entry", df_linear$ids), ]
-        df_linear$ids = gsub("entry➵", "", df_linear$ids)
-    }
-    colnames(df_linear)[2] = "linear"
-    # Load the marginal effects from mlp
-    df_mlp = read.delim(fname_mlp, T)
-    df_mlp = df_mlp[grep("^entry", df_mlp$ids), 1:2]
-    df_mlp$ids = gsub("entry➵", "", df_mlp$ids)
-    colnames(df_mlp)[2] = "mlp"
-    # Merge
-    df = merge(df_linear, df_mlp, by="ids")
-    # Calculate the correlation and R2
-    cortest = cor.test(df$linear, df$mlp)
-    annot = if (cortest$p.value < 0.0001) {
-        "***"
-    } else if (cortest$p.value < 0.001) {
-        "**"
-    } else if (cortest$p.value < 0.01) {
-        "*"
-    } else {
-        "ns"
-    }
-    R2 = mean(c(1 - (sum((df$linear - df$mlp)^2) / sum((df$linear - mean(df$linear))^2)), 1 - (sum((df$linear - df$mlp)^2) / sum((df$mlp - mean(df$mlp))^2))))
-    # Plot
-    fname_png = paste0("comparison-", id, ".png")
-    linear_model_formula = gsub(paste0("output_simulated-", id, "-LINEAR_"), "", gsub(".tsv", "", fname_linear))
-    png(fname_png)
-    plot(df$linear, df$mlp, xlab=paste0("Linear Model Estimated Effects\n(", linear_model_formula, ")"), ylab="Multi-layer Perceptron\nMarginal Effects", main=id)
-    grid()
-    text(min(df$linear), max(df$mlp), label=paste0("\n\ncor=", round(100*cortest$estimate, 2), "%", annot, "\nR²=", round(R2, 2)), pos=c(4, 1))
-    dev.off()
-}
-```
+![](./tests/trials/simulated/comparison-SMALL-1HL.png)
 
-</details>
+#### SMALL-2HL
 
-#### GAMMA-1HL
+![](./tests/trials/simulated/comparison-SMALL-2HL.png)
 
-![](./tests/trials/simulated/comparison-GAMMA-1HL.png)
+#### SMALL-3HL
 
-#### GAMMA-2HL
+![](./tests/trials/simulated/comparison-SMALL-3HL.png)
 
-![](./tests/trials/simulated/comparison-GAMMA-2HL.png)
+#### SMALL-4HL
 
-#### GAMMA-3HL
+![](./tests/trials/simulated/comparison-SMALL-4HL.png)
 
-![](./tests/trials/simulated/comparison-GAMMA-3HL.png)
+#### SMALL-5HL
 
-#### GAMMA-4HL
+![](./tests/trials/simulated/comparison-SMALL-5HL.png)
 
-![](./tests/trials/simulated/comparison-GAMMA-4HL.png)
+#### LARGE-1HL
 
-#### GAMMA-5HL
+![](./tests/trials/simulated/comparison-LARGE-1HL.png)
 
-![](./tests/trials/simulated/comparison-GAMMA-5HL.png)
+#### LARGE-2HL
 
-#### NORMAL-1HL
+![](./tests/trials/simulated/comparison-LARGE-2HL.png)
 
-![](./tests/trials/simulated/comparison-NORMAL-1HL.png)
+#### LARGE-3HL
 
-#### NORMAL-2HL
+![](./tests/trials/simulated/comparison-LARGE-3HL.png)
 
-![](./tests/trials/simulated/comparison-NORMAL-2HL.png)
+#### LARGE-4HL
 
-#### NORMAL-3HL
+![](./tests/trials/simulated/comparison-LARGE-4HL.png)
 
-![](./tests/trials/simulated/comparison-NORMAL-3HL.png)
+#### LARGE-5HL
 
-#### NORMAL-4HL
-
-![](./tests/trials/simulated/comparison-NORMAL-4HL.png)
-
-#### NORMAL-5HL
-
-![](./tests/trials/simulated/comparison-NORMAL-5HL.png)
+![](./tests/trials/simulated/comparison-LARGE-5HL.png)
 
 
 
