@@ -306,9 +306,9 @@ cd mlp
 cd tests/trials/simulated
 module load ASReml-R # if ASReml-R is available
 time Rscript ../../scripts/trials-linear_fit.R
-# real    3m21.942s
-# user    60m6.740s
-# sys     0m8.339s
+# real    3m22.916s
+# user    61m14.510s
+# sys     0m12.706s
 ```
 
 ### Analysis using mlp
@@ -317,11 +317,11 @@ Run `tests/scripts/trials-mlp_fit.sh`:
 
 ```shell
 cd mlp
-cd tests/scripts
-time sh trials-mlp_fit.sh
-# real    1m51.249s
-# user    0m47.435s
-# sys     1m8.759s
+cd tests/trials/simulated
+time sh ../../scripts/trials-mlp_fit.sh
+# real    1m46.854s
+# user    0m47.295s
+# sys     1m4.848s
 ```
 
 ### Comparison between linear mixed model and mlp
@@ -330,54 +330,54 @@ Run `tests/scripts/trials-comparisons.R`:
 
 ```shell
 cd mlp
-cd tests/scripts
-time Rscript trials-comparisons.R
-# real    0m0.331s
-# user    0m6.525s
-# sys     0m0.083s
+cd tests/trials/simulated
+time Rscript ../../scripts/trials-comparisons.R
+# real    0m0.395s
+# user    0m6.552s
+# sys     0m0.062s
 ```
 
 </details>
 
 #### SMALL-1HL
 
-![](./tests/scripts/comparison-SMALL-1HL.png)
+![](./tests/trials/simulated/comparison-SMALL-1HL.png)
 
 #### SMALL-2HL
 
-![](./tests/scripts/comparison-SMALL-2HL.png)
+![](./tests/trials/simulated/comparison-SMALL-2HL.png)
 
 #### SMALL-3HL
 
-![](./tests/scripts/comparison-SMALL-3HL.png)
+![](./tests/trials/simulated/comparison-SMALL-3HL.png)
 
 #### SMALL-4HL
 
-![](./tests/scripts/comparison-SMALL-4HL.png)
+![](./tests/trials/simulated/comparison-SMALL-4HL.png)
 
 #### SMALL-5HL
 
-![](./tests/scripts/comparison-SMALL-5HL.png)
+![](./tests/trials/simulated/comparison-SMALL-5HL.png)
 
 #### LARGE-1HL
 
-![](./tests/scripts/comparison-LARGE-1HL.png)
+![](./tests/trials/simulated/comparison-LARGE-1HL.png)
 
 #### LARGE-2HL
 
-![](./tests/scripts/comparison-LARGE-2HL.png)
+![](./tests/trials/simulated/comparison-LARGE-2HL.png)
 
 #### LARGE-3HL
 
-![](./tests/scripts/comparison-LARGE-3HL.png)
+![](./tests/trials/simulated/comparison-LARGE-3HL.png)
 
 #### LARGE-4HL
 
-![](./tests/scripts/comparison-LARGE-4HL.png)
+![](./tests/trials/simulated/comparison-LARGE-4HL.png)
 
 #### LARGE-5HL
 
-![](./tests/scripts/comparison-LARGE-5HL.png)
+![](./tests/trials/simulated/comparison-LARGE-5HL.png)
 
 ## Tests on empirical data
 
@@ -398,8 +398,8 @@ Download and prepare the empirical datasets:
 cd mlp/
 mkdir tests/trials/empirical/
 cd tests/trials/empirical/
-time sh trials-download_empirical.sh
-time Rscript trials-prepare_empirical.sh
+time sh ../../scripts/trials-download_empirical.sh
+time Rscript ../../scripts/trials-prepare_empirical.sh
 ```
 
 ### Analysis using R
