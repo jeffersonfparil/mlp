@@ -284,89 +284,100 @@ We simulated:
 
 ### Simulate data
 
-Run `tests/trials/simulated/script_SIMULATE.sh`:
+Run `tests/scripts/trials-simulate.sh`:
 
 ```shell
 cd mlp/
+mkdir tests/trials
+mkdir tests/trials/simulated
 cd tests/trials/simulated
-rm input_simulated-*
-rm output_simulated-*
-time sh script_SIMULATE.sh
+time sh ../../scripts/trials-simulate.sh
+# real    1m2.264s
+# user    0m2.556s
+# sys     1m1.800s
 ```
 
 ### Analysis using R
 
-Run `tests/trials/simulated/script_LINEAR.R`:
+Run `tests/scripts/trials-linear_fit.R`:
 
 ```shell
 cd mlp
 cd tests/trials/simulated
 module load ASReml-R # if ASReml-R is available
-time Rscript script_LINEAR.R
+time Rscript ../../scripts/trials-linear_fit.R
+# real    3m21.942s
+# user    60m6.740s
+# sys     0m8.339s
 ```
 
 ### Analysis using mlp
 
-Run `tests/trials/simulated/script_MLP.sh`:
+Run `tests/scripts/trials-mlp_fit.sh`:
 
 ```shell
 cd mlp
-cd tests/trials/simulated
-rm -R mlp_misc_output
-time sh script_MLP.sh
+cd tests/scripts
+time sh trials-mlp_fit.sh
+# real    1m51.249s
+# user    0m47.435s
+# sys     1m8.759s
 ```
 
 ### Comparison between linear mixed model and mlp
 
-Run `tests/trials/simulated/script_COMPARISON.R`:
+Run `tests/scripts/trials-comparisons.R`:
 
 ```shell
 cd mlp
-cd tests/trials/simulated
-time Rscript script_COMPARISON.R
+cd tests/scripts
+time Rscript trials-comparisons.R
+# real    0m0.331s
+# user    0m6.525s
+# sys     0m0.083s
 ```
+
+</details>
 
 #### SMALL-1HL
 
-![](./tests/trials/simulated/comparison-SMALL-1HL.png)
+![](./tests/scripts/comparison-SMALL-1HL.png)
 
 #### SMALL-2HL
 
-![](./tests/trials/simulated/comparison-SMALL-2HL.png)
+![](./tests/scripts/comparison-SMALL-2HL.png)
 
 #### SMALL-3HL
 
-![](./tests/trials/simulated/comparison-SMALL-3HL.png)
+![](./tests/scripts/comparison-SMALL-3HL.png)
 
 #### SMALL-4HL
 
-![](./tests/trials/simulated/comparison-SMALL-4HL.png)
+![](./tests/scripts/comparison-SMALL-4HL.png)
 
 #### SMALL-5HL
 
-![](./tests/trials/simulated/comparison-SMALL-5HL.png)
+![](./tests/scripts/comparison-SMALL-5HL.png)
 
 #### LARGE-1HL
 
-![](./tests/trials/simulated/comparison-LARGE-1HL.png)
+![](./tests/scripts/comparison-LARGE-1HL.png)
 
 #### LARGE-2HL
 
-![](./tests/trials/simulated/comparison-LARGE-2HL.png)
+![](./tests/scripts/comparison-LARGE-2HL.png)
 
 #### LARGE-3HL
 
-![](./tests/trials/simulated/comparison-LARGE-3HL.png)
+![](./tests/scripts/comparison-LARGE-3HL.png)
 
 #### LARGE-4HL
 
-![](./tests/trials/simulated/comparison-LARGE-4HL.png)
+![](./tests/scripts/comparison-LARGE-4HL.png)
 
 #### LARGE-5HL
 
-![](./tests/trials/simulated/comparison-LARGE-5HL.png)
-
-
+![](./tests/scripts/comparison-LARGE-5HL.png)
 
 ## Tests on empirical data
 
@@ -381,572 +392,57 @@ Using agridat data... details: how many? types?
 - We only include datasets with the genotype (`gen`) variable because we are testing `mlp`'s applicability for breeding, i.e. we want to rank the genotypes for selection.
 - We then generate one file with a single response variable named `y` in the first column followed by the explanatory variables.
 
-#### Download agridat data:
+Download and prepare the empirical datasets:
 
 ```shell
 cd mlp/
-cd tests/trials
-mkdir agridat/
-cd agridat/
-curl -L https://codeload.github.com/kwstat/agridat/tar.gz/main | tar -xz --strip=2 agridat-main/data
+mkdir tests/trials/empirical/
+cd tests/trials/empirical/
+time sh trials-download_empirical.sh
+time Rscript trials-prepare_empirical.sh
 ```
 
-#### Prepare the data, i.e. make sure categorical variables are interpretted as strings
+### Analysis using R
 
-```R
-setwd("tests/trials/agridat")
-fnames = list.files(path=".", pattern=".txt$")
-fnames = fnames[!grepl(".covs.txt", fnames)]
-fnames = fnames[!grepl(".uniformity.txt", fnames)]
-for (fname in fnames) {
-    # fname = fnames[261]
-    # fname = "archbold.apple.txt"
-    # fname = "acorsi.grayleafspot.txt"
-    # fname = "alwan.lamb.txt"
-    # fname = "aastveit.barley.height.txt"
-    df = read.table(fname, header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
-    # print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    # print(fname)
-    # print(str(df))
-    # readline(prompt="Press [enter] to proceed")
-    # }
-    potential_explanatory_names = c(
-        "gen", "gens",
-        "genotype", "genotypes",
-        "entry", "entries",
-        "pig", "pigs",
-        "animal", "animals",
-        "id", "ids",
-        "breed", "breeds",
-        "sire", "sires",
-        "male", "males",
-        "female", "females",
-        "tree", "trees",
-        "group", "groups",
-        "zone", "zones",
-        "isle", "isles",
-        "sex",
-        "pop", "pops",
-        "var", "vars",
-        "env", "envs",
-        "year", "years",
-        "loc", "locs",
-        "harvest", "harvests",
-        "season", "seasons",
-        "plot", "plots",
-        "rep", "reps",
-        "row", "rows",
-        "col", "cols",
-        "blk", "blks",
-        "genotype", "genotypes",
-        "population", "populations",
-        "variety", "varieties",
-        "cultivar", "cultivars",
-        "replication", "replications",
-        "column", "columns",
-        "block", "blocks",
-        "pos", "position", "positions",
-        "spacing", "spacings",
-        "stock", "stocks",
-        "trt", "trts",
-        "treatment", "treatments"
-    )
-    potential_response_names = c(
-        "yield",
-        "grain",
-        "straw",
-        "height",
-        "size",
-        "lodging",
-        "protein",
-        "oil"
-    )
-    explanatory_names = c()
-    response_names = c()
-    for (j in 1:ncol(df)) {
-        # j = 1
-        id = names(df)[j]
-        y = df[, j]
-        n = length(y)
-        if (id %in% potential_explanatory_names) {
-            if (is.numeric(y)) {
-                if ((length(unique(y)) > 5) && (var(y, na.rm=TRUE) > 1e-7)) {
-                    response_names = c(response_names, id)
-                } else {
-                    explanatory_names = c(explanatory_names, id)
-                    df[, j] = paste0(id, "➵", y)
-                }
-            } else {
-                explanatory_names = c(explanatory_names, id)
-            }
-        } else {
-            if (id %in% potential_response_names) {
-                response_names = c(response_names, id)
-            } else {
-                if (is.character(y)) {
-                    explanatory_names = c(explanatory_names, id)
-                } else if ((length(unique(y)) < 5) | (var(y, na.rm=TRUE) < 1e-7)) {
-                    explanatory_names = c(explanatory_names, id)
-                    df[, j] = paste0(id, "➵", y)
-                } else {
-                    response_names = c(response_names, id)
-                }
-            }
-        }
-    }
-    idx_explanatories = which(names(df) %in% explanatory_names)
-    # print(colnames(df[idx_explanatories]))
-    if (length(idx_explanatories) == 0) {
-        next
-    }
-    # FOR SIMPLICITY WE ARE ONLY INCLUDING THOSE DATASETS WITH `gen` because we are ultimately interested in ranking genotypes for breeding purposes
-    if (!("gen" %in% colnames(df)[idx_explanatories])) {
-        next
-    }
-    if (max(unique(table(df$gen))) == 1) {
-        next
-    }
-    df_explanatories = df[, idx_explanatories, drop=FALSE]
-    for (y_name in response_names) {
-        # y_name = response_names[1]
-        df_out = cbind(data.frame(y=df[, which(names(df) == y_name)]), df_explanatories)
-        fname_out = gsub(".txt", paste0("-", y_name, ".tsv"), fname)
-        write.table(df_out, file=fname_out, sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
-        print(paste0("Processed: `", fname_out, "`"))
-    }
-}
-```
-
-### R
-
-Fit linear models in R using `lm`, `lmer` and `asreml` (if available)
-
-#### TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-#### TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-#### TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-
-
-#### Generic model selection
-
-##### Run:
+Run `tests/scripts/trials-linear_fit.R`:
 
 ```shell
-cd tests/trials/agridat
-time Rscript ...
+cd mlp
+cd tests/scripts
+module load ASReml-R # if ASReml-R is available
+time Rscript trials-linear_fit.R
+# real    3m21.942s
+# user    60m6.740s
+# sys     0m8.339s
 ```
 
-##### Details (`...`):
+### Analysis using mlp
 
-```R
-library("stringr")
-library("lme4")
-if (nzchar(system.file(package = "asreml"))) {
-    library("asreml") # requires ```shell module load ASReml-R ```
-}
-
-# length(list.files(path=".", pattern=".tsv$"))
-
-process_features = function(df) {
-    # fname = list.files(path=".", pattern=".tsv$")[19]; df = read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
-    # Assuming only the first column is the numeric response variable and the rest are non-numeric explanatory variables
-    ids_features = colnames(df)[2:ncol(df)]
-    for (j in 2:ncol(df)) {
-        df[, j] = as.factor(df[, j])
-    }
-    if (length(ids_features) > 2) {
-        idx = which((names(df) != "y") & (names(df) != "gen"))
-        df$dummy_env = apply(df[, idx, drop=FALSE], MARGIN=1, FUN=function(x){paste(x, collapse="|")})
-        ids_features = c(ids_features, "dummy_env")
-    }
-    # str(df)
-    return(list(
-        df=df, 
-        ids_features=ids_features
-    ))
-}
-
-AIC_lm_lmer_asreml = function(mod) {
-    # mod = model_candidates[[13]]
-    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
-        return(AIC(mod))
-    } else if (class(mod) == "asreml") {
-        return(-2*mod$loglik + 2*nrow(summary(mod)$varcomp))
-    } else {
-        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
-        NA
-    }
-}
-BIC_lm_lmer_asreml = function(mod) {
-    # mod = model_candidates[[13]]
-    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
-        return(BIC(mod))
-    } else if (class(mod) == "asreml") {
-        return(-2*mod$loglik + nrow(summary(mod)$varcomp)*log(summary(mod)$nedf))
-    } else {
-        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
-        NA
-    }
-}
-logLik_lm_lmer_asreml = function(mod) {
-    # mod = model_candidates[[1]]
-    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
-        return(as.numeric(logLik(mod)))
-    } else if (class(mod) == "asreml") {
-        return(mod$loglik)
-    } else {
-        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
-        NA
-    }
-}
-ndf_lm_lmer_asreml = function(mod) {
-    # mod = model_candidates[[13]]
-    if ((class(mod) == "lm") | (class(mod) == "lmerMod")) {
-        return(attr(logLik(mod), "df"))
-    } else if (class(mod) == "asreml") {
-        return(summary(mod)$nedf)
-    } else {
-        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
-        NA
-    }
-}
-
-fit_extract_effects = function(df) {
-
-    # fname = list.files(path=".", pattern=".tsv$")[22]; df = process_features(read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan")))[["df"]]
-    str(df)
-
-    x_names = colnames(df)[2:ncol(df)]
-    x_names_except_gen_and_dummy_env = x_names[(x_names != "gen") & (x_names != "dummy_env")]
-
-
-    # TODO: define a bunch of sensible models
-
-    lm_model_strings = c(
-        "lm(y ~ ., data=df)",
-        "lm(y ~ gen, data=df)",
-        "lm(y ~ dummy_env + gen, data=df)",
-        "lm(y ~ dummy_env*gen, data=df)",
-        paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + gen, data=df)"),
-        paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + gen, data=df)"),
-        paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env*gen, data=df)"),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, " + gen, data=df)")})),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lm(y ~ ", x, "*gen, data=df)")}))
-    )
-    m = length(x_names_except_gen_and_dummy_env)
-    if (m > 1) {
-        for (i in 1:(m-1)) {
-            x1 = x_names_except_gen_and_dummy_env[i]
-            for (j in (i+1):m) {
-                x2 = x_names_except_gen_and_dummy_env[j]
-                lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen, data=df)"))
-                lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen + ", x1, ":gen, data=df)"))
-                lm_model_strings = c(lm_model_strings, paste0("lm(y ~ ", x1, "*", x2, " + gen, data=df)"))
-            }
-        }
-    }
-    lm_model_strings
-
-    lmer_model_strings = c(
-        "lmer(y ~ (1|gen), data=df)",
-        "lmer(y ~ dummy_env + (1|gen), data=df)",
-        "lmer(y ~ dummy_env + (1|gen:dummy_env), data=df)",
-        "lmer(y ~ (1|gen:dummy_env), data=df)",
-        "lmer(y ~ (1|dummy_env) + (1|gen:dummy_env), data=df)",
-        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + (1|gen), data=df)"),
-        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + (1|gen), data=df)"),
-        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + (1|gen:dummy_env), data=df)"),
-        paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), " + dummy_env + (1|gen:dummy_env), data=df)"),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lmer(y ~ ", x, " + (1|gen), data=df)")})),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lmer(y ~ ", x, " + (1|gen:", x, "), data=df)")})),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("lmer(y ~ (1|gen:", x, "), data=df)")}))
-    )
-    m = length(x_names_except_gen_and_dummy_env)
-    if (m > 1) {
-        for (i in 1:(m-1)) {
-            x1 = x_names_except_gen_and_dummy_env[i]
-            for (j in (i+1):m) {
-                x2 = x_names_except_gen_and_dummy_env[j]
-                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen), data=df)"))
-                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen:", x1, "), data=df)"))
-                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen:", x2, "), data=df)"))
-                lmer_model_strings = c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen:", x1, ") + (1|gen:", x2, "), data=df)"))
-            }
-        }
-    }
-    lmer_model_strings
-
-
-    asreml_model_strings = c(
-        "asreml(y ~ 1, random = ~ gen, data=df)",
-        "asreml(y ~ dummy_env, random = ~ gen, data=df)",
-        "asreml(y ~ dummy_env, random = ~ gen:dummy_env, data=df)",
-        "asreml(y ~ 1, random = ~ gen:dummy_env, data=df)",
-        "asreml(y ~ 1, random = ~ dummy_env + gen:dummy_env, data=df)",
-        paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), ", random = ~ gen, data=df)"),
-        paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse=' + ' ), ", random = ~ gen + fa(dummy_env):gen, data=df)"),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("asreml(y ~ ", x, ", random = ~ gen, data=df)")})),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("asreml(y ~ ", x, ", random = ~ ", x, ":gen, data=df)")})),
-        unlist(lapply(x_names_except_gen_and_dummy_env, FUN=function(x){paste0("asreml(y ~ ", x, ", random = ~ fa(", x, "):gen, data=df)")}))
-    )
-    m = length(x_names_except_gen_and_dummy_env)
-    if (m > 1) {
-        for (i in 1:(m-1)) {
-            x1 = x_names_except_gen_and_dummy_env[i]
-            for (j in (i+1):m) {
-                x2 = x_names_except_gen_and_dummy_env[j]
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x1, ":gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x2, ":gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x1, ":gen + ", x2, ":gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x1, "):gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x2, "):gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x1, "):gen + ", x2, ":gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ ", x1, ":gen + fa(", x2, "):gen, data=df)"))
-                asreml_model_strings = c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ fa(", x1, "):gen + fa(", x2, "):gen, data=df)"))
-
-            }
-        }
-    }
-    asreml_model_strings
-
-    model_strings = if (nzchar(system.file(package = "asreml"))) {
-        c(lm_model_strings, lmer_model_strings, asreml_model_strings)
-    } else {
-        c(lm_model_strings, lmer_model_strings)
-    }
-    # Fit these models
-    model_candidates = list()
-    for (i in 1:length(model_strings)) {
-        # i = 1
-        # i = 40
-        # i = length(model_strings)
-        mod_string = model_strings[i]
-        mod_label = unlist(strsplit(mod_string, "\\("))[1]
-        print(paste0("Fitting ", mod_label, "_", i, ": `", mod_string, "`"))
-        mod = tryCatch(
-            {
-                setTimeLimit(30)
-                eval(parse(text=mod_string))
-            },
-            error = function(e) {
-                print("Unable to fit: skipped!")
-                return(NA)
-            }
-        )
-        if ((length(mod) == 1) && is.na(mod)) {
-            model_candidates[[paste0(mod_label, "_", i)]] = NA
-        } else {
-            if (class(mod) == "lmerMod") {
-                if (mod@optinfo$conv$opt != 0) {
-                    # Failed to converge
-                    model_candidates[[paste0(mod_label, "_", i)]] = NA
-                } else {
-                    model_candidates[[paste0(mod_label, "_", i)]] = mod
-                }
-            } else if (class(mod) == "asreml") {
-                if (mod$converge == FALSE) {
-                    model_candidates[[paste0(mod_label, "_", i)]] = NA
-                } else {
-                    model_candidates[[paste0(mod_label, "_", i)]] = mod
-                }
-            } else {
-                model_candidates[[paste0(mod_label, "_", i)]] = mod
-            }
-        }
-    }
-    df_stats = data.frame(
-        model = names(model_candidates),
-        formula = model_strings,
-        AIC = sapply(model_candidates, AIC_lm_lmer_asreml),
-        BIC = sapply(model_candidates, BIC_lm_lmer_asreml),
-        logLik = sapply(model_candidates, logLik_lm_lmer_asreml)
-    )
-    idx_filter = which(!is.na(df_stats$AIC) & is.finite(df_stats$AIC))
-    df_stats = df_stats[idx_filter, ]
-    model_candidates_ORIG = model_candidates
-    model_candidates = model_candidates[idx_filter]
-    print(df_stats)
-    z_AIC = scale(df_stats$AIC, scale=T, center=T)
-    z_BIC = scale(df_stats$BIC, scale=T, center=T)
-    z_logLik = -scale(df_stats$logLik, scale=T, center=T)
-    df_stats$z_sum = 0.2*z_AIC + 0.6*z_BIC + 0.2*z_logLik
-    print(df_stats)
-    # Select the best model based on z_sum
-    # best_model_idx = which.min(df_stats$BIC)
-    # best_model_idx = which.min(df_stats$z_sum)
-    best_model_idx = tail(which(df_stats$z_sum == min(df_stats$z_sum)), 1)
-    best_model = model_candidates[[best_model_idx]]
-    best_model_formula = df_stats$formula[best_model_idx]
-    print(paste("Best model selected:", best_model_formula))
-
-
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-## TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-## TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-## TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-
-    # Plot gen effects (random effects for gen)
-    # best_model = model_candidates[[1]]
-    df_effects = if (class(best_model) == "lm") {
-        # best_model = model_candidates[[1]]
-        effects = coef(best_model)
-        ids = names(effects)
-        intercept = effects[ids == "(Intercept)"]
-        gen_effects = c(intercept, intercept + effects[grepl("gen", ids)])
-        gen_names = c(as.character(levels(df$gen)[1]), ids[grepl("gen", ids)])
-        gen_names = gsub("gen", "", gen_names)
-        df_effects = data.frame(ids=gen_names, effects=gen_effects)
-        rownames(df_effects) = NULL
-        df_effects
-        # barplot(gen_effects, names.arg=gen_names, main = "Estimated Entry Effects (fixed effects model)", xlab = "Entry", ylab = "Coefficients")
-    } else if (class(best_model) == "lmerMod") {
-        # best_model = model_candidates[[3]]
-        gen_effects <- ranef(best_model)$gen
-        df_effects = data.frame(ids=rownames(gen_effects), effects=gen_effects[,1])
-        rownames(df_effects) = NULL
-        df_effects
-        # barplot(gen_effects[,1], names.arg = rownames(gen_effects), main = "Estimated Entry Effects (mixed model)", xlab = "Entry", ylab = "Random Effect")
-    } else if (class(best_model) == "asreml") {
-        # best_model = model_candidates[[13]]
-        df_effects = data.frame(
-            ids = rownames(coef(best_model)$random),
-            effects = as.vector(coef(best_model)$random)
-        ); row.names(df_effects) = NULL
-        # str(df_effects)
-        df_sub = df_effects[grepl("gen", df_effects$ids) & !grepl(":", df_effects$ids), ]
-        df_sub$ids = gsub("gen_", "", df_sub$ids)
-        df_effects
-        # barplot(df_sub$effects, names.arg = df_sub$ids, main = "Estimated Entry Effects (asreml model)", xlab = "Entry", ylab = "Random Effect")
-    } else {
-        data.frame()
-        # plot(0, 0)
-        # print("Unknown model class. We expect 'lm', 'lmerMod' or 'asreml'.")
-    }
-    # Add the expected delimiters for these "marginal" effects
-    df_effects$ids = gsub("_level", "➵level", df_effects$ids)
-    df_effects$ids = gsub(":", "▓", df_effects$ids)
-    # Sort sensibly
-    df_effects = df_effects[stringr::str_order(df_effects$ids, numeric=TRUE), ]
-    return(list(
-        df_effects=df_effects,
-        formula=best_model_formula
-    ))
-}
-
-### Fit and extract entry effects
-# fnames = list.files(path=".", pattern="input_simulated")
-# output = list()
-# for (fname_input in fnames) {
-#     # fname_input = fnames[1]
-#     input_list = process_features(df=read.delim(fname_input, T))
-#     df = input_list$df
-#     ids_features = input_list$ids_features
-#     attach(df)
-#     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-#     print(fname_input)
-#     out = fit_extract_effects(df)
-#     fname_output = paste0(
-#         gsub("^input", "output", gsub(".tsv", "", fname_input)),
-#         "-LINEAR_",
-#         gsub(" ", "", out$formula), 
-#         ".tsv"
-#     )
-#     write.table(out$df_effects, file=fname_output, row.names=FALSE, col.names=TRUE, sep="\t")
-#     output[[fname_input]] = out
-#     detach(df)
-# }
-
-setwd("tests/trials/agridat")
-fnames = list.files(path=".", pattern=".tsv$")
-stopifnot(length(fnames) == 319)
-
-for (fname in fnames) {
-    # fname = fnames[19]
-    df = read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
-    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print(fname)
-    print(str(df))
-
-
-
-}
-
-
-```
-
-#### Dataset-specific analyses
-
-##### ...
-##### ...
-##### ...
-##### ...
-##### ...
-
-### mlp
+Run `tests/scripts/trials-mlp_fit.sh`:
 
 ```shell
-cd mlp/
-cd tests/trials/agridat/
-MLP=../../../target/release/mlp
+cd mlp
+cd tests/scripts
+time sh trials-mlp_fit.sh
+# real    1m51.249s
+# user    0m47.435s
+# sys     1m8.759s
+```
 
-for FILE in $(find . -name "*.txt")
-do
-    # FILE=$(find . -name "*.txt" | sort | head -n1 | tail -n1)
-    # FILE=archbold.apple.txt
-    # FILE=acorsi.grayleafspot.txt
-    # FILE=alwan.lamb.txt
-    echo $FILE
-    DIR_OUTPUT=OUTPUT-$(basename ${FILE%.txt*})
-    echo $DIR_OUTPUT
-    mkdir $DIR_OUTPUT
-    FILE_INPUTS=$(julia +1.12 --project=. scripts/prep_agridat.jl $FILE 0.1)
-    echo $FILE_INPUTS
-    # head $FILE_INPUTS
-    if [ "$FILE_INPUTS" == "" ]
-    then
-        echo "Skipping empty explanatory/response variables"
-    else
-        for FILE_INPUT in $FILE_INPUTS
-        do
-            # FILE_INPUT=$(echo $FILE_INPUTS | cut -d' ' -f1)
-            FILE_OUTPUT=${FILE_INPUT%.tsv*}.json
-            echo $FILE_OUTPUT
-            time $MLP \
-                -f $FILE_INPUT \
-                -o $FILE_OUTPUT \
-                -t 0 \
-                -v \
-                --n-batches 1 \
-                --n-hidden-layers 3 \
-                --n-epochs 100 \
-                --marginals-order 2 \
-            > out.tmp
-            FNAME_LOSS=$(grep "Find the loss curve saved as:" out.tmp | cut -d ':' -f2 | cut -d ' ' -f2)
-            FNAME_SCAT=$(grep "Find the observed vs predicted scatterplot saved as:" out.tmp | cut -d ':' -f2 | cut -d ' ' -f2)
-            FNAME_BARM=$(grep "Find the marginal effects" out.tmp | cut -d ':' -f2 | cut -d ' ' -f2)
-            FNAME_MODEL=$(grep "Please find the output model (network) in json format:" out.tmp | cut -d ':' -f2 | cut -d ' ' -f2)
-            FNAME_MARGINALS=$(grep "Please find the estimated marginal effects in tab-delimited format:" out.tmp | cut -d ':' -f2 | cut -d ' ' -f2)
-            mv $FNAME_MODEL ${DIR_OUTPUT}/$(basename $FNAME_MODEL)
-            mv $FNAME_MARGINALS ${DIR_OUTPUT}/$(basename $FNAME_MARGINALS)
-            mv $FNAME_LOSS ${DIR_OUTPUT}/${FILE_INPUT%.tsv*}-$(basename $FNAME_LOSS)
-            mv $FNAME_SCAT ${DIR_OUTPUT}/${FILE_INPUT%.tsv*}-$(basename $FNAME_SCAT)
-            mv $FNAME_BARM ${DIR_OUTPUT}/${FILE_INPUT%.tsv*}-$(basename $FNAME_BARM)
-            rm out.tmp
-            rm $FILE_INPUT
-        done
-    fi
-done
+### Comparison between linear mixed model and mlp
+
+Run `tests/scripts/trials-comparisons.R`:
+
+```shell
+cd mlp
+cd tests/scripts
+time Rscript trials-comparisons.R
+# real    0m0.331s
+# user    0m6.525s
+# sys     0m0.083s
 ```
 
 </details>
-
-
 # Genomic prediction
 
 ## Tests on simulated data

@@ -33,3 +33,6 @@ target
 *.json
 *.svg
 *.png
+tests/trials
+tests/gp
+tests/remote_sensing
