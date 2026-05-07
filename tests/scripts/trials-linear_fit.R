@@ -70,12 +70,16 @@ loglik_lm_lmer_asreml <- function(mod) {
 }
 
 #' Generate model strings for simulated data using lm, lme4, asreml, and sommer packages.
-generate_model_strings_for_simulated_data <- function(exclude_sommer = FALSE) {
-  lm_model_strings <- c(
-    "lm(y ~ year + loc + trt + gen + blk, data=df)",
-    "lm(y ~ year * loc + trt + gen + blk, data=df)",
-    "lm(y ~ env + gen + blk, data=df)"
-  )
+generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
+  if (exclude_lm) {
+    lm_model_strings <- c()
+  } else {
+    lm_model_strings <- c(
+      "lm(y ~ year + loc + trt + gen + blk, data=df)",
+      "lm(y ~ year * loc + trt + gen + blk, data=df)",
+      "lm(y ~ env + gen + blk, data=df)"
+    )
+  }
   lmer_model_strings <- c(
     "lmer(y ~ year + loc + trt + blk + (1|gen), df)",
     "lmer(y ~ year * loc + trt + blk + (1|gen), df)",
@@ -84,18 +88,18 @@ generate_model_strings_for_simulated_data <- function(exclude_sommer = FALSE) {
     "lmer(y ~ env + blk + (1|gen) + (1|gen:env), df)"
   )
   asreml_model_strings <- c(
-    "asreml(y ~ year + loc + trt + blk, random = ~ gen, data = df)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen, data = df)",
-    "asreml(y ~ year * loc * trt + blk, random = ~ gen, data = df)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen, data = df)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(year):gen, data = df)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen + diag(year):gen, data = df)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(loc):gen, data = df)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(year):gen, data = df)",
-    "asreml(y ~ year * loc * trt + blk, random = ~ gen + fa(year:loc):gen, data = df)",
-    "asreml(y ~ year + loc + trt + blk, random = ~ gen + gen:year + gen:loc, data = df)",
-    "asreml(y ~ env + blk, random = ~ gen, data = df)",
-    "asreml(y ~ env + blk, random = ~ gen + fa(env):gen, data = df)"
+    "asreml(y ~ year + loc + trt + blk, random = ~ gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc + trt + blk, random = ~ gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc * trt + blk, random = ~ gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(year):gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen + diag(year):gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(loc):gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(year):gen, data = df, trace = FALSE)",
+    "asreml(y ~ year * loc * trt + blk, random = ~ gen + fa(year:loc):gen, data = df, trace = FALSE)",
+    "asreml(y ~ year + loc + trt + blk, random = ~ gen + gen:year + gen:loc, data = df, trace = FALSE)",
+    "asreml(y ~ env + blk, random = ~ gen, data = df, trace = FALSE)",
+    "asreml(y ~ env + blk, random = ~ gen + fa(env):gen, data = df, trace = FALSE)"
   )
   if (exclude_sommer) {
     sommer_model_strings <- c()
@@ -271,7 +275,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
         withTimeout(eval(parse(text = mod_string)), timeout = time_limit_seconds)
       },
       error = function(e) {
-        print("Unable to fit: skipped!")
+        print(paste0("SKIPPED | Unable to fit: ", mod_string))
         NA
       }
     )
@@ -391,6 +395,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
 
 #' Fit linear models and extract the genotype effects for simulated data by generating model strings and calling fit_extract_effects.
 fit_extract_effects_for_simulated_data <- function(df, time_limit_seconds = 1, exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
+  # df = process_features(read.table(list.files(path = ".", pattern = ".tsv")[1], T))[[1]]; time_limit_seconds=1; exclude_lm=TRUE; exclude_sommer=TRUE; verbose=TRUE
   model_strings <- generate_model_strings_for_simulated_data(exclude_lm = exclude_lm, exclude_sommer = exclude_sommer)
   fit_extract_effects(df, model_strings, time_limit_seconds = time_limit_seconds, verbose = verbose)
 }
@@ -405,7 +410,7 @@ fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, e
 }
 
 #' Run the analysis on all input files in the directory, processing simulated or empirical data and outputting results.
-run <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
+run <- function(exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
   fnames_tmp <- list.files(path = ".", pattern = "input_simulated")
   fnames <- if (length(fnames_tmp) != 0) {
     fnames_tmp
@@ -414,7 +419,7 @@ run <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
   }
   output <- list()
   for (fname_input in fnames) {
-    # fname_input <- fnames[19]
+    # fname_input <- fnames[1]
     input_list <- process_features(df = read.table(fname_input, header=TRUE))
     df <- input_list$df
     # str(df)
@@ -423,9 +428,9 @@ run <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
     print(fname_input)
     out <- if (length(fnames_tmp) != 0) {
-      fit_extract_effects_for_simulated_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose=FALSE)
+      fit_extract_effects_for_simulated_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
     } else {
-      fit_extract_effects_for_empirical_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose=FALSE)
+      fit_extract_effects_for_empirical_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
     }
     fname_output <- if (length(fnames_tmp) != 0) {
       paste0(
@@ -452,4 +457,4 @@ run <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
 }
 
 # Execute
-run(exclude_lm = TRUE, exclude_sommer = TRUE)
+run(exclude_lm = TRUE, exclude_sommer = TRUE, verbose = FALSE)

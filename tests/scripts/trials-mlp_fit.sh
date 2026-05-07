@@ -18,7 +18,9 @@ then
         # INPUT=$(ls input_simulated-*-*.tsv | head -n2 | tail -n1)
         # INPUT=input_simulated-SMALL-1HL.tsv
         OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
+        echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
         echo "$INPUT --> $OUTPUT"
+        echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
         time ${MLP} \
             -f ${INPUT} \
             -o ${OUTPUT} \
