@@ -527,7 +527,7 @@ impl Data {
                         Value::Numeric(x) => *x,
                         Value::Text(_) => {
                             return Err(Box::new(MatrixError::TypeMismatch(
-                                format!("Unexpected type mismatch in target variable: {}. We expected a numeric variable.", target_names_tmp[j])
+                                format!("Unexpected type mismatch in target variable: {}. We expected a numeric variable. Please remove rows with missing data.", target_names_tmp[j])
                             )));
                         },
                     };
@@ -547,7 +547,7 @@ impl Data {
                         },
                         Value::Numeric(_) => {
                             return Err(Box::new(MatrixError::TypeMismatch(
-                                format!("Unexpected type mismatch in target variable: {}. We expected a non-numeric.", target_names_tmp[j])
+                                format!("Unexpected type mismatch in target variable: {}. We expected a non-numeric variable. Please remove rows with missing data.", target_names_tmp[j])
                             )));
                         },
                     };
