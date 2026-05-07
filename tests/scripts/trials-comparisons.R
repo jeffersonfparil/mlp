@@ -1,9 +1,10 @@
-file_names_input <- list.files(".", pattern = ".*.tsv")
-file_names_linear <- list.files(".", pattern = "output.*-LINEAR.*.tsv")
-file_names_mlp <- list.files(".", pattern = "output.*-MLP.*.tsv")
+fnames_tmp <- list.files(".", pattern = ".*.tsv")
+file_names_input <- fnames_tmp[!grepl("^output", fnames_tmp)]
+file_names_linear <- fnames_tmp[grepl("^output.*-LINEAR.*.tsv", fnames_tmp)]
+file_names_mlp <- fnames_tmp[grepl("^output.*-MLP.*.tsv", fnames_tmp)]
 
 for (file_name_input in file_names_input) {
-  # file_name_input <- file_names_input[12]
+  # file_name_input <- file_names_input[1]
   id <- gsub("input_simulated-", "", gsub(".tsv", "", file_name_input))
   idx_linear <- grep(id, file_names_linear)
   idx_mlp <- grep(id, file_names_mlp)
@@ -19,23 +20,16 @@ for (file_name_input in file_names_input) {
     df_linear$ids <- gsub("gen➵", "", df_linear$ids)
   }
   colnames(df_linear)[2] <- "linear"
-  
   # Load the marginal effects from mlp
   df_mlp <- read.delim(file_name_mlp, TRUE)
   df_mlp <- df_mlp[grep("^gen", df_mlp$ids), 1:2]
   df_mlp$ids <- gsub("gen➵", "", df_mlp$ids)
   colnames(df_mlp)[2] <- "mlp"
-  
   if ((nrow(df_linear) == 0) || (nrow(df_mlp) == 0)) {
     next
   }
-
-  # sort(unique(df_linear$ids))
-  # sort(unique(df_mlp$ids))
-
   # Merge
   df <- merge(df_linear, df_mlp, by = "ids")
-
   # Calculate correlation and R²
   cor_test <- tryCatch(
     cor.test(df$linear, df$mlp),
@@ -63,10 +57,10 @@ for (file_name_input in file_names_input) {
   file_name_png <- paste0("comparison-", id, ".png")
   linear_model_formula <- gsub(
     paste0("output-", id, "-LINEAR_"), "",
-    gsub(".tsv", "", gsub(",data=df", "",gsub(",trace=FALSE", "", file_name_linear)))
+    gsub("output_simulated-", "", gsub(id, "", gsub("-LINEAR_", "", gsub(",random=~", ",\nrandom=~", gsub(",data=df", "", gsub(",trace=FALSE", "", gsub(".tsv", "", file_name_linear)))))))
   )
-  png(file_name_png)
-  par(mar=c(5, 5, 3, 1))
+  png(file_name_png, type="cairo")
+  par(mar=c(5, 6, 3, 1), mgp=c(4, 1, 0))
   plot(df$linear, df$mlp,
     xlab = paste0(
       "Linear Model Estimated Effects\n",
