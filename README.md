@@ -256,7 +256,7 @@ Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimis
 
 # Field trial analysis
 
-What we want to show here is that MLP estimates genotype effects similar to those of linear models while also getting better model fit.
+We want to show that MLP estimates genotype effects similar to those of linear models while also getting better model fit.
 
 Evaluation of the performance of MLP model on yield trial data:
 
@@ -424,6 +424,26 @@ time Rscript ../../scripts/trials-linear_fit.R
 # ???? test run 20260507
 ```
 
+Using slurm because this will take a long time probably --> Run `tests/trials/empirical/trials-linear_fit.slurm`:
+
+```slurm
+#!/bin/bash
+#SBATCH --job-name="mlp"
+#SBATCH --account="dbiof1"
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=50G
+#SBATCH --time=5-0:0:00
+module load ASReml-R # if ASReml-R is available
+time Rscript ../../scripts/trials-linear_fit.R
+##############################################
+# cd tests/trials/empirical/
+# wc -l slurm-16646012.out
+# tail slurm-16646012.out
+# grep -A1 "@@@" slurm-16646012.out | tail -n1
+# cat slurm-16646012.out
+```
+
 ### Analysis using mlp
 
 Run `tests/scripts/trials-mlp_fit.sh`:
@@ -445,9 +465,9 @@ Run `tests/scripts/trials-comparisons.R`:
 cd mlp
 cd tests/trials/empirical/
 time Rscript ../../scripts/trials-comparisons.R
-# real    0m0.331s
-# user    0m6.525s
-# sys     0m0.083s
+# real    0m2.732s
+# user    0m8.683s
+# sys     0m0.146s
 ```
 
 </details>
@@ -469,205 +489,82 @@ time Rscript ../../scripts/trials-comparisons.R
 
 # Genomic prediction
 
+We want to show that MLP performs as good but mostly better than Bayesian linear models for genomic prediction.
+We evaluated performances based on 10-fold cross-validation repeated 5 times:
+    - simulated relatively small datasets (i.e. 700 entries x 42,000 loci which may be continuous allele frequencies or binary genotypes)
+    - empirical dataset from [Azodi et al (2019)](https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9)
+
 <details>
 
 ## Tests on simulated data
 
 ### Simulate data
 
+We simulated:
+- 700 entries
+- 42,000 loci
+- 2 types of datasets:
+  + continuous allele frequencies ranging from 0 to 1
+  + binary genotypes, i.e. 0 or 1
+- With 1 to 2 hidden layers (no larger number of hidden layers because of GPU memory limitations in the H100s and V100s we have access to)
+
+
+Run `tests/scripts/gp-simulate.sh`:
+
 ```shell
 cd mlp/
+mkdir tests/gp
 mkdir tests/gp/simulated
 cd tests/gp/simulated
-MLP=../../../target/release/mlp
-N=700
-P=42000
-for HIDDEN_LAYERS in $(seq 1 3) # cannot have more hidden layers because of GPU memory limitations (H100s and V100s)
-do
-    # HIDDEN_LAYERS=3
-    F_CONTINUOUS=input_simulated-CONTINUOUS-${HIDDEN_LAYERS}HL.tsv
-    F_BINARY=input_simulated-BINARY-${HIDDEN_LAYERS}HL.tsv
-    echo "######################"
-    echo "$F_CONTINUOUS and $F_BINARY"
-    $MLP \
-        --simulate-data-only \
-        --simulation-n-observations $N \
-        --simulation-n-features-continuous $P \
-        --simulation-n-features-categorical 0 \
-        --simulation-n-output-columns 1 \
-        --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
-        --simulation-weights-distribution normal \
-        --simulation-weights-distribution-param-1 0 \
-        --simulation-weights-distribution-param-2 1 \
-        --seed ${HIDDEN_LAYERS} \
-        --verbose
-    F0=$(ls -lhtr input_simulated-*.tsv | tail -n1 |  rev | awk '{print $1}' | rev)
-    mv $F0 $F_CONTINUOUS
-    # Convert into binary genotype data
-    head -n1 $F_CONTINUOUS > $F_BINARY
-    tail -n+2 $F_CONTINUOUS | 
-      awk '{
-          FS="\t"; OFS="\t"; 
-          for (i=2; i<=NF; i++) {
-              $i = sprintf("%.0f", $i)
-          }
-      }{print}' - >> $F_BINARY
-done
+time sh ../../scripts/gp-simulate.sh
+# real    2m43.926s
+# user    2m21.737s
+# sys     0m22.408s
 ```
 
-### BGLR??
+### GP CV using BGLR
 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+Run `tests/scripts/gp-linear_fit.R`:
 
-Starting to draft Bayes A, B and C and also simple OLS down under MLP...
+```shell
+cd mlp
+cd tests/gp/simulated
+time Rscript ../../scripts/gp-linear_fit.R
+# ????
+```
+
+Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-linear_fit.slurm`:
+
+```slurm
+#!/bin/bash
+#SBATCH --job-name="mlp"
+#SBATCH --account="dbiof1"
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=50G
+#SBATCH --time=5-0:0:00
+time Rscript ../../scripts/gp-linear_fit.R
+##########################################
+# cat slurm-16648486.out
+```
 
 ### MLP
 
+Run `tests/scripts/gp-mlp_fit.sh`:
+
 ```shell
+cd mlp
 cd tests/gp/simulated
-MLP=../../../target/release/mlp
-N_EPOCHS=1000
-F_PATIENT_EPOCHS=0.50
-F_VALIDATION=0.0
-N_BATCHES=1
-N_HIDDEN_LAYERS=1
-N_HIDDEN_NODES=256
-
-N_REPS=3
-N_FOLDS=10
-
-
-
-for INPUT in $(ls input_simulated-*-*.tsv)
-do
-    # INPUT=$(ls input_simulated-*-*.tsv | head -n4 | tail -n1)
-    OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
-    N=$(echo $(cut -f1 $INPUT | wc -l) - 1 | bc)
-    M=$(echo "scale=0; $N / $N_FOLDS" | bc)
-    echo "$INPUT -->  $OUTPUT (N=$N; M=$M)"
-
-
-    for REP in $(seq 0 $N_REPS)
-    do
-        IDX_SHUFFLED=($(shuf --random-source=<(yes 42) -e $(seq 2 $(echo $N + 1 | bc))))
-        echo ${IDX_SHUFFLED[@]}
-        for FOLD in $(seq 0 $N_FOLDS)
-        do
-            # FOLD=1
-            IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
-            IDX_FIN=$(echo "$FOLD * $M" | bc)
-            IDX_TRAINING=()
-            IDX_VALIDATION=()
-            for i in $(seq 0 $N)
-            do
-                if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]
-                then
-                    # echo "$i; ${IDX_SHUFFLED[i]}"
-                    IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
-                else
-                    IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
-                fi
-            done
-            echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-            echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-            echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
-
-            TRAINING_IDX=${IDX_TRAINING[@]}
-            VALIDATION_IDX=${IDX_VALIDATION[@]}
-            head -n1 $INPUT > TRAINING_SET.tmp
-            head -n1 $INPUT > VALIDATION_SET.tmp
-            awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> TRAINING_SET.tmp
-            awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> VALIDATION_SET.tmp
-            time ${MLP} \
-                -f TRAINING_SET.tmp \
-                -o OUTPUT.tmp.json \
-                -v \
-                --n-epochs=${N_EPOCHS} \
-                --f-patient-epochs=${F_PATIENT_EPOCHS} \
-                --f-validation=${F_VALIDATION} \
-                --n-batches=${N_BATCHES} \
-                --n-hidden-layers=${N_HIDDEN_LAYERS} \
-                --n-hidden-nodes=${N_HIDDEN_NODES} \
-                --skip-marginals
-            time ${MLP} \
-                -f VALIDATION_SET.tmp \
-                -m OUTPUT.tmp.json \
-                -v \
-                --predict-only
-
-
-            cut -f1 VALIDATION_SET.tmp > true.tmp
-            cut -f1 OUTPUT.tmp-predictions.tsv > pred.tmp
-            paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
-            head true_vs_pred.tsv
-            R
-            df_mlp = read.table("true_vs_pred.tsv", T)
-            str(df_mlp)
-            cor(df_mlp)
-
-            df_training = read.table("TRAINING_SET.tmp", T)
-            df_validation = read.table("VALIDATION_SET.tmp", T)
-            X = as.matrix(df_training[, 2:ncol(df_training)])
-            y = df_training[, 1]
-            
-            # OLS
-            b_hat = t(X) %*% solve(X %*% t(X)) %*% y
-            y_hat = as.matrix(df_validation[, 2:ncol(df_validation)]) %*% b_hat
-            cor(df_validation[, 1], y_hat)
-
-            # Bayesian models
-            library(BGLR)
-            df = rbind(df_training, df_validation)
-            X = as.matrix(df[, 2:ncol(df)])
-            y = df[, 1]
-            yNA = y
-            idx_validation = nrow(df_training):nrow(df)
-            yNA[idx_validation] = NA
-            nIter=6000; burnIn=1000
-
-            # Bayes A
-            time = Sys.time()
-            fmBA=BGLR(y=yNA,ETA=list( list(X=X,model='BayesA')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
-            print(Sys.time() - t)
-            yHat=fmBA$yHat[idx_validation]
-            cor(yHat, y[idx_validation])
-
-            # Bayes B
-            time = Sys.time()
-            fmBB=BGLR(y=yNA,ETA=list( list(X=X,model='BayesB')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
-            print(Sys.time() - t)
-            yHat=fmBB$yHat[idx_validation]
-            cor(yHat, y[idx_validation])
-
-            # Bayes C
-            time = Sys.time()
-            fmBC=BGLR(y=yNA,ETA=list( list(X=X,model='BayesC')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
-            print(Sys.time() - t)
-            yHat=fmBC$yHat[idx_validation]
-            cor(yHat, y[idx_validation])
-
-
-            
-
-
-
-        done
-    done
-
-
-    
-done
-
-
-
-
+time sh ../../scripts/gp-mlp_fit.sh
+# ????
 ```
 
-
-
 ## Tests on empirical data
+
+### Download data
+
+Drayd has bot protection guards which means we need to download the Azodi et al (2019) data manually from here [https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9](https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9).
+
 
 ### BGLR??
 

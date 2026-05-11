@@ -128,6 +128,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-devtools-2.5.2-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-diffobj-0.3.6-r45h54b55ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-digest-0.6.39-r45h3697838_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-doparallel-1.0.17-r45hc72bb7e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-downlit-0.4.5-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-dplyr-1.2.1-r45h3697838_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-ellipsis-0.3.3-r45h54b55ab_0.conda
@@ -139,6 +140,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-flexplot-0.7.4-r45ha770c72_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-fontawesome-0.5.3-r45hc72bb7e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-forcats-1.0.1-r45hc72bb7e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-foreach-1.5.2-r45hc72bb7e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-fs-2.1.0-r45h3697838_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-gbrd-0.4.12-r45hc72bb7e_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-generics-0.1.4-r45hc72bb7e_1.conda
@@ -157,6 +159,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-httr2-1.2.2-r45hc72bb7e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-ini-0.3.1-r45hc72bb7e_1007.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-isoband-0.3.0-r45h3697838_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/r-iterators-1.0.14-r45hc72bb7e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-jquerylib-0.1.4-r45hc72bb7e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/r-jsonlite-2.0.0-r45h54b55ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/r-knitr-1.51-r45hc72bb7e_0.conda
@@ -1789,6 +1792,17 @@ packages:
   license_family: GPL2
   size: 218412
   timestamp: 1763566744987
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-doparallel-1.0.17-r45hc72bb7e_4.conda
+  sha256: 2edd40491f63166d242e4e092f37c793a9c51c45fc8eae6132c11d5831706205
+  md5: af58987665d786f31bfd45264cb72ae4
+  depends:
+  - r-base >=4.5,<4.6.0a0
+  - r-foreach >=1.2.0
+  - r-iterators >=1.0.0
+  license: GPL-2.0-only
+  license_family: GPL2
+  size: 200811
+  timestamp: 1757511066319
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-downlit-0.4.5-r45hc72bb7e_0.conda
   sha256: 73396f3432df8aac38aeb15f27ebdecb216d3b63bfa3c87fc6b996acf27b82f8
   md5: 49850c61c12fbd8dd19b30d9bc81833f
@@ -1949,6 +1963,17 @@ packages:
   license_family: MIT
   size: 424119
   timestamp: 1758793455858
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-foreach-1.5.2-r45hc72bb7e_4.conda
+  sha256: c95d1e61946bf81128be213dea7a07b5196c6e13caf9c6452c38145da8d2dfb1
+  md5: 5abe392c8f8c5b954ebdc5fe46fcc709
+  depends:
+  - r-base >=4.5,<4.6.0a0
+  - r-codetools
+  - r-iterators
+  license: Apache-2.0
+  license_family: APACHE
+  size: 140909
+  timestamp: 1757490449004
 - conda: https://conda.anaconda.org/conda-forge/linux-64/r-fs-2.1.0-r45h3697838_0.conda
   sha256: 748304679610fe9f5d078f5b9be7c8693858ff5f66db55e43fb98d0e4e07d375
   md5: 67c48aad5ce921ad990b951a1f194f42
@@ -2192,6 +2217,15 @@ packages:
   license_family: MIT
   size: 1657523
   timestamp: 1766530500097
+- conda: https://conda.anaconda.org/conda-forge/noarch/r-iterators-1.0.14-r45hc72bb7e_4.conda
+  sha256: c90d0faa668d2753db9da9458ca085891a3030c6537f5675fe0c1a1b5af2103c
+  md5: 7746a41a4cb97cec59db2d5a2cac0701
+  depends:
+  - r-base >=4.5,<4.6.0a0
+  license: Apache-2.0
+  license_family: APACHE
+  size: 350171
+  timestamp: 1757459846270
 - conda: https://conda.anaconda.org/conda-forge/noarch/r-jquerylib-0.1.4-r45hc72bb7e_4.conda
   sha256: 3b98f72bb32d4758854805b664b4404602a583da32c9b96026536f5676f41812
   md5: 49a9ed6ed01f4ae6067ead552795bfce

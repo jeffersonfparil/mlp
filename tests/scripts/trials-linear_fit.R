@@ -1,4 +1,4 @@
-library("R.utils")
+# library("R.utils")
 library("stringr")
 library("lme4")
 if (nzchar(system.file(package = "asreml"))) {
@@ -259,6 +259,8 @@ generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dum
 
 #' Fit models using provided strings, select the best based on AIC/BIC/logLik, and extract genotype effects.
 fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbose = TRUE) {
+  # df <- process_features(df = read.table(list.files(path = ".", pattern = "input_simulated|.tsv")[1], header=TRUE))$df; time_limit_seconds = 1; verbose = TRUE;
+  # x_names <- colnames(df)[2:ncol(df)]; x_names_except_gen_and_dummy_env <- x_names[(x_names != "gen") & (x_names != "dummy_env")]; model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = TRUE, exclude_sommer = TRUE)
   model_candidates <- list()
   for (i in seq_along(model_strings)) {
     # i <- 30
@@ -269,10 +271,11 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     }
     mod <- tryCatch(
       {
-        # setTimeLimit(time_limit_seconds, transient = TRUE)
+        setTimeLimit(elapsed = time_limit_seconds, transient = TRUE)
+        # on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
         # setTimeLimit(cpu = time_limit_seconds, elapsed = time_limit_seconds, transient = TRUE)
-        # eval(parse(text = mod_string))
-        withTimeout(eval(parse(text = mod_string)), timeout = time_limit_seconds)
+        eval(parse(text = mod_string))
+        # withTimeout(eval(parse(text = mod_string)), timeout = time_limit_seconds)
       },
       error = function(e) {
         print(paste0("SKIPPED | Unable to fit: ", mod_string))
@@ -308,6 +311,14 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     logLik = sapply(model_candidates, loglik_lm_lmer_asreml)
   )
   idx_filter = which(!is.na(df_stats$AIC) & is.finite(df_stats$AIC))
+  if (length(idx_filter) == 0) {
+    print("NO MODEL WAS SUCCESSFULLY FITTED!")
+    return(NULL)
+  }
+  if (length(idx_filter) == 0) {
+    print("NO MODEL WAS SUCCESSFULLY FITTED!")
+    return(NULL)
+  }
   df_stats = df_stats[idx_filter, ]
   model_candidates = model_candidates[idx_filter]
   z_AIC <- scale(df_stats$AIC, scale = TRUE, center = TRUE)
@@ -315,7 +326,14 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
   z_logLik <- -scale(df_stats$logLik, scale = TRUE, center = TRUE)
   df_stats$z_sum <- 0.2 * z_AIC + 0.6 * z_BIC + 0.2 * z_logLik # more weight on BIC because it is better for model fit parsinomy rather than predictive accuracy which AIC is better suited for
   # Select the best model based on z_sum
-  best_model_idx <- which.min(df_stats$z_sum)
+  best_model_idx <- if (is.nan(df_stats$z_sum[1])) {
+    # For non-varying stats or only a single model is left
+    1
+  } else {
+    which.min(df_stats$z_sum)
+  }
+  # print(df_stats)
+  # print(best_model_idx)
   best_model <- model_candidates[[best_model_idx]]
   best_model_formula <- df_stats$formula[best_model_idx]
   if (verbose) {
@@ -351,8 +369,8 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
       X = best_model$u
       data.frame(ids=rownames(X), effects=X[, 1])
     } else {
-      ids = c()
-      effects = c()
+      ids <- c()
+      effects <- c()
       for (i in 1:length(best_model$uPevList)) {
         # i <- 1
         # best_model = model_candidates[[23]]
@@ -364,7 +382,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
           grepl("blk", names(best_model$uPevList)[i]) |
           grepl("env", names(best_model$uPevList)[i])
         )
-        X = best_model$uPevList[[i]]
+        X <- best_model$uPevList[[i]]
         if (bool_gen && !bool_env) {
           ids = c(ids, rownames(X))
           effects = c(effects, X[, 1])
@@ -390,7 +408,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
   df_effects$ids <- gsub(":", "▓", df_effects$ids)
   # Sort sensibly
   df_effects <- df_effects[stringr::str_order(df_effects$ids, numeric = TRUE), ]
-  return(list(df_effects = df_effects, formula = best_model_formula))
+  list(df_effects = df_effects, formula = best_model_formula)
 }
 
 #' Fit linear models and extract the genotype effects for simulated data by generating model strings and calling fit_extract_effects.
@@ -411,26 +429,41 @@ fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, e
 
 #' Run the analysis on all input files in the directory, processing simulated or empirical data and outputting results.
 run <- function(exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
+  # exclude_lm = TRUE; exclude_sommer = TRUE; verbose = FALSE
   fnames_tmp <- list.files(path = ".", pattern = "input_simulated")
   fnames <- if (length(fnames_tmp) != 0) {
     fnames_tmp
   } else {
-    list.files(path = ".", pattern = ".tsv")
+    tmp <- list.files(path = ".", pattern = ".tsv")
+    tmp[!grepl("^output", tmp)]
   }
   output <- list()
-  for (fname_input in fnames) {
+  ###################################################
+  ###################################################
+  ###################################################
+  ##### NOTE: resuming from previous UNSUCCESSFUL RUN
+  ###################################################
+  ###################################################
+  ###################################################
+  # for (fname_input in fnames) {
+  for (fname_input in fnames[154:length(fnames)]) {
     # fname_input <- fnames[1]
-    input_list <- process_features(df = read.table(fname_input, header=TRUE))
+    # fname_input <- fnames[154]
+    # fname_input = "talbot.potato.traits-score.tsv"; which(fnames == fname_input)
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    print(fname_input)
+    input_list <- process_features(df = read.table(fname_input, sep = "\t", header = TRUE))
     df <- input_list$df
     # str(df)
     # ids_features <- input_list$ids_features
     attach(df)
-    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print(fname_input)
     out <- if (length(fnames_tmp) != 0) {
       fit_extract_effects_for_simulated_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
     } else {
       fit_extract_effects_for_empirical_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
+    }
+    if (is.null(out)) {
+      next
     }
     fname_output <- if (length(fnames_tmp) != 0) {
       paste0(
@@ -457,4 +490,4 @@ run <- function(exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
 }
 
 # Execute
-run(exclude_lm = TRUE, exclude_sommer = TRUE, verbose = FALSE)
+run(exclude_lm = TRUE, exclude_sommer = TRUE, verbose = FALSE) # testing ASREML only
