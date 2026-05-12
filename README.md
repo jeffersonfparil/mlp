@@ -563,9 +563,9 @@ mkdir ${DIR}/mlp_misc_output
 cd $DIR
 sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
 # ????
-# cat slurm-16664904_*.out
-# tail -n1 slurm-16664904_*
-# grep -n -i "err" slurm-16664904_*.out
+# cat slurm-16675299_*.out
+# tail -n1 slurm-16675299_*
+# grep -n -i "err" slurm-16675299_*.out
 # cat output_simulated-*MLP*.tsv
 ```
 
@@ -591,12 +591,64 @@ time sh $SCRIPT $INPUT $MLP $DIR
 # sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
 ```
 
+### Comparison between linear mixed model and mlp
+
+Run `tests/scripts/trials-comparisons.R`:
+
+```shell
+cd mlp
+cd tests/gp/simulated/
+time Rscript ../../scripts/gp-comparisons.R
+# real    0m0.260s
+# user    0m6.469s
+# sys     0m0.068s
+```
+
+</details>
+
+### Results
+
+![](./tests/gp/simulated/gp-comparisons-simulated.png)
+
+
 ## Tests on empirical data
 
-### Download data
+### Prepare the data
 
 Drayd has bot protection guards which means we need to download the Azodi et al (2019) data manually from here [https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9](https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9).
 
+Extract the datasets into `tests/gp/empirical`, then merge the phenotype and genotype data per species such that we have one the trait/response variable at the first column and then the marker data for the rest of the columns, and yield 1 `.tsv` file per trait across datasets/species.
+
+```shell
+DIR=${HOME}/Documents/mlp/tests/gp/empirical
+cd $DIR
+
+for f in $(ls *_pheno.csv)
+do
+    # f=$(ls *_pheno.csv | head -n1)
+    echo $f
+    P=$(head -n1 $f | awk -F, '{print NF}')
+    echo "$P columns"
+    head -n1 $f
+
+    g=${f%_pheno.csv*}_geno.csv
+    cut -d, -f1 $f > ids_pheno.tmp
+    cut -d, -f1 $g > ids_geno.tmp
+    DIFF=$(diff ids_pheno.tmp ids_geno.tmp | wc -l)
+    if [[ $DIFF -gt 0 ]]
+    then
+        echo "Mismatched IDs in $f and $g!"
+        next
+    fi
+    for f_col in $(seq 2 $P)
+    do
+        cut -d, -f$f_col $ftrait_pheno.tmp
+        paste -f, ids_pheno.tmp 
+    done
+
+done
+
+```
 
 ### BGLR??
 

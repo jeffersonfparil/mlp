@@ -412,6 +412,7 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     let p = data.features.n_rows;
     let k = data.targets.n_rows + network.predictions.n_rows;
     // println!("n={}; p={}; k={}; data.targets.n_rows={}; network.predictions.n_rows={}", n, p, k, data.targets.n_rows, network.predictions.n_rows);
+    // First column/s is/are the predictions and the rest are the observed/expected values
     let mut predictions = Data::new(n, p, k)?;
     predictions.feature_names = data.feature_names.clone();
     predictions.features = data.features.clone();
@@ -425,19 +426,23 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
         }
         target_names
     };
+    // Use the mean and sd to unstandardise the predictions
+    let mu: f32 = network.targets_mean_sd.0;
+    let sd: f32 = network.targets_mean_sd.1;
     predictions.targets.data = {
         let y_pred = network.predictions.to_host()?;
         let y_true = data.targets.to_host()?;
         let mut source = vec![f32::NAN; k*n];
         for i in 0..y_pred.len() {
-            source[i] = y_pred[i];
+            source[i] = (y_pred[i] * sd) + mu; // unstandardise
         }
         for i in 0..y_true.len() {
-            source[y_pred.len() + i] = y_true[i];
+            source[y_pred.len() + i] = (y_true[i] * sd) + mu; // unstandardise
         }
         let stream = data.targets.data.context().default_stream();
         stream.clone_htod(&source)?
-    };    
+    };
+
     predictions.write_delimited(&fname_predictions, "\t")?;
     if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     println!(
