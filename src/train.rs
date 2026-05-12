@@ -72,6 +72,7 @@ fn prep_all_hyperparams(
     range_dropout_rate: Option<(f32, f32, f32)>,
     range_learning_rate: Option<(f32, f32, f32)>,
     range_n_epochs: Option<(usize, usize, usize)>,
+    range_n_burnin_epochs: Option<(usize, usize, usize)>,
     range_f_patient_epochs: Option<(f32, f32, f32)>,
     range_f_validation: Option<(f32, f32, f32)>,
     range_n_batches: Option<(usize, usize, usize)>,
@@ -84,6 +85,7 @@ fn prep_all_hyperparams(
         usize,
         f32,
         f32,
+        usize,
         usize,
         f32,
         f32,
@@ -113,6 +115,10 @@ fn prep_all_hyperparams(
     let selection_n_epochs: Vec<usize> = match range_n_epochs {
         Some(x) => prep_each_hyperparam(x)?,
         None => prep_each_hyperparam((5, 10, 1))?,
+    };
+    let selection_n_burnin_epochs: Vec<usize> = match range_n_burnin_epochs {
+        Some(x) => prep_each_hyperparam(x)?,
+        None => prep_each_hyperparam((0, 2, 1))?,
     };
     let selection_f_patient_epochs: Vec<f32> = match range_f_patient_epochs {
         Some(x) => prep_each_hyperparam(x)?,
@@ -148,6 +154,7 @@ fn prep_all_hyperparams(
         f32,
         f32,
         usize,
+        usize,
         f32,
         f32,
         usize,
@@ -160,25 +167,28 @@ fn prep_all_hyperparams(
             for dropout_rate in &selection_dropout_rates {
                 for learning_rate in &selection_learning_rates {
                     for n_epochs in &selection_n_epochs {
-                        for f_patient_epochs in &selection_f_patient_epochs {
-                            for f_validation in &selection_f_validation {
-                                for n_batches in &selection_n_batches {
-                                    for activation in &selection_activations {
-                                        for cost in &selection_costs {
-                                            for optimiser in &selection_optimisers {
-                                                param_combinations.push((
-                                                    *n_hidden_layers,
-                                                    *n_hidden_nodes,
-                                                    *dropout_rate,
-                                                    *learning_rate,
-                                                    *n_epochs,
-                                                    *f_patient_epochs,
-                                                    *f_validation,
-                                                    *n_batches,
-                                                    activation.clone(),
-                                                    cost.clone(),
-                                                    optimiser.clone(),
-                                                ));
+                        for n_burnin_epochs in &selection_n_burnin_epochs {
+                            for f_patient_epochs in &selection_f_patient_epochs {
+                                for f_validation in &selection_f_validation {
+                                    for n_batches in &selection_n_batches {
+                                        for activation in &selection_activations {
+                                            for cost in &selection_costs {
+                                                for optimiser in &selection_optimisers {
+                                                    param_combinations.push((
+                                                        *n_hidden_layers,
+                                                        *n_hidden_nodes,
+                                                        *dropout_rate,
+                                                        *learning_rate,
+                                                        *n_epochs,
+                                                        *n_burnin_epochs,
+                                                        *f_patient_epochs,
+                                                        *f_validation,
+                                                        *n_batches,
+                                                        activation.clone(),
+                                                        cost.clone(),
+                                                        optimiser.clone(),
+                                                    ));
+                                                }
                                             }
                                         }
                                     }
@@ -243,12 +253,22 @@ impl Network {
         let training_indexes: Vec<usize> = (0..n)
             .filter(|&x| !validation_indexes.contains(&x))
             .collect();
-
         let (mut network_validation, mut network_training) = if n_validation > 0 {
             (self.slice(&validation_indexes)?,  self.slice(&training_indexes)?)
         } else {
             (self.slice(&vec![0])?, self.slice(&training_indexes)?)
         };
+        // Pre-training burn-in epochs
+        let mut pb = ProgressBar::new(optimisation_parameters.n_burnin_epochs, 50, format!("Burn-in {} epochs", optimisation_parameters.n_burnin_epochs));
+        for _ in 0..optimisation_parameters.n_burnin_epochs {
+            network_training.forwardpass()?;
+            network_training.backpropagation()?;
+            network_training.optimise(optimisation_parameters)?;
+            network_training.predict()?;
+            pb.next();
+        }
+        pb.finish();
+        // Training after burn-in
         let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
         for epoch in 0..optimisation_parameters.n_epochs {
             network_training.forwardpass()?;
@@ -264,8 +284,7 @@ impl Network {
             } else {
                 costs.push(network_training.loss()? as f64);
             }
-            // // Update the network after training the training network
-            // self.replace_model(&network_training)?;
+            // Update the network after training the training network
             pb.next();
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
@@ -379,6 +398,7 @@ impl Network {
         range_dropout_rate: Option<(f32, f32, f32)>,
         range_learning_rate: Option<(f32, f32, f32)>,
         range_n_epochs: Option<(usize, usize, usize)>,
+        range_n_burnin_epochs: Option<(usize, usize, usize)>,
         range_f_patient_epochs: Option<(f32, f32, f32)>,
         range_f_validation: Option<(f32, f32, f32)>,
         range_n_batches: Option<(usize, usize, usize)>,
@@ -394,6 +414,7 @@ impl Network {
             range_dropout_rate,
             range_learning_rate,
             range_n_epochs,
+            range_n_burnin_epochs,
             range_f_patient_epochs,
             range_f_validation,
             range_n_batches,
@@ -407,6 +428,7 @@ impl Network {
             usize,
             f32,
             f32,
+            usize,
             usize,
             f32,
             f32,
@@ -437,6 +459,7 @@ impl Network {
                 dropout_rate,
                 learning_rate,
                 n_epochs,
+                n_burnin_epochs,
                 f_patient_epochs,
                 f_validation,
                 n_batches,
@@ -462,6 +485,7 @@ impl Network {
             let mut optimisation_parameters = OptimisationParameters::new(&network)?;
             optimisation_parameters.learning_rate = learning_rate;
             optimisation_parameters.n_epochs = n_epochs;
+            optimisation_parameters.n_burnin_epochs = n_burnin_epochs;
             optimisation_parameters.f_patient_epochs = f_patient_epochs;
             optimisation_parameters.f_validation = f_validation;
             optimisation_parameters.n_batches = n_batches;
@@ -482,6 +506,7 @@ impl Network {
                 dropout_rate,
                 learning_rate,
                 n_epochs,
+                n_burnin_epochs,
                 f_patient_epochs,
                 f_validation,
                 n_batches,
@@ -503,6 +528,7 @@ impl Network {
                 dropout_rate,
                 learning_rate,
                 n_epochs,
+                n_burnin_epochs,
                 f_patient_epochs,
                 f_validation,
                 n_batches,
@@ -513,12 +539,13 @@ impl Network {
             ) in &results
             {
                 println!(
-                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:14} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
+                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:6} | {:14} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
                     n_hidden_layers,
                     n_hidden_nodes,
                     dropout_rate,
                     learning_rate,
                     n_epochs,
+                    n_burnin_epochs,
                     f_patient_epochs,
                     f_validation,
                     n_batches,
@@ -538,6 +565,7 @@ impl Network {
                 dropout_rate,
                 learning_rate,
                 n_epochs,
+                n_burnin_epochs,
                 f_patient_epochs,
                 f_validation,
                 n_batches,
@@ -553,6 +581,7 @@ impl Network {
             println!("\t- Dropout Rate: {}", dropout_rate);
             println!("\t- Learning Rate: {}", learning_rate);
             println!("\t- Epochs: {}", n_epochs);
+            println!("\t- Burnin epochs: {}", n_burnin_epochs);
             println!(
                 "\t- Patient Epochs: {}",
                 (f_patient_epochs * n_epochs as f32).ceil() as usize
@@ -584,6 +613,7 @@ impl Network {
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         optimisation_parameters.learning_rate = learning_rate;
         optimisation_parameters.n_epochs = n_epochs;
+        optimisation_parameters.n_burnin_epochs = n_burnin_epochs;
         optimisation_parameters.f_patient_epochs = f_patient_epochs;
         optimisation_parameters.f_validation = f_validation;
         optimisation_parameters.n_batches = n_batches;
@@ -668,6 +698,7 @@ mod tests {
         let range_dropout_rate = Some((0.0, 0.0, 0.1));
         let range_learning_rate = Some((0.0001, 0.0001, 0.0001));
         let range_n_epochs = Some((1, 3, 1));
+        let range_n_burnin_epochs = Some((0, 2, 1));
         let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
         let range_f_validation = Some((0.0, 0.1, 0.1));
         let range_n_batches = Some((1, 2, 1));
@@ -681,6 +712,7 @@ mod tests {
             range_dropout_rate,
             range_learning_rate,
             range_n_epochs,
+            range_n_burnin_epochs,
             range_f_patient_epochs,
             range_f_validation,
             range_n_batches,

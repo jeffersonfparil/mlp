@@ -78,6 +78,10 @@ struct Args {
     #[arg(long, default_value_t = 10)]
     n_epochs: usize,
 
+    /// Number of burnin epochs (initial training epochs to discard)
+    #[arg(long, default_value_t = 0)]
+    n_burnin_epochs: usize,
+
     /// Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping
     #[arg(long, default_value_t = 0.25)]
     f_patient_epochs: f32,
@@ -157,6 +161,10 @@ struct Args {
     /// Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(long, value_parser, value_delimiter = ',', default_value = "10,10,10")]
     range_n_epochs: Vec<usize>,
+
+    /// Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "0,1,1")]
+    range_n_burnin_epochs: Vec<usize>,
 
     /// Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(
@@ -590,6 +598,21 @@ fn train_with_hyperparameter_optimisation(
             args.range_n_epochs[2],
         )),
     };
+    let range_n_burnin_epochs = match args.range_n_burnin_epochs.len() != 3 {
+        true => {
+            return Err(Box::new(OptimiserError::OptimisationParameterError(
+                format!(
+                    "Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_n_burnin_epochs={:?})",
+                    args.range_n_burnin_epochs
+                ),
+            )));
+        }
+        false => Some((
+            args.range_n_burnin_epochs[0],
+            args.range_n_burnin_epochs[1],
+            args.range_n_burnin_epochs[2],
+        )),
+    };
     let range_f_patient_epochs = match args.range_f_patient_epochs.len() != 3 {
         true => {
             return Err(Box::new(OptimiserError::OptimisationParameterError(
@@ -677,6 +700,7 @@ fn train_with_hyperparameter_optimisation(
         range_dropout_rates,
         range_learning_rates,
         range_n_epochs,
+        range_n_burnin_epochs,
         range_f_patient_epochs,
         range_f_validation,
         range_n_batches,
@@ -723,6 +747,7 @@ fn train_with_fixed_hyperparameters(
         _ => return Err(Box::new(OptimiserError::UnimplementedOptimiser)),
     };
     optimisation_parameters.n_epochs = args.n_epochs;
+    optimisation_parameters.n_burnin_epochs = args.n_burnin_epochs;
     optimisation_parameters.f_patient_epochs = args.f_patient_epochs;
     optimisation_parameters.f_validation = args.f_validation;
     optimisation_parameters.n_batches = args.n_batches;

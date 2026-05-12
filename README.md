@@ -530,12 +530,14 @@ Run `tests/scripts/gp-linear_fit.R`:
 cd mlp
 cd tests/gp/simulated
 time Rscript ../../scripts/gp-linear_fit.R
-# ????
+# real    588m48.742s
+# user    1160m31.341s
+# sys     5m16.772s
 ```
 
 Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-linear_fit.slurm`:
 
-```slurm
+```shell
 #!/bin/bash
 #SBATCH --job-name="mlp"
 #SBATCH --account="dbiof1"
@@ -546,17 +548,47 @@ Using slurm because this will take a long time probably --> Run `tests/gp/simula
 time Rscript ../../scripts/gp-linear_fit.R
 ##########################################
 # cat slurm-16648486.out
+rm BRR*.dat
+rm Bayes*.dat
 ```
 
 ### MLP
 
-Run `tests/scripts/gp-mlp_fit.sh`:
+Run `tests/scripts/gp-mlp_fit.sh` via `tests/gp/simulated/gp-mlp_fit.slurm`:
 
 ```shell
-cd mlp
-cd tests/gp/simulated
-time sh ../../scripts/gp-mlp_fit.sh
+DIR=${HOME}/Documents/mlp/tests/gp/simulated
+mkdir ${DIR}/mlp_misc_output
+# time sh ../../scripts/gp-mlp_fit.sh $INPUT $MLP $DIR
+cd $DIR
+sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
 # ????
+# cat slurm-16664904_*.out
+# tail -n1 slurm-16664904_*
+# grep -n -i "err" slurm-16664904_*.out
+# cat output_simulated-*MLP*.tsv
+```
+
+Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-mlp_fit.slurm`:
+
+```shell
+#!/bin/bash
+#SBATCH --job-name="mlp"
+#SBATCH --account="dbiof1"
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:h100:1
+#SBATCH --mem=50G
+#SBATCH --time=5-0:0:00
+# cd ${HOME}/Documents/mlp; pixi shell
+MLP=${HOME}/Documents/mlp/target/release/mlp
+DIR=${HOME}/Documents/mlp/tests/gp/simulated
+SCRIPT=${HOME}/Documents/mlp/tests/scripts/gp-mlp_fit.sh
+INPUT=$(find "$DIR" -wholename "$DIR/input_simulated-*.tsv" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
+time sh $SCRIPT $INPUT $MLP $DIR
+##########################################
+# sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
 ```
 
 ## Tests on empirical data

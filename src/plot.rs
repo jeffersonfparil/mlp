@@ -24,13 +24,14 @@ impl Network {
         // Filename
         let dir: PathBuf = current_dir()?;
         let fname_loss_svg = format!(
-            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
+            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
             dir.display(),
             self.n_hidden_layers,
             self.activation,
             optimisation_parameters.optimiser,
             optimisation_parameters.n_epochs,
             optimisation_parameters.f_patient_epochs,
+            optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
             Utc::now().format("%Y%m%d%H%M%S")
@@ -66,13 +67,14 @@ impl Network {
         // Filename
         let dir: PathBuf = current_dir()?;
         let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
+            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
             dir.display(),
             self.n_hidden_layers,
             self.activation,
             optimisation_parameters.optimiser,
             optimisation_parameters.n_epochs,
             optimisation_parameters.f_patient_epochs,
+            optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
             Utc::now().format("%Y%m%d%H%M%S")
@@ -142,7 +144,6 @@ impl Network {
 }
 
 impl Marginals {
-
     pub fn plot(self: &Self, main_only: bool) -> Result<String, Box<dyn Error>> {
         // Note that we only plot the marginal effects and leave it to the use to plot the R2 using their preferred plotting software/library
         // Filename

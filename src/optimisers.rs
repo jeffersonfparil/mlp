@@ -38,8 +38,9 @@ pub enum Optimiser {
 pub struct OptimisationParameters {
     pub optimiser: Optimiser,     // Adam by default
     pub n_epochs: usize,          // t = 10
+    pub n_burnin_epochs: usize,   // h = 0 // number of initial epochs run to discard
     pub f_patient_epochs: f32,    // f = 0.25 // fraction of n_epochs to wait before early stopping
-    pub f_validation: f32,     // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
+    pub f_validation: f32,        // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
     pub n_batches: usize,         // b = 1
     pub learning_rate: f32,       // η = 0.001
     pub first_moment_decay: f32,  // β₁ = 0.900
@@ -295,6 +296,7 @@ impl OptimisationParameters {
         let out = Self {
             optimiser: Optimiser::Adam,
             n_epochs: 10,
+            n_burnin_epochs: 0,
             f_patient_epochs: 0.25,
             f_validation: 0.00,
             n_batches: 1,
