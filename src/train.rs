@@ -245,6 +245,7 @@ impl Network {
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
             .ceil() as usize;
+        // Note that for large networks this can be very VRAM-hungry! TODO: make this more efficient probably for non-vross-validating runs
         // With or without cross-validation
         let n: usize = self.targets.n_cols;
         let n_validation: usize = (n as f32 * optimisation_parameters.f_validation).floor() as usize;

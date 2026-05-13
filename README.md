@@ -508,48 +508,32 @@ We simulated:
   + binary genotypes, i.e. 0 or 1
 - With 1 to 2 hidden layers (no larger number of hidden layers because of GPU memory limitations in the H100s and V100s we have access to)
 
-
 Run `tests/scripts/gp-simulate.sh`:
 
 ```shell
-cd mlp/
+cd ${HOME}/Documents/mlp
 mkdir tests/gp
 mkdir tests/gp/simulated
 cd tests/gp/simulated
 time sh ../../scripts/gp-simulate.sh
-# real    2m43.926s
-# user    2m21.737s
-# sys     0m22.408s
+# real    3m6.970s
+# user    2m53.788s
+# sys     0m13.480s
 ```
 
 ### GP CV using BGLR
 
-Run `tests/scripts/gp-linear_fit.R`:
+Run `tests/scripts/gp-linear_fit.slurm`:
 
 ```shell
-cd mlp
-cd tests/gp/simulated
-time Rscript ../../scripts/gp-linear_fit.R
-# real    588m48.742s
-# user    1160m31.341s
-# sys     5m16.772s
-```
-
-Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-linear_fit.slurm`:
-
-```shell
-#!/bin/bash
-#SBATCH --job-name="mlp"
-#SBATCH --account="dbiof1"
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=50G
-#SBATCH --time=5-0:0:00
-time Rscript ../../scripts/gp-linear_fit.R
-##########################################
-# cat slurm-16648486.out
-rm BRR*.dat
-rm Bayes*.dat
+DIR=${HOME}/Documents/mlp
+DIR_SRC=${DIR}/tests/scripts
+DIR_DATA=${DIR}/tests/gp/simulated
+cd $DIR_DATA
+sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) ${DIR_SRC}/gp-linear_fit.slurm ${DIR_SRC} ${DIR_DATA}
+# grep -n -i "err" slurm-*.out
+# grep -n -i "skip" slurm-*.out
+# tail slurm-*.out
 ```
 
 ### MLP
@@ -559,13 +543,11 @@ Run `tests/scripts/gp-mlp_fit.sh` via `tests/gp/simulated/gp-mlp_fit.slurm`:
 ```shell
 DIR=${HOME}/Documents/mlp/tests/gp/simulated
 mkdir ${DIR}/mlp_misc_output
-# time sh ../../scripts/gp-mlp_fit.sh $INPUT $MLP $DIR
 cd $DIR
 sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
-# ????
-# cat slurm-16675299_*.out
-# tail -n1 slurm-16675299_*
-# grep -n -i "err" slurm-16675299_*.out
+# cat slurm-16688865_*.out
+# tail -n1 slurm-16688865_*
+# grep -n -i "err" slurm-16688865_*.out
 # cat output_simulated-*MLP*.tsv
 ```
 
@@ -599,9 +581,9 @@ Run `tests/scripts/trials-comparisons.R`:
 cd mlp
 cd tests/gp/simulated/
 time Rscript ../../scripts/gp-comparisons.R
-# real    0m0.260s
-# user    0m6.469s
-# sys     0m0.068s
+# real    0m0.450s
+# user    0m4.851s
+# sys     0m0.098s
 ```
 
 </details>
@@ -619,195 +601,80 @@ Drayd has bot protection guards which means we need to download the Azodi et al 
 
 Extract the datasets into `tests/gp/empirical`, then merge the phenotype and genotype data per species such that we have one the trait/response variable at the first column and then the marker data for the rest of the columns, and yield 1 `.tsv` file per trait across datasets/species.
 
+Run `tests/scripts/gp-prepare_empirical.sh`:
+
 ```shell
 DIR=${HOME}/Documents/mlp/tests/gp/empirical
 cd $DIR
-
-for f in $(ls *_pheno.csv)
-do
-    # f=$(ls *_pheno.csv | head -n1)
-    echo $f
-    P=$(head -n1 $f | awk -F, '{print NF}')
-    echo "$P columns"
-    head -n1 $f
-
-    g=${f%_pheno.csv*}_geno.csv
-    cut -d, -f1 $f > ids_pheno.tmp
-    cut -d, -f1 $g > ids_geno.tmp
-    DIFF=$(diff ids_pheno.tmp ids_geno.tmp | wc -l)
-    if [[ $DIFF -gt 0 ]]
-    then
-        echo "Mismatched IDs in $f and $g!"
-        next
-    fi
-    for f_col in $(seq 2 $P)
-    do
-        cut -d, -f$f_col $ftrait_pheno.tmp
-        paste -f, ids_pheno.tmp 
-    done
-
-done
-
+time sh ../../scripts/gp-prepare_empirical.sh
+# ???
 ```
 
-### BGLR??
+### GP CV using BGLR
 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+Run `tests/scripts/gp-linear_fit.R`:
+
+```shell
+cd mlp
+cd tests/gp/empirical
+time Rscript ../../scripts/gp-linear_fit.R
+# real    2m10.887s
+# user    2m6.888s
+# sys     0m5.476s
+```
+
+Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-linear_fit.slurm`:
+
+```shell
+#!/bin/bash
+#SBATCH --job-name="mlp"
+#SBATCH --account="dbiof1"
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=50G
+#SBATCH --time=5-0:0:00
+time Rscript ../../scripts/gp-linear_fit.R
+##########################################
+# cat slurm-16648486.out
+rm BRR*.dat
+rm Bayes*.dat
+```
 
 ### MLP
 
+Run `tests/scripts/gp-mlp_fit.sh` via `tests/gp/simulated/gp-mlp_fit.slurm`:
+
 ```shell
-cd tests/gp/azodi_2019
-MLP=../../../target/release/mlp
-N_EPOCHS=1000
-F_PATIENT_EPOCHS=0.50
-F_VALIDATION=0.0
-N_BATCHES=1
-N_HIDDEN_LAYERS=1
-N_HIDDEN_NODES=256
-
-N_REPS=3
-N_FOLDS=10
-
-
-
-for SPECIES in ("maize" "rice" "sorghum" "soy" "spruce" "switchgrass")
-do
-    # SPECIES=maize
-
-    cut -d, -f1 ${SPECIES}_pheno.csv > ids_pheno.tmp
-    cut -d, -f1 ${SPECIES}_geno.csv > ids_geno.tmp
-    if [[ $(diff ids_pheno.tmp ids_geno.tmp | wc -l) -ne 0 ]]
-    then
-        echo "ERROR"
-    fi
-
-    T=$(head -n1 ${SPECIES}_pheno.csv | awk -F, '{print NF}')
-    for j in $(seq 2 $T)
-    do
-        # j=2
-        cut -d, -f$j ${SPECIES}_pheno.csv > y.tmp
-        cut -d, -f2- ${SPECIES}_geno.csv > X.tmp
-        paste -d, y.tmp X.tmp | sed -z 's/,/\t/g' > ${SPECIES}.tsv
-        # wc -l ${SPECIES}.tsv
-        # head -n1 ${SPECIES}.tsv | awk '{print NF}'
-        # bat --wrap never -l tsv ${SPECIES}.tsv
-        INPUT=${SPECIES}.tsv
-        OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
-        N=$(echo $(cut -f1 $INPUT | wc -l) - 1 | bc)
-        M=$(echo "scale=0; $N / $N_FOLDS" | bc)
-        echo "$INPUT -->  $OUTPUT (N=$N; M=$M)"
-        for REP in $(seq 0 $N_REPS)
-        do
-            IDX_SHUFFLED=($(shuf --random-source=<(yes 42) -e $(seq 2 $(echo $N + 1 | bc))))
-            echo ${IDX_SHUFFLED[@]}
-            for FOLD in $(seq 0 $N_FOLDS)
-            do
-                # FOLD=1
-                IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
-                IDX_FIN=$(echo "$FOLD * $M" | bc)
-                IDX_TRAINING=()
-                IDX_VALIDATION=()
-                for i in $(seq 0 $N)
-                do
-                    if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]
-                    then
-                        # echo "$i; ${IDX_SHUFFLED[i]}"
-                        IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
-                    else
-                        IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
-                    fi
-                done
-                echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-                echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-                echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
-
-                TRAINING_IDX=${IDX_TRAINING[@]}
-                VALIDATION_IDX=${IDX_VALIDATION[@]}
-                head -n1 $INPUT > TRAINING_SET.tmp
-                head -n1 $INPUT > VALIDATION_SET.tmp
-                awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> TRAINING_SET.tmp
-                awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> VALIDATION_SET.tmp
-                wc -l TRAINING_SET.tmp
-                wc -l VALIDATION_SET.tmp
-                time ${MLP} \
-                    -f TRAINING_SET.tmp \
-                    -o OUTPUT.tmp.json \
-                    -v \
-                    --n-epochs=${N_EPOCHS} \
-                    --f-patient-epochs=${F_PATIENT_EPOCHS} \
-                    --f-validation=${F_VALIDATION} \
-                    --n-batches=${N_BATCHES} \
-                    --n-hidden-layers=${N_HIDDEN_LAYERS} \
-                    --n-hidden-nodes=${N_HIDDEN_NODES} \
-                    --skip-marginals
-                time ${MLP} \
-                    -f VALIDATION_SET.tmp \
-                    -m OUTPUT.tmp.json \
-                    -v \
-                    --predict-only
-
-
-                cut -f1 VALIDATION_SET.tmp > true.tmp
-                cut -f1 OUTPUT.tmp-predictions.tsv > pred.tmp
-                paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
-                head true_vs_pred.tsv
-                R
-                df_mlp = read.table("true_vs_pred.tsv", T)
-                str(df_mlp)
-                cor(df_mlp)
-
-                df_training = read.table("TRAINING_SET.tmp", T)
-                df_validation = read.table("VALIDATION_SET.tmp", T)
-                X = as.matrix(df_training[, 2:ncol(df_training)])
-                y = df_training[, 1]
-                
-                # OLS
-                b_hat = t(X) %*% solve(X %*% t(X)) %*% y
-                y_hat = as.matrix(df_validation[, 2:ncol(df_validation)]) %*% b_hat
-                cor(df_validation[, 1], y_hat)
-
-                # Bayesian models
-                library(BGLR)
-                df = rbind(df_training, df_validation)
-                X = as.matrix(df[, 2:ncol(df)])
-                y = df[, 1]
-                yNA = y
-                idx_validation = nrow(df_training):nrow(df)
-                yNA[idx_validation] = NA
-                nIter=6000; burnIn=1000
-
-                # Bayes A
-                time = Sys.time()
-                fmBA=BGLR(y=yNA,ETA=list( list(X=X,model='BayesA')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
-                print(Sys.time() - t)
-                yHat=fmBA$yHat[idx_validation]
-                cor(yHat, y[idx_validation])
-
-                # Bayes B
-                time = Sys.time()
-                fmBB=BGLR(y=yNA,ETA=list( list(X=X,model='BayesB')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
-                print(Sys.time() - t)
-                yHat=fmBB$yHat[idx_validation]
-                cor(yHat, y[idx_validation])
-
-                # Bayes C
-                time = Sys.time()
-                fmBC=BGLR(y=yNA,ETA=list( list(X=X,model='BayesC')), nIter=nIter,burnIn=burnIn,saveAt='ba_')
-                print(Sys.time() - t)
-                yHat=fmBC$yHat[idx_validation]
-                cor(yHat, y[idx_validation])
-            done
-        done
-    done
-done
-
-
-
-
+DIR=${HOME}/Documents/mlp/tests/gp/empirical
+mkdir ${DIR}/mlp_misc_output
+# time sh ../../scripts/gp-mlp_fit.sh $INPUT $MLP $DIR
+cd $DIR
+sbatch --array=1-$(ls input_empirical-*.tsv | wc -l) gp-mlp_fit.slurm
+# ????
 ```
+
+Using slurm because this will take a long time probably --> Run `tests/gp/empirical/gp-mlp_fit.slurm`:
+
+```shell
+#!/bin/bash
+#SBATCH --job-name="mlp"
+#SBATCH --account="dbiof1"
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:h100:1
+#SBATCH --mem=50G
+#SBATCH --time=5-0:0:00
+# cd ${HOME}/Documents/mlp; pixi shell
+MLP=${HOME}/Documents/mlp/target/release/mlp
+DIR=${HOME}/Documents/mlp/tests/gp/empirical
+SCRIPT=${HOME}/Documents/mlp/tests/scripts/gp-mlp_fit.sh
+INPUT=$(find "$DIR" -wholename "$DIR/*-*.tsv" | grep -v "^output" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
+time sh $SCRIPT $INPUT $MLP $DIR
+##########################################
+# sbatch --array=1-$(ls input_empirical-*.tsv | wc -l) gp-mlp_fit.slurm
+```
+
 
 </details>
 

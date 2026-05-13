@@ -671,7 +671,7 @@ impl Data {
             self.features.clone(),
             self.targets.clone(),
             n_hidden_layers,
-            n_hidden_nodes,
+            n_hidden_nodes.clone(),
             dropout_rates,
             seed,
         )?;

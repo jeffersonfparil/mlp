@@ -865,20 +865,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         return marginals_only(&args)
     }
     // Load the data including targets and features
+    let n_steps: usize = if args.skip_marginals {3} else {4};
+    if args.verbose {println!("(1/{}) Loading data...", n_steps)};
     let data = read_data(&args)?;
     // Prepare the network
+    if args.verbose {println!("(2/{}) Preparing network...", n_steps)};
     let mut network = prepare_network(&args, &data)?; 
     // Network training and save
     let fname_network_output: String = if args.hyperparameter_optimisation {
         // Perform hyperparameter optimisation then use the best hyperparameters to train the network
+        if args.verbose {println!("(3/{}) Training with hyperparameter optimisation...", n_steps)};
         train_with_hyperparameter_optimisation(&args, &mut network)?
     } else {
         // Train the network using the supplied and/or default hyperparameters
+        if args.verbose {println!("(3/{}) Training with user-supplied/default hyperparameters...", n_steps)};
         train_with_fixed_hyperparameters(&args, &mut network)?
     };
     // println!("network before saving and reloading: {}", network);
     // Estimate marginal effects after training
     if !args.skip_marginals {
+        if args.verbose {println!("(4/{}) Extracting marginal effects...", n_steps)};
         marginals_after_training(&args, &data, &mut network, fname_network_output)?;
     }
     Ok(())
