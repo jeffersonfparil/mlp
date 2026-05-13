@@ -1,13 +1,13 @@
 #!/bin/bash
 INPUT=$1
 MLP=$2
-DIR=$3
-# DIR=/home/jp3h/Documents/mlp/tests/gp/simulated
-# INPUT=$(find "$DIR" -name "*input_simulated-*.tsv" | head -n1 | tail -n1)
-# # DIR=/home/jp3h/Documents/mlp/tests/gp/empirical
-# # INPUT=$(find "$DIR" -name "*.tsv" | grep -v "LINEAR" | grep -v "MLP" | sort | head -n1 | tail -n1)
+DIR_DATA=$3
+# DIR_DATA=/home/jp3h/Documents/mlp/tests/gp/simulated
+# INPUT=$(find "$DIR_DATA" -name "*input_simulated-*.tsv" | head -n1 | tail -n1)
+# # DIR_DATA=/home/jp3h/Documents/mlp/tests/gp/empirical
+# # INPUT=$(find "$DIR_DATA" -name "*.tsv" | grep -v "LINEAR" | grep -v "MLP" | sort | head -n1 | tail -n1)
 # MLP=/home/jp3h/Documents/mlp/target/release/mlp
-# mkdir ${DIR}/mlp_misc_output
+# mkdir ${DIR_DATA}/mlp_misc_output
 if [[ $(dirname $INPUT) == "." ]]
 then
     echo "Please use the full path of the input file ($INPUT)."
@@ -26,8 +26,8 @@ N_REPS=5
 N_FOLDS=10
 # Setup the output directory
 ID=$(basename ${INPUT%.tsv*})
-mkdir ${DIR}/mlp_misc_output/${ID}
-cd ${DIR}/mlp_misc_output/${ID}
+mkdir ${DIR_DATA}/mlp_misc_output/${ID}
+cd ${DIR_DATA}/mlp_misc_output/${ID}
 # Setup the output file
 OUTPUT=$(echo $INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv/-MLP_E${N_EPOCHS}_B${N_BURNIN_EPOCHS}_F${F_PATIENT_EPOCHS}_V${F_VALIDATION}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}.tsv/g")
 if [[ $(echo $(basename $OUTPUT) | grep "^output" | wc -l) -eq 0 ]]

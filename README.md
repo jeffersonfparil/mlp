@@ -534,43 +534,25 @@ sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) ${DIR_SRC}/gp-linear_fit.sl
 # grep -n -i "err" slurm-*.out
 # grep -n -i "skip" slurm-*.out
 # tail slurm-*.out
+# head -n100 output_simulated-*.tsv
 ```
 
 ### MLP
 
-Run `tests/scripts/gp-mlp_fit.sh` via `tests/gp/simulated/gp-mlp_fit.slurm`:
+Run `tests/scripts/gp-mlp_fit.slurm`:
 
 ```shell
-DIR=${HOME}/Documents/mlp/tests/gp/simulated
-mkdir ${DIR}/mlp_misc_output
-cd $DIR
-sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
-# cat slurm-16688865_*.out
-# tail -n1 slurm-16688865_*
-# grep -n -i "err" slurm-16688865_*.out
-# cat output_simulated-*MLP*.tsv
-```
-
-Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-mlp_fit.slurm`:
-
-```shell
-#!/bin/bash
-#SBATCH --job-name="mlp"
-#SBATCH --account="dbiof1"
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:h100:1
-#SBATCH --mem=50G
-#SBATCH --time=5-0:0:00
-# cd ${HOME}/Documents/mlp; pixi shell
-MLP=${HOME}/Documents/mlp/target/release/mlp
-DIR=${HOME}/Documents/mlp/tests/gp/simulated
-SCRIPT=${HOME}/Documents/mlp/tests/scripts/gp-mlp_fit.sh
-INPUT=$(find "$DIR" -wholename "$DIR/input_simulated-*.tsv" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
-time sh $SCRIPT $INPUT $MLP $DIR
-##########################################
-# sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) gp-mlp_fit.slurm
+DIR=${HOME}/Documents/mlp
+MLP=${DIR}/target/release/mlp
+DIR_SRC=${DIR}/tests/scripts
+DIR_DATA=${DIR}/tests/gp/simulated
+cd $DIR_DATA
+mkdir ${DIR_DATA}/mlp_misc_output
+sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA}
+# grep -n -i "err" slurm-*.out
+# grep -n -i "skip" slurm-*.out
+# tail slurm-*.out
+# head -n100 output_simulated-*.tsv
 ```
 
 ### Comparison between linear mixed model and mlp

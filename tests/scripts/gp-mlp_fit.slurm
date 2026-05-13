@@ -8,11 +8,8 @@
 #SBATCH --mem=50G
 #SBATCH --time=5-0:0:00
 # cd ${HOME}/Documents/mlp; pixi shell
-
-# TODO: update these to be more similar to `gp-linear_fit.slurm`...
-
-MLP=${HOME}/Documents/mlp/target/release/mlp
-DIR=${HOME}/Documents/mlp/tests/gp/simulated
-SCRIPT=${HOME}/Documents/mlp/tests/scripts/gp-mlp_fit.sh
-INPUT=$(find "$DIR" -wholename "$DIR/input_simulated-*.tsv" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
-time sh $SCRIPT $INPUT $MLP $DIR
+MLP=$1
+DIR_SRC=$2
+DIR_DATA=$3
+INPUT=$(find "$DIR_DATA" -wholename "$DIR_DATA/input_simulated-*.tsv" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
+time sh ${DIR_SRC}/gp-mlp_fit.sh $INPUT $MLP $DIR_DATA

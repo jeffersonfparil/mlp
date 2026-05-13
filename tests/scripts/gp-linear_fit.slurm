@@ -2,8 +2,8 @@
 #SBATCH --job-name="mlp"
 #SBATCH --account="dbiof1"
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=10G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=50G
 #SBATCH --time=5-0:0:00
 DIR_SRC=$1
 DIR_DATA=$2
