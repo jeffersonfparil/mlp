@@ -154,7 +154,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1e-3,1e-3,1e-3"
+        default_value = "1e-5,1e-3,1e-4"
     )]
     range_learning_rates: Vec<f32>,
 
