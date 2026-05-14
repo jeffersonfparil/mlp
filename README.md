@@ -645,9 +645,9 @@ DIR_DATA=${DIR}/tests/gp/empirical
 cd $DIR_DATA
 mkdir ${DIR_DATA}/mlp_misc_output
 # sbatch --array=1-$(ls *.tsv | grep -v "output" | wc -l) ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA}
-sbatch --array=4-15 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # smaller datasets (below 100k loci) # tail slurm-16697268_*.out
-sbatch --array=1-3 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large maize datasets # tail slurm-16697269_*.out
-sbatch --array=16-18 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large switchgrass datasets # tail slurm-16697270_*.out
+sbatch --array=4-15 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # smaller datasets (below 100k loci) # tail slurm-16697674_*.out
+sbatch --array=1-3 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large maize datasets # tail slurm-16697675_*.out
+sbatch --array=16-18 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large switchgrass datasets # tail slurm-16697676_*.out
 # grep -n -i "err" slurm-*.out
 # grep -n -i "skip" slurm-*.out
 # tail slurm-*.out
