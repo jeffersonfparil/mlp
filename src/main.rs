@@ -83,7 +83,7 @@ struct Args {
     n_burnin_epochs: usize,
 
     /// Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping
-    #[arg(long, default_value_t = 0.25)]
+    #[arg(long, default_value_t = 0.01)]
     f_patient_epochs: f32,
 
     /// Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs)
@@ -136,7 +136,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "100,100,100"
+        default_value = "128,128,128"
     )]
     range_hidden_layer_nodes: Vec<usize>,
 
@@ -154,7 +154,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1e-5,1e-5,1e-5"
+        default_value = "1e-3,1e-3,1e-3"
     )]
     range_learning_rates: Vec<f32>,
 
@@ -163,7 +163,7 @@ struct Args {
     range_n_epochs: Vec<usize>,
 
     /// Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "0,1,1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "0,0,1")]
     range_n_burnin_epochs: Vec<usize>,
 
     /// Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
@@ -171,7 +171,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "0.5,1.0,0.5"
+        default_value = "0.01,0.01,0.01"
     )]
     range_f_patient_epochs: Vec<f32>,
 
@@ -180,12 +180,12 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "0.0,0.25,0.01"
+        default_value = "0.0,0.0,0.01"
     )]
     range_f_validation: Vec<f32>,
 
     /// Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2,1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,1,1")]
     range_n_batches: Vec<usize>,
 
     /// Activation functions to test

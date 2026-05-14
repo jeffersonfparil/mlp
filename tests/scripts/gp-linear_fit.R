@@ -1,18 +1,18 @@
 library(BGLR)
 # library(doParallel)
-args = commandArgs(trailingOnly=TRUE)
+args <- commandArgs(trailingOnly = TRUE)
 n_folds <- 10
 n_reps <- 5
-nIter <- 1500
-burnIn <- 500
+nIter <- 1500 # 6000
+burnIn <- 500 # 1000
 cv_metrics <- function(yHat, y) {
   # yHat = rnorm(100); y = rnorm(100)
-  n = length(y)
-  pcor = cor(yHat, y)
-  mae = mean(abs(yHat - y))
-  mse = mean((yHat - y)^2)
-  rmse = sqrt(mse)
-  r2 = 1.00 - (sum((yHat - y)^2) / sum((y - mean(y))^2))
+  n <- length(y)
+  pcor <- cor(yHat, y)
+  mae <- mean(abs(yHat - y))
+  mse <- mean((yHat - y)^2)
+  rmse <- sqrt(mse)
+  r2 <- 1.00 - (sum((yHat - y)^2) / sum((y - mean(y))^2))
   list(
     pcor = pcor,
     mae = mae,
@@ -24,26 +24,26 @@ cv_metrics <- function(yHat, y) {
 fit <- function(fname_input) {
   # fname_input <- list.files(path = ".", pattern = "^input_simulated-.*.tsv")[1]
   # fname_input <- list.files(path = ".", pattern = "*.*.tsv")[1]
-  fname_output = gsub("input_simulated", "output_simulated", gsub(".tsv", "-LINEAR.tsv", fname_input))
-  fname_output = if (grepl("^output", basename(fname_output))) {
+  fname_output <- gsub("input_simulated", "output_simulated", gsub(".tsv", "-LINEAR.tsv", fname_input))
+  fname_output <- if (grepl("^output", basename(fname_output))) {
     fname_output
   } else {
     paste0(dirname(fname_output), "/output-", basename(fname_output))
   }
-  cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse="\t"), file=fname_output, sep="\n")
-  datasets = c()
-  reps = c()
-  folds = c()
-  nt = c()
-  nv = c()
-  models = c()
-  corr = c()
-  r2 = c()
+  cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output, sep = "\n")
+  datasets <- c()
+  reps <- c()
+  folds <- c()
+  nt <- c()
+  nv <- c()
+  models <- c()
+  corr <- c()
+  r2 <- c()
   df <- read.table(fname_input, sep = "\t", header = TRUE)
   df < df[complete.cases(df), ]
   n <- nrow(df)
   p <- ncol(df) - 1
-  m <- ceiling(n / n_folds)
+  m <- floor(n / n_folds)
   if (m < 3) {
     print(paste0("ERROR: Skipping because the dataset (", fname_input, ") is too small (n=", n, "; m=", m, ") for ", n_reps, "-reps of ", n_folds, "-fold cross-validation"))
     return(1)
@@ -66,16 +66,16 @@ fit <- function(fname_input) {
         # model = "BayesC"
         mod <- BGLR(y = yNA, ETA = list(list(X = X, model = model)), nIter = nIter, burnIn = burnIn, saveAt = paste0(fname_input, "-", model, "-"), verbose=TRUE)
         yHat <- mod$yHat[idx_validation]
-        res = cv_metrics(yHat, y[idx_validation, ])
-        datasets = c(datasets, fname_input)
-        reps = c(reps, r)
-        folds = c(folds, f)
-        nt = c(nt, length(idx_training))
-        nv = c(nv, length(idx_validation))
-        models = c(models, model)
-        corr = c(corr, res$pcor)
-        r2 = c(r2, res$r2)
-        data = paste(c(fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse="\t")
+        res <- cv_metrics(yHat, y[idx_validation, ])
+        datasets <- c(datasets, fname_input)
+        reps <- c(reps, r)
+        folds <- c(folds, f)
+        nt <- c(nt, length(idx_training))
+        nv <- c(nv, length(idx_validation))
+        models <- c(models, model)
+        corr <- c(corr, res$pcor)
+        r2 <- c(r2, res$r2)
+        data <- paste(c(fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
         cat(data, file = fname_output, sep = "\n", append=TRUE)
         unlink(paste0(args[1], "-", model, "-*"))
       }

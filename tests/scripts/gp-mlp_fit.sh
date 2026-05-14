@@ -15,13 +15,13 @@ then
 fi
 # Fixed parameters
 N_EPOCHS=1000
-N_BURNIN_EPOCHS=100
-F_PATIENT_EPOCHS=0.5
+N_BURNIN_EPOCHS=10
+F_PATIENT_EPOCHS=0.01
 F_VALIDATION=0.1
 N_BATCHES=1
 N_HIDDEN_LAYERS=1
-# N_HIDDEN_NODES=2048
-N_HIDDEN_NODES=500
+N_HIDDEN_NODES=700
+LEARNING_RATE=0.00001
 N_REPS=5
 N_FOLDS=10
 # Setup the output directory
@@ -37,13 +37,14 @@ fi
 echo -e "datasets\treps\tfolds\tnt\tnv\tmodels\tcorr\tr2" > $OUTPUT
 N=$(echo $(cut -f1 $INPUT | wc -l) - 1 | bc)
 M=$(echo "scale=0; $N / $N_FOLDS" | bc)
-echo "$INPUT -->  $OUTPUT (N=$N; M=$M)"
+P=$(head -n1 $INPUT | cut -f2- | awk '{print NF}')
+echo "$INPUT -->  $OUTPUT (N=$N; M=$M; P=$P)"
 # Run replicated k-fold cross-validation
 for REP in $(seq 1 $N_REPS)
 do
     # REP=1
     IDX_SHUFFLED=($(shuf --random-source=<(yes $REP) -e $(seq 2 $(echo $N + 1 | bc))))
-    echo ${IDX_SHUFFLED[@]}
+    # echo ${IDX_SHUFFLED[@]}
     for FOLD in $(seq 1 $N_FOLDS)
     do
         # FOLD=1
@@ -61,9 +62,9 @@ do
                 IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
             fi
         done
-        echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-        echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-        echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
+        # echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+        # echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
+        # echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
         TRAINING_IDX=${IDX_TRAINING[@]}
         VALIDATION_IDX=${IDX_VALIDATION[@]}
         head -n1 $INPUT > TRAINING_SET.tmp
@@ -76,13 +77,13 @@ do
         #     -v \
         #     --hyperparameter-optimisation \
         #     --range-hidden-layers="1,1,1" \
-        #     --range-hidden-layer-nodes="1024,2048,1024" \
+        #     --range-hidden-layer-nodes="700,700,700" \
         #     --range-dropout-rates="0.0,0.0,0.01" \
-        #     --range-learning-rates="1e-5,1e-5,1e-5" \
+        #     --range-learning-rates="1e-5,1e-3,1e-4" \
         #     --range-n-epochs="1000,1000,1000" \
-        #     --range-n-burnin-epochs="10,100,10" \
+        #     --range-n-burnin-epochs="10,10,10" \
         #     --range-f-patient-epochs="0.01,0.01,0.01" \
-        #     --range-f-validation="0.0,0.1,0.1" \
+        #     --range-f-validation="0.1,0.1,0.1" \
         #     --range-n-batches="1,1,1" \
         #     --selection-activations="ReLU" \
         #     --selection-costs="MSE" \
@@ -100,6 +101,7 @@ do
             --n-batches=${N_BATCHES} \
             --n-hidden-layers=${N_HIDDEN_LAYERS} \
             --n-hidden-nodes=${N_HIDDEN_NODES} \
+            --learning-rate=${LEARNING_RATE} \
             --skip-marginals
         time ${MLP} \
             -f VALIDATION_SET.tmp \

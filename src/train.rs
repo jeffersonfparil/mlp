@@ -69,8 +69,8 @@ where
 fn prep_all_hyperparams(
     range_hidden_layers: Option<(usize, usize, usize)>,
     range_hidden_layer_nodes: Option<(usize, usize, usize)>,
-    range_dropout_rate: Option<(f32, f32, f32)>,
-    range_learning_rate: Option<(f32, f32, f32)>,
+    range_dropout_rates: Option<(f32, f32, f32)>,
+    range_learning_rates: Option<(f32, f32, f32)>,
     range_n_epochs: Option<(usize, usize, usize)>,
     range_n_burnin_epochs: Option<(usize, usize, usize)>,
     range_f_patient_epochs: Option<(f32, f32, f32)>,
@@ -104,11 +104,11 @@ fn prep_all_hyperparams(
         Some(x) => prep_each_hyperparam(x)?,
         None => prep_each_hyperparam((100, 500, 100))?,
     };
-    let selection_dropout_rates: Vec<f32> = match range_dropout_rate {
+    let selection_dropout_rates: Vec<f32> = match range_dropout_rates {
         Some(x) => prep_each_hyperparam(x)?,
         None => prep_each_hyperparam((0.0, 0.5, 0.01))?,
     };
-    let selection_learning_rates: Vec<f32> = match range_learning_rate {
+    let selection_learning_rates: Vec<f32> = match range_learning_rates {
         Some(x) => prep_each_hyperparam(x)?,
         None => prep_each_hyperparam((1e-5, 1e-2, 1e-4))?,
     };
@@ -396,8 +396,8 @@ impl Network {
         self: &Self,
         range_hidden_layers: Option<(usize, usize, usize)>,
         range_hidden_layer_nodes: Option<(usize, usize, usize)>,
-        range_dropout_rate: Option<(f32, f32, f32)>,
-        range_learning_rate: Option<(f32, f32, f32)>,
+        range_dropout_rates: Option<(f32, f32, f32)>,
+        range_learning_rates: Option<(f32, f32, f32)>,
         range_n_epochs: Option<(usize, usize, usize)>,
         range_n_burnin_epochs: Option<(usize, usize, usize)>,
         range_f_patient_epochs: Option<(f32, f32, f32)>,
@@ -412,8 +412,8 @@ impl Network {
         let param_combinations = prep_all_hyperparams(
             range_hidden_layers,
             range_hidden_layer_nodes,
-            range_dropout_rate,
-            range_learning_rate,
+            range_dropout_rates,
+            range_learning_rates,
             range_n_epochs,
             range_n_burnin_epochs,
             range_f_patient_epochs,
@@ -696,8 +696,8 @@ mod tests {
         // Hyper-parameter optimisations
         let range_hidden_layers = Some((1, 2, 1));
         let range_hidden_layer_nodes = Some((5, 5, 5));
-        let range_dropout_rate = Some((0.0, 0.0, 0.1));
-        let range_learning_rate = Some((0.0001, 0.0001, 0.0001));
+        let range_dropout_rates = Some((0.0, 0.0, 0.1));
+        let range_learning_rates = Some((0.0001, 0.0001, 0.0001));
         let range_n_epochs = Some((1, 3, 1));
         let range_n_burnin_epochs = Some((0, 2, 1));
         let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
@@ -710,8 +710,8 @@ mod tests {
         let network_hyper_optimised = network.hyperoptimise(
             range_hidden_layers,
             range_hidden_layer_nodes,
-            range_dropout_rate,
-            range_learning_rate,
+            range_dropout_rates,
+            range_learning_rates,
             range_n_epochs,
             range_n_burnin_epochs,
             range_f_patient_epochs,

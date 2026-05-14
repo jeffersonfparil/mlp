@@ -9,8 +9,6 @@ Simple multilayer perceptron (MLP) from scratch
 # Quickstart
 
 ```shell
-./mlp -h
-
 Usage: mlp [OPTIONS]
 
 Options:
@@ -34,8 +32,12 @@ Options:
           Optimiser (Choose: "Adam", "AdamMax", "GradientDescent") [default: Adam]
       --n-epochs <N_EPOCHS>
           Maximum number of training epochs [default: 10]
+      --n-burnin-epochs <N_BURNIN_EPOCHS>
+          Number of burnin epochs (initial training epochs to discard) [default: 0]
       --f-patient-epochs <F_PATIENT_EPOCHS>
           Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping [default: 0.25]
+      --f-validation <F_VALIDATION>
+          Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs) [default: 0]
       --n-batches <N_BATCHES>
           Number of training batches to split the input data into [default: 2]
       --learning-rate <LEARNING_RATE>
@@ -61,11 +63,15 @@ Options:
       --range-dropout-rates <RANGE_DROPOUT_RATES>
           Range of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0.0,0.0,0.01]
       --range-learning-rates <RANGE_LEARNING_RATES>
-          Range of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1e-5,1e-5,1e-5]
+          Range of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1e-3,1e-3,1e-3]
       --range-n-epochs <RANGE_N_EPOCHS>
           Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 10,10,10]
+      --range-n-burnin-epochs <RANGE_N_BURNIN_EPOCHS>
+          Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0,1,1]
       --range-f-patient-epochs <RANGE_F_PATIENT_EPOCHS>
           Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0.5,1.0,0.5]
+      --range-f-validation <RANGE_F_VALIDATION>
+          Range of proportions of the observations to be used in within training validation set [default: 0.0,0.25,0.01]
       --range-n-batches <RANGE_N_BATCHES>
           Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1,2,1]
       --selection-activations <SELECTION_ACTIVATIONS>
@@ -494,9 +500,23 @@ We evaluated performances based on 10-fold cross-validation repeated 5 times:
     - simulated relatively small datasets (i.e. 700 entries x 42,000 loci which may be continuous allele frequencies or binary genotypes)
     - empirical dataset from [Azodi et al (2019)](https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9)
 
-<details>
+*Notes:* 
+- We will need to increase the number of MCMC iterations for the BGLR to more realistic level, i.e. from 1,500 (500 burin) to 6,000 (1,000 burnin) iterations.
+- We may also opt to perform hyperparameter optimisation for mlp, instead of the fixed parameters below:
+    + N_EPOCHS=1000
+    + N_BURNIN_EPOCHS=100
+    + F_PATIENT_EPOCHS=0.5
+    + F_VALIDATION=0.1
+    + N_BATCHES=1
+    + N_HIDDEN_LAYERS=1
+    + N_HIDDEN_NODES=500
+    + N_REPS=5
+    + N_FOLDS=10
+    + ... or maybe use a simple parameter adjustment depending on the number of loci, e.g. increase the number of hidden nodes to 2048 if the number of loci drops below 1,000?
 
 ## Tests on simulated data
+
+<details>
 
 ### Simulate data
 
@@ -560,12 +580,12 @@ sbatch --array=1-$(ls input_simulated-*.tsv | wc -l) ${DIR_SRC}/gp-mlp_fit.slurm
 Run `tests/scripts/trials-comparisons.R`:
 
 ```shell
-cd mlp
-cd tests/gp/simulated/
-time Rscript ../../scripts/gp-comparisons.R
-# real    0m0.450s
-# user    0m4.851s
-# sys     0m0.098s
+DIR=${HOME}/Documents/mlp
+cd ${DIR}/tests/gp/simulated
+time Rscript ${DIR}/tests/scripts/gp-comparisons.R "gp-comparisons-simulated.png"
+# real    0m0.324s
+# user    0m4.892s
+# sys     0m0.088s
 ```
 
 </details>
@@ -577,6 +597,8 @@ time Rscript ../../scripts/gp-comparisons.R
 
 ## Tests on empirical data
 
+<details>
+
 ### Prepare the data
 
 Drayd has bot protection guards which means we need to download the Azodi et al (2019) data manually from here [https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9](https://datadryad.org/dataset/doi:10.5061/dryad.xksn02vb9).
@@ -586,90 +608,88 @@ Extract the datasets into `tests/gp/empirical`, then merge the phenotype and gen
 Run `tests/scripts/gp-prepare_empirical.sh`:
 
 ```shell
-DIR=${HOME}/Documents/mlp/tests/gp/empirical
-cd $DIR
-time sh ../../scripts/gp-prepare_empirical.sh
-# ???
+DIR=${HOME}/Documents/mlp
+DIR_DATA=${DIR}/tests/gp/empirical
+cd $DIR_DATA
+time sh ${DIR}/tests/scripts/gp-prepare_empirical.sh
+# real    2m10.783s
+# user    2m6.665s
+# sys     0m5.534s
 ```
 
 ### GP CV using BGLR
 
-Run `tests/scripts/gp-linear_fit.R`:
+Run `tests/scripts/gp-linear_fit.slurm`:
 
 ```shell
-cd mlp
-cd tests/gp/empirical
-time Rscript ../../scripts/gp-linear_fit.R
-# real    2m10.887s
-# user    2m6.888s
-# sys     0m5.476s
-```
-
-Using slurm because this will take a long time probably --> Run `tests/gp/simulated/gp-linear_fit.slurm`:
-
-```shell
-#!/bin/bash
-#SBATCH --job-name="mlp"
-#SBATCH --account="dbiof1"
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=50G
-#SBATCH --time=5-0:0:00
-time Rscript ../../scripts/gp-linear_fit.R
-##########################################
-# cat slurm-16648486.out
-rm BRR*.dat
-rm Bayes*.dat
+DIR=${HOME}/Documents/mlp
+DIR_SRC=${DIR}/tests/scripts
+DIR_DATA=${DIR}/tests/gp/empirical
+cd $DIR_DATA
+sbatch --array=1-$(ls *.tsv | grep -v "output" | wc -l) ${DIR_SRC}/gp-linear_fit.slurm ${DIR_SRC} ${DIR_DATA}
+# grep -n -i "err" slurm-*.out
+# grep -n -i "skip" slurm-*.out
+# tail slurm-*.out
+# head -n100 output-*LINEAR*.tsv
 ```
 
 ### MLP
 
-Run `tests/scripts/gp-mlp_fit.sh` via `tests/gp/simulated/gp-mlp_fit.slurm`:
+Run `tests/scripts/gp-mlp_fit.slurm`:
 
 ```shell
-DIR=${HOME}/Documents/mlp/tests/gp/empirical
-mkdir ${DIR}/mlp_misc_output
-# time sh ../../scripts/gp-mlp_fit.sh $INPUT $MLP $DIR
-cd $DIR
-sbatch --array=1-$(ls input_empirical-*.tsv | wc -l) gp-mlp_fit.slurm
-# ????
+DIR=${HOME}/Documents/mlp
+MLP=${DIR}/target/release/mlp
+DIR_SRC=${DIR}/tests/scripts
+DIR_DATA=${DIR}/tests/gp/empirical
+cd $DIR_DATA
+mkdir ${DIR_DATA}/mlp_misc_output
+# sbatch --array=1-$(ls *.tsv | grep -v "output" | wc -l) ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA}
+sbatch --array=4-15 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # smaller datasets (below 100k loci) # tail slurm-16697268_*.out
+sbatch --array=1-3 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large maize datasets # tail slurm-16697269_*.out
+sbatch --array=16-18 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large switchgrass datasets # tail slurm-16697270_*.out
+# grep -n -i "err" slurm-*.out
+# grep -n -i "skip" slurm-*.out
+# tail slurm-*.out
+# head -n100 output-*MLP*.tsv
 ```
 
-Using slurm because this will take a long time probably --> Run `tests/gp/empirical/gp-mlp_fit.slurm`:
+### Comparison between linear mixed model and mlp
+
+Run `tests/scripts/trials-comparisons.R`:
 
 ```shell
-#!/bin/bash
-#SBATCH --job-name="mlp"
-#SBATCH --account="dbiof1"
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:h100:1
-#SBATCH --mem=50G
-#SBATCH --time=5-0:0:00
-# cd ${HOME}/Documents/mlp; pixi shell
-MLP=${HOME}/Documents/mlp/target/release/mlp
-DIR=${HOME}/Documents/mlp/tests/gp/empirical
-SCRIPT=${HOME}/Documents/mlp/tests/scripts/gp-mlp_fit.sh
-INPUT=$(find "$DIR" -wholename "$DIR/*-*.tsv" | grep -v "^output" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
-time sh $SCRIPT $INPUT $MLP $DIR
-##########################################
-# sbatch --array=1-$(ls input_empirical-*.tsv | wc -l) gp-mlp_fit.slurm
+DIR=${HOME}/Documents/mlp
+cd ${DIR}/tests/gp/empirical
+time Rscript ${DIR}/tests/scripts/gp-comparisons.R "gp-comparisons-empirical.png"
+# ???
 ```
-
 
 </details>
+
+### Results
+
+Tests on empirical data running...
+
+![](./tests/gp/empirical/gp-comparisons-empirical.png)
+
 
 
 # Remote-sensing modelling
 
+Empirical data test only (as simulating data will not be that different from the continuous simulated data in GP)
+
 <details>
 
-## Empirical data test only (as simulating data will not be that different from the continuous simulated data in GP)
+## Prepare the dataset
 
-Potential dta sources:
-- https://datadryad.org/dataset/doi:10.5061/dryad.v41ns1s4z
-- https://datadryad.org/dataset/doi:10.5061/dryad.r4xgxd2mz
+Download dataset from [Fared et al (2024)](https://datadryad.org/dataset/doi:10.5061/dryad.v41ns1s4z).
+
+
+
+## Fit using canonical methods --> python stuff??
+
+## MLP
 
 </details>
 

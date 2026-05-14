@@ -1,3 +1,4 @@
+args <- commandArgs(trailingOnly = TRUE)
 fnames_tmp <- list.files(".", pattern = ".*.tsv")
 file_names_input <- fnames_tmp[!grepl("^output", fnames_tmp)]
 file_names_linear <- fnames_tmp[grepl("^output.*-LINEAR.*.tsv", fnames_tmp)]
@@ -37,8 +38,9 @@ print(df_results)
 n <- length(unique(df_results$models))
 m <- length(unique(df_results$id))
 M <- matrix(df_results$mean_corr, nrow = n, ncol = m, byrow = FALSE)
-rownames(M) <- unique(df_results$models)
-colnames(M) <- unique(df_results$id)
+S <- matrix(df_results$sd_corr, nrow = n, ncol = m, byrow = FALSE) / sqrt(5*10)
+rownames(M) <- unique(df_results$models); rownames(S) <- unique(df_results$models)
+colnames(M) <- unique(df_results$id); colnames(S) <- unique(df_results$id)
 colours_models <- c(
   # "#8dd3c7",
   # "#ffffb3",
@@ -52,16 +54,25 @@ colours_models <- c(
   "#d55e00"
 )
 
-png("gp-comparisons-simulated.png", height = 700, width = 900)
-barplot(
+fname_png <- args[1]
+png(fname_png, height = 700, width = 900)
+bp <- barplot(
   M,
   beside = TRUE,
   col = colours_models,
   border = NA,
   legend.text = TRUE,
-  args.legend = list(x = "topleft"),
+  args.legend = list(x = "topright"),
   xlab = "Dataset",
-  ylab = "Pearson's correlation"
+  ylab = "Pearson's correlation",
+  ylim = c(min(M - S), max(M + S))
+)
+arrows(
+  x0 = bp, y0 = M - S,
+  x1 = bp, y1 = M + S,
+  angle = 90, code = 3, length = 0.1
 )
 grid()
 dev.off()
+
+print(paste0(getwd(), "/", fname_png))
