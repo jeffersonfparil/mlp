@@ -503,7 +503,7 @@ We evaluated performances based on 10-fold cross-validation repeated 5 times:
 *Notes:* 
 - We will need to increase the number of MCMC iterations for the BGLR to more realistic level, i.e. from 1,500 (500 burin) to 6,000 (1,000 burnin) iterations.
 - We may also opt to perform hyperparameter optimisation for mlp, instead of the fixed parameters below:
-    + ... **TODO UPDATE** ...
+    + ... **TODO UPDATE: testing hyperparam optim choosing betwween ReLU vs Liner activations** ...
     + ... or maybe use a simple parameter adjustment depending on the number of loci, e.g. increase the number of hidden nodes to 2048 if the number of loci drops below 1,000?
 
 ## Tests on simulated data
