@@ -11,5 +11,5 @@
 MLP=$1
 DIR_SRC=$2
 DIR_DATA=$3
-INPUT=$(find "$DIR_DATA" -wholename "$DIR_DATA/*.tsv" | grep -v "output-" | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
+INPUT=$(find "$DIR_DATA" -wholename "$DIR_DATA/*.tsv" | grep -v "output-" | sort | head -n${SLURM_ARRAY_TASK_ID} | tail -n1)
 time sh ${DIR_SRC}/gp-mlp_fit.sh $INPUT $MLP $DIR_DATA

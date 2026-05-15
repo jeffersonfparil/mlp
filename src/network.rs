@@ -401,7 +401,7 @@ impl Network {
         let output_row_indexes: Vec<usize> = (0..self.targets.n_rows).collect();
         let input_data: Matrix = self.activations_per_layer[0].slice(&input_row_indexes, col_indexes)?;
         let output_data: Matrix = self.targets.slice(&output_row_indexes, col_indexes)?;
-        let network: Network = Network::new(
+        let mut network: Network = Network::new(
             &self.targets.data.context().default_stream(),
             input_data,
             output_data,
@@ -410,6 +410,8 @@ impl Network {
             self.dropout_rates.clone(),
             self.seed,
         )?;
+        network.activation = self.activation.clone();
+        network.cost = self.cost.clone();
         network.check_dimensions()?;
         Ok(network)
     }

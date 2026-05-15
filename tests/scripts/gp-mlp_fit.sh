@@ -5,7 +5,7 @@ DIR_DATA=$3
 # DIR_DATA=/home/jp3h/Documents/mlp/tests/gp/simulated
 # INPUT=$(find "$DIR_DATA" -name "*input_simulated-*.tsv" | head -n1 | tail -n1)
 # # DIR_DATA=/home/jp3h/Documents/mlp/tests/gp/empirical
-# # INPUT=$(find "$DIR_DATA" -name "*.tsv" | grep -v "LINEAR" | grep -v "MLP" | sort | head -n1 | tail -n1)
+# # INPUT=$(find "$DIR_DATA" -name "*.tsv" | grep -v "LINEAR" | grep -v "MLP" | sort | head -n6 | tail -n1)
 # MLP=/home/jp3h/Documents/mlp/target/release/mlp
 # mkdir ${DIR_DATA}/mlp_misc_output
 if [[ $(dirname $INPUT) == "." ]]
@@ -13,15 +13,18 @@ then
     echo "Please use the full path of the input file ($INPUT)."
     exit 1
 fi
-# Fixed parameters
-N_EPOCHS=1000
-N_BURNIN_EPOCHS=10
-F_PATIENT_EPOCHS=0.01
-F_VALIDATION=0.1
-N_BATCHES=1
-N_HIDDEN_LAYERS=1
-N_HIDDEN_NODES=700
-LEARNING_RATE=0.00001
+# # Fixed parameters
+# N_EPOCHS=1000
+# N_BURNIN_EPOCHS=100
+# F_PATIENT_EPOCHS=0.01
+# F_VALIDATION=0.1
+# N_BATCHES=1
+# N_HIDDEN_LAYERS=1
+# N_HIDDEN_NODES=700
+# ACTIVATION="Linear"
+# LEARNING_RATE=0.00001
+# OPTIMISER="Adam"
+# DROPOUT_RATES=0.00
 N_REPS=5
 N_FOLDS=10
 # Setup the output directory
@@ -71,38 +74,42 @@ do
         head -n1 $INPUT > VALIDATION_SET.tmp
         awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> TRAINING_SET.tmp
         awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $INPUT >> VALIDATION_SET.tmp
-        # time ${MLP} \
-        #     -f TRAINING_SET.tmp \
-        #     -o OUTPUT.tmp.json \
-        #     -v \
-        #     --hyperparameter-optimisation \
-        #     --range-hidden-layers="1,1,1" \
-        #     --range-hidden-layer-nodes="700,700,700" \
-        #     --range-dropout-rates="0.0,0.0,0.01" \
-        #     --range-learning-rates="1e-5,1e-3,1e-4" \
-        #     --range-n-epochs="1000,1000,1000" \
-        #     --range-n-burnin-epochs="10,10,10" \
-        #     --range-f-patient-epochs="0.01,0.01,0.01" \
-        #     --range-f-validation="0.1,0.1,0.1" \
-        #     --range-n-batches="1,1,1" \
-        #     --selection-activations="ReLU" \
-        #     --selection-costs="MSE" \
-        #     --selection-optimisers="Adam" \
-        #     --skip-marginals
-        # rm *.svg
+        # Selecting between ReLU and Linear activation functions (selectiong the latter renders the model simply linear)
         time ${MLP} \
             -f TRAINING_SET.tmp \
             -o OUTPUT.tmp.json \
             -v \
-            --n-epochs=${N_EPOCHS} \
-            --n-burnin-epochs=${N_BURNIN_EPOCHS} \
-            --f-patient-epochs=${F_PATIENT_EPOCHS} \
-            --f-validation=${F_VALIDATION} \
-            --n-batches=${N_BATCHES} \
-            --n-hidden-layers=${N_HIDDEN_LAYERS} \
-            --n-hidden-nodes=${N_HIDDEN_NODES} \
-            --learning-rate=${LEARNING_RATE} \
+            --hyperparameter-optimisation \
+            --range-hidden-layers="1,1,1" \
+            --range-hidden-layer-nodes="700,700,700" \
+            --range-dropout-rates="0.0,0.0,0.01" \
+            --range-learning-rates="1e-5,1e-5,1e-5" \
+            --range-n-epochs="1000,1000,1000" \
+            --range-n-burnin-epochs="100,100,100" \
+            --range-f-patient-epochs="0.01,0.01,0.01" \
+            --range-f-validation="0.1,0.1,0.1" \
+            --range-n-batches="1,1,1" \
+            --selection-costs="MSE" \
+            --selection-optimisers="Adam" \
+            --selection-activations="ReLU,Linear" \
             --skip-marginals
+        # rm *.svg
+        # time ${MLP} \
+        #     -f TRAINING_SET.tmp \
+        #     -o OUTPUT.tmp.json \
+        #     -v \
+        #     --n-epochs=${N_EPOCHS} \
+        #     --n-burnin-epochs=${N_BURNIN_EPOCHS} \
+        #     --f-patient-epochs=${F_PATIENT_EPOCHS} \
+        #     --f-validation=${F_VALIDATION} \
+        #     --n-batches=${N_BATCHES} \
+        #     --n-hidden-layers=${N_HIDDEN_LAYERS} \
+        #     --n-hidden-nodes=${N_HIDDEN_NODES} \
+        #     --activation=${ACTIVATION} \
+        #     --learning-rate=${LEARNING_RATE} \
+        #     --optimiser=${OPTIMISER} \
+        #     --dropout-rates=${DROPOUT_RATES} \
+        #     --skip-marginals
         time ${MLP} \
             -f VALIDATION_SET.tmp \
             -m OUTPUT.tmp.json \

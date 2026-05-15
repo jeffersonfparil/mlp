@@ -800,6 +800,7 @@ impl Network {
             "ReLU" => Activation::ReLU,
             "Sigmoid" => Activation::Sigmoid,
             "HyperbolicTangent" => Activation::HyperbolicTangent,
+            "Linear" => Activation::Linear,
             _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
         };
         network.cost = match serdifiable_network.cost.as_ref() {

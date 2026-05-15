@@ -62,7 +62,7 @@ struct Args {
     #[arg(long, value_parser, value_delimiter = ',', default_value = "0.0")]
     dropout_rates: Vec<f32>,
 
-    /// Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent") (Note: "LeakyReLU" under construction)
+    /// Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear") (Note: "LeakyReLU" under construction)
     #[arg(long, default_value = "ReLU")]
     activation: String,
 
@@ -670,6 +670,7 @@ fn train_with_hyperparameter_optimisation(
                 "ReLU" => Activation::ReLU,
                 "Sigmoid" => Activation::Sigmoid,
                 "HyperbolicTangent" => Activation::HyperbolicTangent,
+                "Linear" => Activation::Linear,
                 _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
             });
         }
@@ -736,6 +737,7 @@ fn train_with_fixed_hyperparameters(
         "ReLU" => Activation::ReLU,
         "Sigmoid" => Activation::Sigmoid,
         "HyperbolicTangent" => Activation::HyperbolicTangent,
+        "Linear" => Activation::Linear,
         _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
     };
     network.cost = match args.cost.as_ref() {

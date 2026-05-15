@@ -25,7 +25,7 @@ Options:
       --dropout-rates <DROPOUT_RATES>
           Dropout rates per hidden layer [default: 0.0]
       --activation <ACTIVATION>
-          Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent") (Note: "LeakyReLU" under construction) [default: ReLU]
+          Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear") (Note: "LeakyReLU" under construction) [default: ReLU]
       --cost <COST>
           Cost function (Choose: "MSE", "MAE", "HL") [default: MSE]
       --optimiser <OPTIMISER>
@@ -503,15 +503,7 @@ We evaluated performances based on 10-fold cross-validation repeated 5 times:
 *Notes:* 
 - We will need to increase the number of MCMC iterations for the BGLR to more realistic level, i.e. from 1,500 (500 burin) to 6,000 (1,000 burnin) iterations.
 - We may also opt to perform hyperparameter optimisation for mlp, instead of the fixed parameters below:
-    + N_EPOCHS=1000
-    + N_BURNIN_EPOCHS=100
-    + F_PATIENT_EPOCHS=0.5
-    + F_VALIDATION=0.1
-    + N_BATCHES=1
-    + N_HIDDEN_LAYERS=1
-    + N_HIDDEN_NODES=500
-    + N_REPS=5
-    + N_FOLDS=10
+    + ... **TODO UPDATE** ...
     + ... or maybe use a simple parameter adjustment depending on the number of loci, e.g. increase the number of hidden nodes to 2048 if the number of loci drops below 1,000?
 
 ## Tests on simulated data
@@ -645,11 +637,11 @@ DIR_DATA=${DIR}/tests/gp/empirical
 cd $DIR_DATA
 mkdir ${DIR_DATA}/mlp_misc_output
 # sbatch --array=1-$(ls *.tsv | grep -v "output" | wc -l) ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA}
-sbatch --array=4-15 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # smaller datasets (below 100k loci) # tail slurm-16697674_*.out
-sbatch --array=1-3 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large maize datasets # tail slurm-16697675_*.out
-sbatch --array=16-18 ${DIR_SRC}/gp-mlp_fit_V100.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large switchgrass datasets # tail slurm-16697676_*.out
+sbatch --array=4-15 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # smaller datasets (below 100k loci)
+sbatch --array=1-3 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large maize datasets
+sbatch --array=16-18 ${DIR_SRC}/gp-mlp_fit.slurm ${MLP} ${DIR_SRC} ${DIR_DATA} # large switchgrass datasets
 # grep -n -i "err" slurm-*.out
-# grep -n -i "skip" slurm-*.out
+# grep -n "Activation:" slurm-*.out
 # tail slurm-*.out
 # head -n100 output-*MLP*.tsv
 ```
@@ -662,7 +654,9 @@ Run `tests/scripts/trials-comparisons.R`:
 DIR=${HOME}/Documents/mlp
 cd ${DIR}/tests/gp/empirical
 time Rscript ${DIR}/tests/scripts/gp-comparisons.R "gp-comparisons-empirical.png"
-# ???
+# real    0m0.464s
+# user    0m4.964s
+# sys     0m0.106s
 ```
 
 </details>

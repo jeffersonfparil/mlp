@@ -33,6 +33,7 @@ impl fmt::Display for ActivationError {
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Activation {
+    Linear,
     Sigmoid,
     HyperbolicTangent,
     ReLU,
@@ -42,6 +43,9 @@ pub enum Activation {
 impl fmt::Display for Activation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Activation::Linear => {
+                write!(f, "Linear")
+            }
             Activation::Sigmoid => {
                 write!(f, "Sigmoid")
             }
@@ -57,6 +61,46 @@ impl fmt::Display for Activation {
         }
     }
 }
+
+const LINEAR: &str = "
+    extern \"C\" __global__ void cuLinear(float* A, float* B, int n_rows, int n_cols) {
+        // Linear activation kernel implementation
+        // Arguments:
+        //  - A: input matrix (n_rows x n_cols)
+        //  - B: output matrix (n_rows x n_cols)
+        //  - n_rows: number of rows in A and B
+        //  - n_cols: number of columns in A and B
+        // Assumes:
+        //  - row-major storage
+        //  - matrices A and B are of the same size
+        int i = (blockIdx.y * blockDim.y) + threadIdx.y; // Row index
+        int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
+        if ((i < n_rows) && (j < n_cols)) {
+            int idx = (i * n_cols) + j; // Linear index for the A and B matrices
+            B[idx] = A[idx];
+        }
+    }
+";
+
+const LINEAR_DERIVATIVE: &str = "
+    extern \"C\" __global__ void cuLinearDerivative(float* A, float* B, int n_rows, int n_cols) {
+        // Linear activation derivative kernel implementation
+        // Arguments:
+        //  - A: input matrix (n_rows x n_cols)
+        //  - B: output matrix (n_rows x n_cols)
+        //  - n_rows: number of rows in A and B
+        //  - n_cols: number of columns in A and B
+        // Assumes:
+        //  - row-major storage
+        //  - matrices A and B are of the same size
+        int i = (blockIdx.y * blockDim.y) + threadIdx.y; // Row index
+        int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
+        if ((i < n_rows) && (j < n_cols)) {
+            int idx = (i * n_cols) + j; // Linear index for the A and B matrices
+            B[idx] = 1.00;
+        }
+    }
+";
 
 const SIGMOID: &str = "
     extern \"C\" __global__ void cuSigmoid(float* A, float* B, int n_rows, int n_cols) {
@@ -241,6 +285,60 @@ const LEAKYRELU_DERIVATIVE: &str = "
         }
     }
 ";
+
+pub fn linear(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuLinear", LINEAR)?;
+    let stream: Arc<CudaStream> = a.data.context().default_stream();
+    let mut builder: LaunchArgs = stream.launch_builder(&f);
+    let n_rows: u32 = a.n_rows as u32;
+    let n_cols: u32 = a.n_cols as u32;
+    let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+    let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
+    builder.arg(&a.data);
+    builder.arg(&mut out_dev);
+    builder.arg(&n_rows);
+    builder.arg(&n_cols);
+    let cfg = LaunchConfig {
+        block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
+        grid_dim: (
+            (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            1,
+        ),
+        shared_mem_bytes: 0,
+    };
+    unsafe {
+        let _ = builder.launch(cfg);
+    };
+    Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
+}
+
+pub fn linearderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuLinearDerivative", LINEAR_DERIVATIVE)?;
+    let stream: Arc<CudaStream> = a.data.context().default_stream();
+    let mut builder: LaunchArgs = stream.launch_builder(&f);
+    let n_rows: u32 = a.n_rows as u32;
+    let n_cols: u32 = a.n_cols as u32;
+    let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+    let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
+    builder.arg(&a.data);
+    builder.arg(&mut out_dev);
+    builder.arg(&n_rows);
+    builder.arg(&n_cols);
+    let cfg = LaunchConfig {
+        block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
+        grid_dim: (
+            (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            1,
+        ),
+        shared_mem_bytes: 0,
+    };
+    unsafe {
+        let _ = builder.launch(cfg);
+    };
+    Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
+}
 
 pub fn sigmoid(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     let f: CudaFunction = a.get_cached_kernel("cuSigmoid", SIGMOID)?;
@@ -465,6 +563,7 @@ pub fn leakyreluderivative(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>>
 impl Activation {
     pub fn activate(&self, a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
         match self {
+            Activation::Linear => linear(a),
             Activation::Sigmoid => sigmoid(a),
             Activation::HyperbolicTangent => hyperbolictangent(a),
             Activation::ReLU => relu(a),
@@ -475,6 +574,7 @@ impl Activation {
     }
     pub fn derivative(&self, a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
         match self {
+            Activation::Linear => linearderivative(a),
             Activation::Sigmoid => sigmoidderivative(a),
             Activation::HyperbolicTangent => hyperbolictangentderivative(a),
             Activation::ReLU => reluderivative(a),
