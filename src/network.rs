@@ -1,11 +1,12 @@
 use crate::activations;
 use crate::costs;
 use crate::linalg::matrix::Matrix;
-use crate::progress_bar;
-use crate::progress_bar::ProgressBar;
+// use crate::progress_bar;
+// use crate::progress_bar::ProgressBar;
 use cudarc::driver::{CudaSlice, CudaStream};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
+use rand_distr::Cauchy;
 use rand_distr::Normal;
 use std::error::Error;
 use std::fmt;
@@ -314,6 +315,7 @@ impl Network {
             let p: usize = n_nodes[i];
             // println!("i={};p={}; n*p={}", i, p, n*p);
             let normal = Normal::new(0.0, 2.0/(p as f32))?; // He initialisation
+            // let normal = Cauchy::new(0.0, 2.0/(p as f32))?; // testing
             // let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
             let mut weights_host: Vec<f32> = Vec::with_capacity(n * p);
             // let mut pb = ProgressBar::new(n*p, 50, format!("He initialisation of weights in the {} layer: ", i));

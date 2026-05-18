@@ -1,10 +1,12 @@
 args <- commandArgs(trailingOnly = TRUE)
 # args <- "gp-comparisons-empirical.png"
+fname_png <- args[1]
 fnames_tmp <- list.files(".", pattern = ".*.tsv")
 file_names_input <- fnames_tmp[!grepl("^output", fnames_tmp)]
 file_names_linear <- fnames_tmp[grepl("^output.*-LINEAR.*.tsv", fnames_tmp)]
 file_names_mlp <- fnames_tmp[grepl("^output.*-MLP.*.tsv", fnames_tmp)]
 
+df <- NULL
 df_results <- NULL
 for (file_name_input in file_names_input) {
   # file_name_input <- file_names_input[1]
@@ -26,15 +28,32 @@ for (file_name_input in file_names_input) {
     merge(aggregate(corr ~ models, FUN = mean, data = df_mlp), aggregate(corr ~ models, FUN = sd, data = df_mlp), by = "models")
   )
   colnames(df_merged) <- c("models", "mean_corr", "sd_corr")
-
+  df <- if (is.null(df)) {
+    rbind(df_linear, df_mlp)
+  } else {
+    rbind(df, df_linear, df_mlp)
+  }
   df_results <- if (is.null(df_results)) {
     cbind(id, df_merged)
   } else {
     rbind(df_results, cbind(id, df_merged))
   }
 }
+# print(df_results)
+df$datasets <- unlist(lapply(df$datasets, FUN=function(x){gsub(".tsv", "", basename(x))}))
+str(df)
 
-print(df_results)
+png(fname_png, width = 1500)
+colours <- c("#7fc97f", "#beaed4", "#fdc086", "#ffff99", "#386cb0")
+par(mar = c(10, 5, 1, 1))
+bp <- boxplot(corr ~ models + datasets, data = df, col = colours, xaxt = "n", xlab = NA)
+datasets <- unique(df$datasets)
+models <- unlist(lapply(strsplit(bp$names[1:length(models)], "[.]"), FUN=function(x){x[1]}))
+abline(v = 5 * c(0:length(datasets)) + 0.5, lty = 4)
+axis(side = 1, at = 5 * c(1:length(datasets)) - 2.5, labels = datasets, las = 2)
+grid()
+legend("bottomleft", legend = models, fill = colours)
+dev.off()
 
 n <- length(unique(df_results$models))
 m <- length(unique(df_results$id))

@@ -167,7 +167,8 @@ time cargo run -- -s -n1000 -p10 -v
 
 
 # TESTING CROSS-VALIDATION FOR N << P DATASETS
-time cargo run -- -s -n500 -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
+time cargo run -- -s -n100 -p2000 -q0 -v
+# time cargo run -- -s -n500 -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
 N=$(cat $INPUT | wc -l)
 V=$(printf %.0f $(echo  "scale=0; $N * 0.1" | bc))
