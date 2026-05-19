@@ -8,6 +8,8 @@ use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use rand_distr::Cauchy;
 use rand_distr::Normal;
+use rand_distr::Uniform;
+use ruviz::plots::distribution;
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
@@ -176,6 +178,13 @@ enum NetworkError {
     OtherError(String),
 }
 
+pub enum WeightsInitialisation {
+    He,
+    Cauchy,
+    Uniform,
+    StandardNormal,
+}
+
 impl Network {
     pub fn check_dimensions(&self) -> Result<(), Box<dyn Error>> {
         let n_observations: usize = self.targets.n_cols;
@@ -246,6 +255,47 @@ impl Network {
         Ok(())
     }
 
+    pub fn init_weights(&mut self, init_type: WeightsInitialisation, seed: usize) -> Result<(), Box<dyn Error>> {
+        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
+        let n = self.n_hidden_layers;
+        for i in 0..(n+1) {
+            let n: usize = self.weights_per_layer[i].n_rows;
+            let p: usize = self.weights_per_layer[i].n_cols;
+            let mut weights_host: Vec<f32> = Vec::with_capacity(n * p);
+            // Sampling in chucks is faster than one-by-one or all-at-once
+            let step_size: usize = 1_000_000;
+            for j in (0..(n*p)).step_by(step_size) {
+                let m = if j+step_size > (n*p) {
+                    n*p - j
+                } else {
+                    step_size
+                };
+                let tmp: Vec<f32> = match init_type {
+                    WeightsInitialisation::He => {
+                        let distribution = Normal::new(0.0, 2.0/(p as f32))?;
+                        (&mut rng).sample_iter(distribution).take(m).collect()
+                    },
+                    WeightsInitialisation::Cauchy => {
+                        let distribution = Cauchy::new(0.0, 2.0/(p as f32))?;
+                        (&mut rng).sample_iter(distribution).take(m).collect()
+                    },
+                    WeightsInitialisation::Uniform => {
+                        let distribution = Uniform::new(0.0, 1.0)?;
+                        (&mut rng).sample_iter(distribution).take(m).collect()
+                    },
+                    WeightsInitialisation::StandardNormal => {
+                        let distribution = Normal::new(0.0, 1.0)?;
+                        (&mut rng).sample_iter(distribution).take(m).collect()
+                    },
+                };
+                weights_host.extend(&tmp);
+            }
+            let stream = self.weights_per_layer[i].data.context().default_stream();
+            self.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n, p)?;
+        }
+        Ok(())
+    }
+    
     pub fn new(
         stream: &Arc<CudaStream>,
         input_data: Matrix,
@@ -301,7 +351,6 @@ impl Network {
         }
         n_nodes.push(n_output_nodes);
         let predictions_host: Vec<f32> = vec![0f32; n_observations * n_output_nodes];
-        let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         let predictions_dev: CudaSlice<f32> = stream.clone_htod(&predictions_host)?;
         let predictions: Matrix = Matrix::new(predictions_dev, n_output_nodes, n_observations)?;
         let mut weights_per_layer: Vec<Matrix> = vec![];
@@ -313,28 +362,7 @@ impl Network {
         for i in 0..(n_nodes.len() - 1) {
             let n: usize = n_nodes[i + 1];
             let p: usize = n_nodes[i];
-            // println!("i={};p={}; n*p={}", i, p, n*p);
-            let normal = Normal::new(0.0, 2.0/(p as f32))?; // He initialisation
-            // let normal = Cauchy::new(0.0, 2.0/(p as f32))?; // testing
-            // let weights_host: Vec<f32> = (&mut rng).sample_iter(normal).take(n * p).collect();
-            let mut weights_host: Vec<f32> = Vec::with_capacity(n * p);
-            // let mut pb = ProgressBar::new(n*p, 50, format!("He initialisation of weights in the {} layer: ", i));
-            // for _ in 0..(n*p) {
-            //     weights_host.push(normal.sample(&mut rng) as f32);
-            //     pb.next();
-            // }
-            // pb.finish();
-            let step_size: usize = 1_000_000;
-            for j in (0..(n*p)).step_by(step_size) {
-                let m = if j+step_size > (n*p) {
-                    n*p - j
-                } else {
-                    step_size
-                };
-                let tmp: Vec<f32> = (&mut rng).sample_iter(normal).take(m).collect();
-                weights_host.extend(&tmp);
-            }
-            // println!("weights_host[0..10]={:?}", &weights_host[0..10]);
+            let weights_host: Vec<f32> = vec![0f32; n * p];
             let dweights_host: Vec<f32> = vec![0f32; n * p];
             let biases_host: Vec<f32> = vec![0f32; n * 1];
             let dbiases_host: Vec<f32> = vec![0f32; n * 1];
@@ -373,7 +401,7 @@ impl Network {
         let targets_dev: CudaSlice<f32> = stream.clone_htod(&targets_host)?;
         let targets: Matrix = Matrix::new(targets_dev, output_data.n_rows, output_data.n_cols)?;
         // Output
-        let out = Self {
+        let mut out = Self {
             n_hidden_layers: n_hidden_layers,
             n_hidden_nodes: n_hidden_nodes,
             dropout_rates: dropout_rates,
@@ -391,6 +419,8 @@ impl Network {
             n_epochs: 0,
             seed: seed,
         };
+        // He/Kaiming initialisation of weights by default as ReLU is tha default activation function
+        out.init_weights(WeightsInitialisation::He, seed)?;
         out.check_dimensions()?;
         Ok(out)
     }

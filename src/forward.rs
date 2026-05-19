@@ -59,6 +59,7 @@ impl Network {
             self.weights_x_biases_per_layer[i] =
                 weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
             if i < n {
+                // No activation function for the output layer
                 self.activations_per_layer[i + 1] = self
                     .activation
                     .activate(&self.weights_x_biases_per_layer[i])?;
