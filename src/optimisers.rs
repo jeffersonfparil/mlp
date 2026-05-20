@@ -332,6 +332,7 @@ impl Network {
 mod tests {
     use super::*;
     use cudarc::driver::{CudaContext, CudaSlice};
+    use crate::network::WeightsInitialisation;
     #[test]
     fn test_optimisers() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -357,6 +358,7 @@ mod tests {
             n_hidden_layers,
             vec![256; n_hidden_layers],
             vec![0.0f32; n_hidden_layers],
+            WeightsInitialisation::He,
             42,
         )?;
         println!("network (init): {}", network);

@@ -9,32 +9,60 @@ use rand_chacha::ChaCha12Rng;
 use rand_distr::Cauchy;
 use rand_distr::Normal;
 use rand_distr::Uniform;
-use ruviz::plots::distribution;
+// use ruviz::plots::distribution;
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
 // TODO: revise comments also add docs to make sure we know how each field correspond to each other including their dimensions, i.e. activations is the odd-one-out as it includes the input layer plus all hidden layers and the output layer
 
+#[derive(Debug, Copy, Clone)]
+pub enum WeightsInitialisation {
+    He,
+    Cauchy,
+    Uniform,
+    StandardNormal,
+}
+
+impl fmt::Display for WeightsInitialisation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WeightsInitialisation::He => {
+                write!(f, "He")
+            }
+            WeightsInitialisation::Cauchy => {
+                write!(f, "Cauchy")
+            }
+            WeightsInitialisation::Uniform => {
+                write!(f, "Uniform")
+            }
+            WeightsInitialisation::StandardNormal => {
+                write!(f, "StandardNormal")
+            }
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Network {
-    pub n_hidden_layers: usize,                   // number of hidden layers (k)
-    pub n_hidden_nodes: Vec<usize>,               // number of nodes per hidden layer
-    pub dropout_rates: Vec<f32>,                  // dropout rates per hidden layer
-    pub targets: Matrix,                          // observed values (n_output_nodes x n_observations; standardised, i.e. standard normal with mean 0.0 and standard deviation 1.0)
-    pub targets_mean_sd: (f32,f32),               // mean and standard deviation of the targets matrix across all values (i.e. not per row nor per column)
-    pub predictions: Matrix,                      // predictions (n_output_nodes x n_observations)
-    pub weights_per_layer: Vec<Matrix>,           // weights (n_nodes[i+1] x n_nodes[i]) for each layer
-    pub biases_per_layer: Vec<Matrix>,            // biases (n_nodes[i+1] x 1) for each layer
-    pub weights_x_biases_per_layer: Vec<Matrix>,  // pre-activation sums (n_nodes[i+1] x n_observations) for each layer
-    pub activations_per_layer: Vec<Matrix>,       // activations (n_nodes[i] x n_observations) for each layer, includes input as first element
-    pub weights_gradients_per_layer: Vec<Matrix>, // weight gradients (n_nodes[i+1] x n_nodes[i]) for each layer
-    pub biases_gradients_per_layer: Vec<Matrix>,  // bias gradients (n_nodes[i+1] x 1) for each layer
-    pub activation: activations::Activation,      // activation function enum (includes derivative)
-    pub cost: costs::Cost,                        // cost function
-    pub n_epochs: usize,                          // number of epochs ran
-    pub seed: usize,                              // random seed for reproducibility
+    pub n_hidden_layers: usize,                        // number of hidden layers (k)
+    pub n_hidden_nodes: Vec<usize>,                    // number of nodes per hidden layer
+    pub dropout_rates: Vec<f32>,                       // dropout rates per hidden layer
+    pub targets: Matrix,                               // observed values (n_output_nodes x n_observations; standardised, i.e. standard normal with mean 0.0 and standard deviation 1.0)
+    pub targets_mean_sd: (f32,f32),                    // mean and standard deviation of the targets matrix across all values (i.e. not per row nor per column)
+    pub predictions: Matrix,                           // predictions (n_output_nodes x n_observations)
+    pub weights_per_layer: Vec<Matrix>,                // weights (n_nodes[i+1] x n_nodes[i]) for each layer
+    pub biases_per_layer: Vec<Matrix>,                 // biases (n_nodes[i+1] x 1) for each layer
+    pub weights_x_biases_per_layer: Vec<Matrix>,       // pre-activation sums (n_nodes[i+1] x n_observations) for each layer
+    pub activations_per_layer: Vec<Matrix>,            // activations (n_nodes[i] x n_observations) for each layer, includes input as first element
+    pub weights_gradients_per_layer: Vec<Matrix>,      // weight gradients (n_nodes[i+1] x n_nodes[i]) for each layer
+    pub biases_gradients_per_layer: Vec<Matrix>,       // bias gradients (n_nodes[i+1] x 1) for each layer
+    pub activation: activations::Activation,           // activation function enum (includes derivative)
+    pub cost: costs::Cost,                             // cost function
+    pub weights_initialisation: WeightsInitialisation, // weights initialisation
+    pub n_epochs: usize,                               // number of epochs ran
+    pub seed: usize,                                   // random seed for reproducibility
 }
 
 impl fmt::Display for Network {
@@ -173,16 +201,24 @@ impl fmt::Display for Network {
 }
 
 #[derive(Debug, PartialEq)]
-enum NetworkError {
+pub enum NetworkError {
     DimensionMismatch(String),
     OtherError(String),
 }
 
-pub enum WeightsInitialisation {
-    He,
-    Cauchy,
-    Uniform,
-    StandardNormal,
+/// Implement Error for NetworkError
+impl Error for NetworkError {}
+
+/// Implement std::fmt::Display for NetworkError
+impl fmt::Display for NetworkError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NetworkError::DimensionMismatch(msg) => {
+                write!(f, "Dimension Mismatch in Network: {}", msg)
+            }
+            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
+        }
+    }
 }
 
 impl Network {
@@ -255,7 +291,7 @@ impl Network {
         Ok(())
     }
 
-    pub fn init_weights(&mut self, init_type: WeightsInitialisation, seed: usize) -> Result<(), Box<dyn Error>> {
+    pub fn init_weights(&mut self, init_type: &WeightsInitialisation, seed: usize) -> Result<(), Box<dyn Error>> {
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         let n = self.n_hidden_layers;
         for i in 0..(n+1) {
@@ -303,6 +339,7 @@ impl Network {
         n_hidden_layers: usize,
         n_hidden_nodes: Vec<usize>,
         dropout_rates: Vec<f32>,
+        weights_initialisation: WeightsInitialisation,
         seed: usize,
         // verbose: bool,
     ) -> Result<Self, Box<dyn Error>> {
@@ -416,11 +453,12 @@ impl Network {
             activations_per_layer: activations_per_layer,
             activation: activations::Activation::ReLU,
             cost: costs::Cost::MSE,
+            weights_initialisation: weights_initialisation,
             n_epochs: 0,
             seed: seed,
         };
         // He/Kaiming initialisation of weights by default as ReLU is tha default activation function
-        out.init_weights(WeightsInitialisation::He, seed)?;
+        out.init_weights(&weights_initialisation, seed)?;
         out.check_dimensions()?;
         Ok(out)
     }
@@ -440,6 +478,7 @@ impl Network {
             self.n_hidden_layers,
             self.n_hidden_nodes.clone(),
             self.dropout_rates.clone(),
+            self.weights_initialisation.clone(),
             self.seed,
         )?;
         network.activation = self.activation.clone();
@@ -518,21 +557,6 @@ impl Network {
     }
 }
 
-/// Implement Error for NetworkError
-impl Error for NetworkError {}
-
-/// Implement std::fmt::Display for NetworkError
-impl fmt::Display for NetworkError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NetworkError::DimensionMismatch(msg) => {
-                write!(f, "Dimension Mismatch in Network: {}", msg)
-            }
-            NetworkError::OtherError(msg) => write!(f, "Other Error in Network: {}", msg),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -561,6 +585,7 @@ mod tests {
             10,
             vec![256; 10],
             vec![0.0f32; 10],
+            WeightsInitialisation::He,
             42,
         )?;
         println!("Network: {}", network);

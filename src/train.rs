@@ -1,10 +1,11 @@
 use crate::activations::Activation;
 use crate::costs::Cost;
-use crate::network::Network;
+use crate::network::{Network, WeightsInitialisation};
 use crate::optimisers::{OptimisationParameters, Optimiser};
 use crate::progress_bar::ProgressBar;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
+// use rand_distr::weighted::Weight;
 use rayon::prelude::*;
 use std::error::Error;
 use std::fmt;
@@ -79,6 +80,7 @@ fn prep_all_hyperparams(
     selection_activations: Option<Vec<Activation>>,
     selection_costs: Option<Vec<Cost>>,
     selection_optimisers: Option<Vec<Optimiser>>,
+    selection_weights_initialisations: Option<Vec<WeightsInitialisation>>,
 ) -> Result<
     Vec<(
         usize,
@@ -93,6 +95,7 @@ fn prep_all_hyperparams(
         Activation,
         Cost,
         Optimiser,
+        WeightsInitialisation,
     )>,
     Box<dyn Error>,
 > {
@@ -148,6 +151,15 @@ fn prep_all_hyperparams(
             Optimiser::GradientDescent,
         ],
     };
+    let selection_weights_initialisations: Vec<WeightsInitialisation> = match selection_weights_initialisations {
+        Some(x) => x,
+        None => vec![
+            WeightsInitialisation::He,
+            WeightsInitialisation::Cauchy,
+            WeightsInitialisation::Uniform,
+            WeightsInitialisation::StandardNormal,
+        ],
+    };
     let mut param_combinations: Vec<(
         usize,
         usize,
@@ -161,6 +173,7 @@ fn prep_all_hyperparams(
         Activation,
         Cost,
         Optimiser,
+        WeightsInitialisation,
     )> = Vec::new();
     for n_hidden_layers in &selection_hidden_layers {
         for n_hidden_nodes in &selection_hidden_layer_nodes {
@@ -174,20 +187,23 @@ fn prep_all_hyperparams(
                                         for activation in &selection_activations {
                                             for cost in &selection_costs {
                                                 for optimiser in &selection_optimisers {
-                                                    param_combinations.push((
-                                                        *n_hidden_layers,
-                                                        *n_hidden_nodes,
-                                                        *dropout_rate,
-                                                        *learning_rate,
-                                                        *n_epochs,
-                                                        *n_burnin_epochs,
-                                                        *f_patient_epochs,
-                                                        *f_validation,
-                                                        *n_batches,
-                                                        activation.clone(),
-                                                        cost.clone(),
-                                                        optimiser.clone(),
-                                                    ));
+                                                    for weights_initialisation in &selection_weights_initialisations {
+                                                        param_combinations.push((
+                                                            *n_hidden_layers,
+                                                            *n_hidden_nodes,
+                                                            *dropout_rate,
+                                                            *learning_rate,
+                                                            *n_epochs,
+                                                            *n_burnin_epochs,
+                                                            *f_patient_epochs,
+                                                            *f_validation,
+                                                            *n_batches,
+                                                            activation.clone(),
+                                                            cost.clone(),
+                                                            optimiser.clone(),
+                                                            weights_initialisation.clone(),
+                                                        ));
+                                                    }
                                                 }
                                             }
                                         }
@@ -406,6 +422,7 @@ impl Network {
         selection_activations: Option<Vec<Activation>>,
         selection_costs: Option<Vec<Cost>>,
         selection_optimisers: Option<Vec<Optimiser>>,
+        selection_weights_initialisations: Option<Vec<WeightsInitialisation>>,
         verbose: bool,
     ) -> Result<Self, Box<dyn Error>> {
         self.check_dimensions()?;
@@ -422,6 +439,7 @@ impl Network {
             selection_activations,
             selection_costs,
             selection_optimisers,
+            selection_weights_initialisations,
         )?;
         // Hyper-parameter optimisations
         let mut results: Vec<(
@@ -437,6 +455,7 @@ impl Network {
             Activation,
             Cost,
             Optimiser,
+            WeightsInitialisation,
             f32,
         )> = Vec::new();
         let mut best_params = (f32::MAX, param_combinations[0].clone());
@@ -467,6 +486,7 @@ impl Network {
                 activation,
                 cost,
                 optimiser,
+                weights_initialisation,
             ) = p.clone();
             // Create a new instance of the network with the current hyperparameters
             let mut network = Network::new(
@@ -479,6 +499,7 @@ impl Network {
                 n_hidden_layers,
                 vec![n_hidden_nodes; n_hidden_layers],
                 vec![dropout_rate; n_hidden_layers],
+                weights_initialisation,
                 self.seed,
             )?;
             network.activation = activation.clone();
@@ -514,6 +535,7 @@ impl Network {
                 activation.clone(),
                 cost.clone(),
                 optimiser.clone(),
+                weights_initialisation.clone(),
                 loss,
             ));
         }
@@ -521,7 +543,7 @@ impl Network {
         if verbose {
             println!("Hyper-parameter Optimisation Results:");
             println!(
-                "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Validation_Set | Batches | Activation | Cost | Optimiser | Final_Cost |"
+                "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Validation_Set | Batches | Activation | Cost | Optimiser | Weights_Initialisation | Final_Cost |"
             );
             for (
                 n_hidden_layers,
@@ -536,11 +558,12 @@ impl Network {
                 activation,
                 cost,
                 optimiser,
+                weights_initialisation,
                 loss,
             ) in &results
             {
                 println!(
-                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:6} | {:14} | {:14} | {:7} | {:?} | {:?} | {:?} | {:10.6} |",
+                    "| {:13} | {:12} | {:12.4} | {:13.6} | {:6} | {:6} | {:14} | {:14} | {:7} | {:?} | {:?} | {:?} | {:?} | {:10.6} |",
                     n_hidden_layers,
                     n_hidden_nodes,
                     dropout_rate,
@@ -553,6 +576,7 @@ impl Network {
                     activation,
                     cost,
                     optimiser,
+                    weights_initialisation,
                     loss,
                 );
             }
@@ -573,6 +597,7 @@ impl Network {
                 activation,
                 cost,
                 optimiser,
+                weights_initialisation,
             ),
         ) = best_params;
         if verbose {
@@ -595,6 +620,7 @@ impl Network {
             println!("\t- Activation: {:?}", activation);
             println!("\t- Cost: {:?}", cost);
             println!("\t- Optimiser: {:?}", optimiser);
+            println!("\t- Weights Initialisation: {:?}", weights_initialisation);
             println!("\t- Mean Loss: {}", loss_expected);
         }
         let mut network = Network::new(
@@ -607,6 +633,7 @@ impl Network {
             n_hidden_layers,
             vec![n_hidden_nodes; n_hidden_layers],
             vec![dropout_rate; n_hidden_layers],
+            weights_initialisation,
             self.seed,
         )?;
         network.activation = activation.clone();
@@ -635,6 +662,7 @@ impl Network {
 mod tests {
     use super::*;
     use crate::io::Data;
+    use crate::network::WeightsInitialisation;
     #[test]
     fn test_train() -> Result<(), Box<dyn Error>> {
         let n: usize = 12_345; // number of observations
@@ -645,7 +673,7 @@ mod tests {
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
         let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 123, true)?;
-        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 123)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 123)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         println!("Network:\n{}\n\n", network);
         println!("Optimisation Parameters:\n{}\n\n", optimisation_parameters);
@@ -705,7 +733,9 @@ mod tests {
         let range_n_batches = Some((1, 2, 1));
         let selection_activations = Some(vec![Activation::ReLU]);
         let selection_costs = Some(vec![Cost::MSE]);
-        let selection_optimisers = Some(vec![Optimiser::Adam, Optimiser::GradientDescent]);
+        let selection_optimisers = Some(vec![Optimiser::GradientDescent]);
+        let selection_weights_initialisations = Some(vec![WeightsInitialisation::He, WeightsInitialisation::Cauchy]);
+        
         let verbose = true;
         let network_hyper_optimised = network.hyperoptimise(
             range_hidden_layers,
@@ -720,6 +750,7 @@ mod tests {
             selection_activations,
             selection_costs,
             selection_optimisers,
+            selection_weights_initialisations,
             verbose,
         )?;
         println!("network_hyper_optimised:\n{}", network_hyper_optimised);

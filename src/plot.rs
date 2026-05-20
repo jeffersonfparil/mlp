@@ -3,7 +3,7 @@ use crate::marginal::Marginals;
 use crate::optimisers::OptimisationParameters;
 use crate::train::TrainingError;
 use chrono::Utc;
-use ruviz::core::{Plot, PlottingError, SubplotFigure, subplots};
+use ruviz::core::{Plot, PlottingError, SubplotFigure};
 use ruviz::prelude::{LegendPosition, PlotBuilder};
 use ruviz::plots::BarConfig;
 use std::env::current_dir;
@@ -224,6 +224,7 @@ impl Marginals {
 mod test {
     use super::*;
     use crate::io::Data;
+    use crate::network::WeightsInitialisation;
     use rand::Rng;
     #[test]
     fn test_plot() -> Result<(), Box<dyn Error>> {
@@ -235,7 +236,7 @@ mod test {
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
         let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
-        let network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         let optimisation_parameters = OptimisationParameters::new(&network)?;
         // Network-related plots
         let mut rng = rand::rng();

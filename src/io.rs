@@ -1,7 +1,7 @@
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::linalg::matrix::{Matrix, MatrixError};
-use crate::network::Network;
+use crate::network::{Network, WeightsInitialisation, NetworkError};
 use crate::marginal::{Marginals, MarginalError};
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
@@ -229,6 +229,7 @@ impl Data {
             n_hidden_layers,
             n_hidden_nodes,
             dropout_rates,
+            WeightsInitialisation::He,
             seed,
         )?;
         // println!("network: {}", network);
@@ -662,6 +663,7 @@ impl Data {
         n_hidden_layers: usize,
         n_hidden_nodes: Vec<usize>,
         dropout_rates: Vec<f32>,
+        weights_initialisation: WeightsInitialisation,
         seed: usize,
     ) -> Result<Network, Box<dyn Error>> {
         self.check_dimensions()?;
@@ -673,6 +675,7 @@ impl Data {
             n_hidden_layers,
             n_hidden_nodes.clone(),
             dropout_rates,
+            weights_initialisation,
             seed,
         )?;
         Ok(network)
@@ -698,6 +701,7 @@ pub struct SerdifiableNetwork {
     biases_gradients_per_layer: Vec<Vec<f32>>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
     activation: String, // activation function enum (includes derivative)
     cost: String, // cost function
+    weights_initialisation: String, // weights initialisation, i.e. He, Cauchy, Uniform or StandardNormal
     n_epochs: usize, // number of training epochs
     seed: usize, // random seed for dropouts
     loss: f32, // mean loss (additional field not part of the actual Network struct)
@@ -756,6 +760,7 @@ impl Network {
                 .collect(),
             activation: self.activation.to_string(),
             cost: self.cost.to_string(),
+            weights_initialisation: self.weights_initialisation.to_string(),
             n_epochs: self.n_epochs,
             seed: self.seed,
             loss: self.loss()?,
@@ -785,7 +790,13 @@ impl Network {
         let unstandardised_output_data: Vec<f32> = serdifiable_network.targets.iter().map(|&x| (x * serdifiable_network.targets_mean_sd.1) + serdifiable_network.targets_mean_sd.0).collect();
         let output_data = Matrix::new(stream.clone_htod(&unstandardised_output_data)?, k, n)?;
         let predictions = Matrix::new(stream.clone_htod(&serdifiable_network.predictions)?, k, n)?;
-
+        let weights_initialisation = match serdifiable_network.weights_initialisation.as_ref() {
+            "He" => WeightsInitialisation::He,
+            "Cauchy" => WeightsInitialisation::Cauchy,
+            "Uniform" => WeightsInitialisation::Uniform,
+            "StandardNormal" => WeightsInitialisation::StandardNormal,
+            e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
+        };
         let mut network: Network = Network::new(
             &stream,
             input_data,
@@ -793,6 +804,7 @@ impl Network {
             serdifiable_network.n_hidden_layers.clone(),
             serdifiable_network.n_hidden_nodes.clone(),
             serdifiable_network.dropout_rates.clone(),
+            weights_initialisation,
             serdifiable_network.seed.clone(),
         )?;
         network.predictions = predictions;
@@ -966,7 +978,7 @@ mod tests {
         println!("data_reloaded: {}", data_reloaded);
         println!("data_simulated_reloaded: {}", data_simulated_reloaded);
         // Initialise the network from reloaded data
-        let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
         assert!(
             network.activations_per_layer[0].summat()?

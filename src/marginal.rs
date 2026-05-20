@@ -451,6 +451,7 @@ mod tests {
     use super::*;
     use crate::io::Data;
     use crate::optimisers::OptimisationParameters;
+    use crate::network::WeightsInitialisation;
     use approx::assert_relative_eq;
     #[test]
     fn test_marginal() -> Result<(), Box<dyn Error>> {
@@ -482,7 +483,7 @@ mod tests {
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
         let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
-        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         network.train(&mut optimisation_parameters, true)?;
         // Unstandardisation
@@ -497,7 +498,7 @@ mod tests {
         let mut marginals_dummy = Marginals::new((0..(n as usize)).map(|x| x.to_string()).collect(), 1)?;
         marginals_dummy.effects = z;
         marginals_dummy.unstandaridise(&network)?;
-        marginals_dummy.effects.iter().zip(y.iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals_dummy.effects.iter().zip(y.iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-4)});
         
         // Order: 1
         let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;

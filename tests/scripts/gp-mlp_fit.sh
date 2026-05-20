@@ -90,8 +90,9 @@ do
             --range-f-validation="0.1,0.1,0.1" \
             --range-n-batches="1,1,1" \
             --selection-costs="MSE" \
-            --selection-optimisers="Adam" \
+            --selection-optimisers="Adam,GradientDescent" \
             --selection-activations="ReLU,Linear" \
+            --selection-weights-initialisations="He,Cauchy" \
             --skip-marginals
         # rm *.svg
         # time ${MLP} \

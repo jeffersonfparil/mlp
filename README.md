@@ -225,6 +225,30 @@ head marginal_main.tsv
 head marginal_2nd.tsv
 head marginal_3rd.tsv
 head deep_shap.tsv
+
+
+# time cargo run -- -s -n1000 -p10 -v
+# INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
+# time cargo run -- \
+#    -f $INPUT \
+#    -o OUTPUT.tmp.json \
+#    -v \
+#    --hyperparameter-optimisation \
+#    --range-hidden-layers="1,1,1" \
+#    --range-hidden-layer-nodes="700,700,700" \
+#    --range-dropout-rates="0.0,0.0,0.01" \
+#    --range-learning-rates="1e-5,1e-5,1e-5" \
+#    --range-n-epochs="1000,1000,1000" \
+#    --range-n-burnin-epochs="100,100,100" \
+#    --range-f-patient-epochs="0.01,0.01,0.01" \
+#    --range-f-validation="0.1,0.1,0.1" \
+#    --range-n-batches="1,1,1" \
+#    --selection-costs="MSE" \
+#    --selection-optimisers="Adam,GradientDescent" \
+#    --selection-activations="ReLU,Linear" \
+#    --selection-weights-initialisations="He,Cauchy" \
+#    --skip-marginals
+
 ```
 
 # Compile for release

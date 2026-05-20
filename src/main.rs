@@ -21,7 +21,7 @@ mod plot;
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::io::Data;
-use crate::network::Network;
+use crate::network::{Network, WeightsInitialisation, NetworkError};
 use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
 use crate::marginal::Marginals;
 
@@ -73,6 +73,10 @@ struct Args {
     /// Optimiser (Choose: "Adam", "AdamMax", "GradientDescent")
     #[arg(long, default_value = "Adam")]
     optimiser: String,
+
+    /// Weights initialisation (Choose: "He", "Cauchy", "Unifoirm", "StandardNormal")
+    #[arg(long, default_value = "He")]
+    weights_initialisation: String,
 
     /// Maximum number of training epochs
     #[arg(long, default_value_t = 10)]
@@ -205,6 +209,15 @@ struct Args {
     )]
     selection_optimisers: Vec<String>,
 
+    /// Weights initialisations to test
+    #[arg(
+        long,
+        value_parser,
+        value_delimiter = ',',
+        default_value = "He,Cauchy"
+    )]
+    selection_weights_initialisations: Vec<String>,
+
     ////////////////////////////////////////////////////////////////////////////////
     /// Predict using a fitted network (fitted MLP model)
     #[arg(long, action)]
@@ -328,13 +341,23 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
     } else {
         args.dropout_rates.clone()
     };
-    // Return the network with the input data
+    let weights_initialisation = match args.weights_initialisation.as_ref() {
+        "He" => WeightsInitialisation::He,
+        "Cauchy" => WeightsInitialisation::Cauchy,
+        "Uniform" => WeightsInitialisation::Uniform,
+        "StandardNormal" => WeightsInitialisation::StandardNormal,
+        e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
+    };
+    // Return the initialised network
     data.init_network(
         n_hidden_layers,
         n_hidden_nodes,
         dropout_rates,
+        weights_initialisation,
         args.seed,
     )
+    // Re-initialise the weights
+    
 }
 
 fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
@@ -398,6 +421,7 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
         network_fitted.n_hidden_layers,
         network_fitted.n_hidden_nodes.clone(),
         network_fitted.dropout_rates.clone(),
+        network_fitted.weights_initialisation.clone(),
         network_fitted.seed,
     )?;
     network.replace_model(&network_fitted)?;
@@ -700,6 +724,19 @@ fn train_with_hyperparameter_optimisation(
         }
         Some(v)
     };
+    let selection_weights_initialisations: Option<Vec<WeightsInitialisation>> = {
+        let mut v: Vec<WeightsInitialisation> = Vec::new();
+        for x in &args.selection_weights_initialisations {
+            v.push(match x.as_ref() {
+                "He" => WeightsInitialisation::He,
+                "Cauchy" => WeightsInitialisation::Cauchy,
+                "Uniform" => WeightsInitialisation::Uniform,
+                "StandardNormal" => WeightsInitialisation::StandardNormal,
+                e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
+            });
+        }
+        Some(v)
+    };
     let network_hyper_optimised = network.hyperoptimise(
         range_hidden_layers,
         range_hidden_layer_nodes,
@@ -713,6 +750,7 @@ fn train_with_hyperparameter_optimisation(
         selection_activations,
         selection_costs,
         selection_optimisers,
+        selection_weights_initialisations,
         args.verbose,
     )?;
     // Save the hyperparameter-optimised-trained network
