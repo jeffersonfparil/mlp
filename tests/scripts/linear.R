@@ -1,29 +1,51 @@
-
-args <- commandArgs(trailingOnly = TRUE)
-# args <- c("trials")
-analysis_type <- if (!(args[1] %in% c("trials", "gp"))) {
-  print(paste0("Error: unrecognised analysis type: ", args[1], ". Please choose from 'trials' and 'gp'."))
-  q()
-}
-params <- list(
-
-  n_folds = NA,
-  n_folds = NA,
-  n_reps = NA,
-  nIter = NA,
-  burnIn = NA,
-)
-
-
 library("stringr")
 library("lme4")
 if (nzchar(system.file(package = "asreml"))) {
-  library("asreml") # requires ```shell module load ASReml-R ```
+  library("asreml")
 }
 if (nzchar(system.file(package = "sommer"))) {
-  library("sommer") # Too slow for non-trially large datasets, e.g. 21,000 observations simulated here
+  library("sommer") # Currently, too slow for non-trivialy large datasets, e.g. 21,000 observations simulated here
 }
 library(BGLR)
+
+args <- commandArgs(trailingOnly = TRUE)
+
+get_params <- function(args) {
+  # args <- c("trials", "TRUE", "TRUE", "TRUE", "TRUE")
+  # args <- c("gp", "5", "5", "6000", "1000")
+  analysis_type <- args[1]
+  if (!(analysis_type %in% c("trials", "gp"))) {
+    stop("ERROR: Invalid analysis type. Must be either 'trials' or 'gp'.")
+  }
+  params <- list(
+    trials = list(
+      is_simulated = NA,
+      exclude_lm = NA,
+      exclude_sommer = NA,
+      verbose = NA
+    ),
+    gp = list(
+      n_folds = NA,
+      n_reps = NA,
+      n_iterations  = NA,
+      n_burnin_iterations = NA,
+      verbose = NA
+
+    )
+  )
+  if (analysis_type == "trials") {
+    params$trials$is_simulated <- if (args[2] == "TRUE") TRUE else FALSE
+    params$trials$exclude_lm <- if (args[3] == "TRUE") TRUE else FALSE
+    params$trials$exclude_sommer <- if (args[4] == "TRUE") TRUE else FALSE
+    params$trials$verbose <- if (args[5] == "TRUE") TRUE else FALSE
+  } else if (analysis_type == "gp") {
+    params$gp$n_folds <- if (!is.na(args[2])) as.numeric(args[2]) else 5
+    params$gp$n_reps <- if (!is.na(args[3])) as.numeric(args[3]) else 5
+    params$gp$n_iterations <- if (!is.na(args[4])) as.numeric(args[4]) else 6000
+    params$gp$n_burnin_iterations <- if (!is.na(args[5])) as.numeric(args[5]) else 1000
+  }
+  params
+}
 
 #' Process features in the dataframe by converting explanatory variables to factors and creating a dummy environment variable if needed.
 process_features <- function(df) {
@@ -87,6 +109,7 @@ loglik_lm_lmer_asreml <- function(mod) {
 }
 
 #' Generate model strings for simulated data using lm, lme4, asreml, and sommer packages.
+#' The models are based on the structure of the simulated data, which includes factors like year, location, treatment, genotype, and block.
 generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
   if (exclude_lm) {
     lm_model_strings <- c()
@@ -147,6 +170,7 @@ generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclud
 }
 
 #' Generate model strings for empirical data using lm, lme4, asreml, and sommer packages based on feature names.
+#' On the other hand, these models are more data-driven and agnostic to the underlying data generating process, and are based on the feature names in the empirical data.
 generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dummy_env, exclude_lm = FALSE, exclude_sommer = FALSE) {
   m <- length(x_names_except_gen_and_dummy_env)
   if (exclude_lm) {
@@ -444,6 +468,7 @@ fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, e
   fit_extract_effects(df, model_strings, time_limit_seconds = time_limit_seconds, verbose = verbose)
 }
 
+#' Compute cross-validation metrics (Pearson correlation, MAE, MSE, RMSE, R-squared) between predicted and observed values.
 cv_metrics <- function(yHat, y) {
   # yHat = rnorm(100); y = rnorm(100)
   n <- length(y)
@@ -461,6 +486,7 @@ cv_metrics <- function(yHat, y) {
   )
 }
 
+#' Perform repeated k-fold cross-validation using Bayesian models (BRR, BayesA, BayesB, BayesC) from the BGLR package and compute metrics for each fold and repetition.
 define_fname_output <- function(fname_input) {
   dirname_input <- dirname(fname_input)
   basename_input <- basename(fname_input)
@@ -473,30 +499,36 @@ define_fname_output <- function(fname_input) {
   file.path(dirname_input, fname_output)
 }
 
-fit_trials <- function(fname_input, is_simulated, exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
-  print(fname_input)
+#' Main function to extract genotype effects from input datasets (simulated or empirical) by fitting various models and selecting the best one based on criteria, then saving the results to an output file.
+extract_entries_effects <- function(fname_input, params) {
   input_list <- process_features(df = read.table(fname_input, sep = "\t", header = TRUE))
   df <- input_list$df
-  # str(df)
-  # ids_features <- input_list$ids_features
   attach(df)
-  out <- if (is_simulated) {
-    fit_extract_effects_for_simulated_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
+  out <- if (params$trials$is_simulated) {
+    fit_extract_effects_for_simulated_data(
+      df, 
+      exclude_lm = params$trials$exclude_lm, 
+      exclude_sommer = params$trials$exclude_sommer, 
+      verbose = params$trials$verbose
+    )
   } else {
-    fit_extract_effects_for_empirical_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
+    fit_extract_effects_for_empirical_data(
+      df, 
+      exclude_lm = params$trials$exclude_lm, 
+      exclude_sommer = params$trials$exclude_sommer, 
+      verbose = params$trials$verbose
+    )
   }
   if (is.null(out)) {
     next
   }
   fname_output <- define_fname_output(fname_input)
-  write.table(out$df_effects,
-    file = fname_output, row.names = FALSE,
-    col.names = TRUE, sep = "\t"
-  )
+  write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t")
   fname_output
 }
 
-fit_gp <- function(fname_input) {
+#' Perform repeated k-fold cross-validation using Bayesian models (BRR, BayesA, BayesB, BayesC) from the BGLR package and compute metrics for each fold and repetition, then save the results to an output file.
+gp_repeated_kfold_cv <- function(fname_input, params$gp$n_folds, params$gp$n_reps, params$gp$n_iterations, n_burnin_iterations) {
   # fname_input <- list.files(path = ".", pattern = "^input_simulated-.*.tsv")[1]
   # fname_input <- list.files(path = ".", pattern = "*.*.tsv")[1]
   fname_output <- define_fname_output(fname_input)
@@ -514,18 +546,18 @@ fit_gp <- function(fname_input) {
   df < df[complete.cases(df), ]
   n <- nrow(df)
   p <- ncol(df) - 1
-  m <- floor(n / n_folds)
+  m <- floor(n / params$gp$n_folds)
   if (m < 3) {
-    print(paste0("ERROR: Skipping because the dataset (", fname_input, ") is too small (n=", n, "; m=", m, ") for ", n_reps, "-reps of ", n_folds, "-fold cross-validation"))
+    print(paste0("ERROR: Skipping because the dataset (", fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
     return(1)
   }
   y <- df[, 1, drop = FALSE]
   X <- df[, 2:ncol(df), drop = FALSE]
-  for (r in 1:n_reps) {
+  for (r in 1:params$gp$n_reps) {
     # r <- 1
     set.seed(r)
     idx_shuffled <- sample(1:n, n, replace = FALSE)
-    for (f in 1:n_folds) {
+    for (f in 1:params$gp$n_folds) {
       # f <- 2
       bool_validation <- (1:n) %in% (((f-1)*m)+1):(f*m)
       bool_training <- !bool_validation
@@ -535,7 +567,14 @@ fit_gp <- function(fname_input) {
       yNA[idx_validation] <- NA
       for (model in c("BRR", "BayesA", "BayesB", "BayesC")) {
         # model = "BayesC"
-        mod <- BGLR(y = yNA, ETA = list(list(X = X, model = model)), nIter = nIter, burnIn = burnIn, saveAt = paste0(fname_input, "-", model, "-"), verbose=TRUE)
+        mod <- BGLR(
+          y = yNA, 
+          ETA = list(list(X = X, model = model)), 
+          nIter = params$gp$n_iterations, 
+          burnIn = params$gp$n_burnin_iterations, 
+          saveAt = paste0(fname_input, "-", model, "-"), 
+          verbose=TRUE
+        )
         yHat <- mod$yHat[idx_validation]
         res <- cv_metrics(yHat, y[idx_validation, ])
         datasets <- c(datasets, fname_input)
@@ -555,16 +594,3 @@ fit_gp <- function(fname_input) {
   file.rename(from = fname_output_tmp, to = fname_output)
   fname_output
 }
-
-# Execute GP
-# # # Run on parallel
-# # fnames_tmp <- list.files(path = ".", pattern = "^input_simulated-.*.tsv")
-# # fnames <- if (length(fnames_tmp) > 0) {
-# #   fnames_tmp
-# # } else {
-# #   list.files(path = ".", pattern = "[maize|rice|sorghum|soy|spruce|switchgrass]-.*.tsv")
-# # }``
-# # system.time({
-# #     mclapply(fnames, fit, mc.cores = length(fnames))
-# # })
-# fit(fname_input = args[1])
