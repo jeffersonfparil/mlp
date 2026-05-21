@@ -10,6 +10,7 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo -e "\t- N_REPS: number of replications of k-fold cross-validation"
     echo -e "\t- N_FOLDS: number of folds for k-fold cross-validation"
     echo -e "\t- BASE_SEED: base seed for reshuffling genotypes per replication of k-fold cross-validation (the seed for each replication will be BASE_SEED + REP)"
+    # TODO ADD EXAMPLES see simulate.sh for examples...
     exit 0
 fi
 MLP=$1

@@ -1,147 +1,14 @@
-args <- commandArgs(trailingOnly = TRUE)
-if (args[1] == "-h" || args[1] == "--help") {
-  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
-  cat("Arguments:\n")
-  cat("\t- ANALYSIS_TYPE:\n")
-  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
-  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
-  cat("\t- FNAME_INPUT: The input file name.\n")
-  cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
-  cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
-  cat("\t- DIRNAME_OUTPUT: The output directory.\n")
-  cat("For trials analysis, additional arguments are:\n")
-  cat("\t\t- is_simulated: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t- exclude_lm: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t- exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t- verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("For genomic prediction analysis, additional arguments are:\n")
-  cat("\t\t- n_folds: numeric (Default: 5)\n")
-  cat("\t\t- n_reps: numeric (Default: 1)\n")
-  cat("\t\t- n_iterations: numeric (Default: 1000)\n")
-  cat("\t\t- n_burnin_iterations: numeric (Default: 100)\n")
-  cat("\t\t- models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
-  cat("\t\t- base_seed: numeric (Default: 123)\n")
-  cat("\t\t- verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("Examples:\n")
-  cat("DIR=${HOME}/Documents/mlp/tests\n")
-  cat("cd ${DIR}/scripts\n")
-  cat("mkdir tmp\n")
-  cat("echo 'TRIALS ANALYSIS'\n")
-  cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
-  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE TRUE TRUE TRUE\n")
-  cat("echo 'GENOMIC PREDICTION ANALYSIS'\n")
-  cat("Rscript empiricalprep.R gp ${DIR}/datasets/azodi_2019/sorghum_geno.csv tmp\n")
-  cat("Rscript linear.R gp tmp/sorghum-YLD.tsv tmp 2 2 100 10 'BRR,BayesA' 123 TRUE\n")
-  cat()
-  quit(status = 0)
-}
-
+# library("R.utils")
 library("stringr")
 library("lme4")
 if (nzchar(system.file(package = "asreml"))) {
-  library("asreml")
+  library("asreml") # requires ```shell module load ASReml-R ```
 }
 if (nzchar(system.file(package = "sommer"))) {
-  library("sommer") # Currently, too slow for non-trivialy large datasets, e.g. 21,000 observations simulated here
-}
-library(BGLR)
-
-#' Parse command-line arguments for the linear model fitting and effect extraction process, including analysis type, input file, and model fitting parameters.
-get_params <- function(args) {
-  # args <- c("trials", "input-file.tsv", "tmp", "TRUE", "TRUE", "TRUE", "TRUE")
-  # args <- c("gp", "input-file.tsv", "tmp", "6", "7", "123", "4567")
-  analysis_type <- args[1]
-  if (!(analysis_type %in% c("trials", "gp"))) {
-    stop("ERROR: Invalid analysis type. Must be either 'trials' or 'gp'.")
-  }
-  if (analysis_type == "trials" && length(args) < 7) {
-    stop(paste0("ERROR: For 'trials' analysis, 7 arguments are required:\n",
-      "\t1. analysis_type",
-      "\t2. input file name",
-      "\t3. output directory",
-      "\t4. is_simulated (TRUE/FALSE)",
-      "\t5. exclude_lm (TRUE/FALSE)",
-      "\t6. exclude_sommer (TRUE/FALSE)",
-      "\t7. verbose (TRUE/FALSE)"
-    ))
-  }
-  if (analysis_type == "gp" && length(args) < 10) {
-    stop(paste0("ERROR: For 'gp' analysis, 10 arguments are required:\n",
-      "\t1. analysis_type",
-      "\t2. input file name",
-      "\t3. output directory",
-      "\t4. n_folds (numeric)",
-      "\t5. n_reps (numeric)",
-      "\t6. n_iterations (numeric)",
-      "\t7. n_burnin_iterations (numeric)",
-      "\t8. models (comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC')",
-      "\t9. base_seed (numeric)",
-      "\t10. verbose (TRUE/FALSE)"
-    ))
-  }
-
-  fname_input <- args[2]
-  if (!file.exists(fname_input)) {
-    stop(paste0("ERROR: The input file '", fname_input, "' does not exist."))
-  } else {
-    extension_names <- rev(unlist(strsplit(args[2], split = "\\.")))[1]
-    if (extension_names != "tsv") {
-      stop(paste0("ERROR: The input file '", fname_input, "' must be a TSV file with a .tsv extension."))
-    }
-  }
-  dirname_output <- args[3]
-  if (!dir.exists(dirname_output)) {
-    stop(paste0("ERROR: The output directory '", dirname_output, "' does not exist."))
-  }
-  params <- list(
-    analysis_type = analysis_type,
-    fname_input = fname_input,
-    dirname_output = dirname_output,
-    trials = list(
-      is_simulated = NA,
-      exclude_lm = NA,
-      exclude_sommer = NA,
-      verbose = NA
-    ),
-    gp = list(
-      n_folds = NA,
-      n_reps = NA,
-      n_iterations  = NA,
-      n_burnin_iterations = NA,
-      models = NA,
-      base_seed = NA,
-      verbose = NA
-    )
-  )
-  suppressWarnings(
-    if (analysis_type == "trials") {
-      params$trials$is_simulated <- if (args[4] == "TRUE") TRUE else FALSE
-      params$trials$exclude_lm <- if (args[5] == "TRUE") TRUE else FALSE
-      params$trials$exclude_sommer <- if (args[6] == "TRUE") TRUE else FALSE
-      params$trials$verbose <- if (args[7] == "TRUE") TRUE else FALSE
-    } else if (analysis_type == "gp") {
-      params$gp$n_folds <- if (!is.na(args[4]) && !is.na(as.numeric(args[4]))) as.numeric(args[4]) else 5
-      params$gp$n_reps <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 5
-      params$gp$n_iterations <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 6000
-      params$gp$n_burnin_iterations <- if (!is.na(args[7]) && !is.na(as.numeric(args[7]))) as.numeric(args[7]) else 1000
-      params$gp$models <- {
-        models <- if (!is.na(args[8])) strsplit(args[8], split = ",")[[1]] else c("BRR", "BayesA", "BayesB", "BayesC")
-        for (m in models) {
-          if (!(m %in% c("BRR", "BayesA", "BayesB", "BayesC"))) {
-            stop(paste0("ERROR: Invalid model '", m, "'. Valid models are 'BRR', 'BayesA', 'BayesB', and 'BayesC'."))
-          }
-        }
-        models
-      }
-      params$gp$base_seed <- if (!is.na(args[9]) && !is.na(as.numeric(args[9]))) as.numeric(args[9]) else ceiling(100*runif(1))
-      params$gp$verbose <- if (args[10] == "TRUE") TRUE else FALSE
-    }
-  )
-  params
+  library("sommer") # Too slow for non-trially large datasets, e.g. 21,000 observations simulated here
 }
 
 #' Process features in the dataframe by converting explanatory variables to factors and creating a dummy environment variable if needed.
-#' Importantly, we assume that the first column of the dataframe is the numeric response variable (y) and the rest are non-numeric explanatory variables. The function also identifies the feature names for modeling.
 process_features <- function(df) {
   # fname = list.files(path=".", pattern=".tsv$")[19]; df = read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
   # Assuming only the first column is the numeric response variable and the rest are non-numeric explanatory variables
@@ -203,7 +70,6 @@ loglik_lm_lmer_asreml <- function(mod) {
 }
 
 #' Generate model strings for simulated data using lm, lme4, asreml, and sommer packages.
-#' The models are based on the structure of the simulated data, which includes factors like year, location, treatment, genotype, and block.
 generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
   if (exclude_lm) {
     lm_model_strings <- c()
@@ -264,7 +130,6 @@ generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclud
 }
 
 #' Generate model strings for empirical data using lm, lme4, asreml, and sommer packages based on feature names.
-#' On the other hand, these models are more data-driven and agnostic to the underlying data generating process, and are based on the feature names in the empirical data.
 generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dummy_env, exclude_lm = FALSE, exclude_sommer = FALSE) {
   m <- length(x_names_except_gen_and_dummy_env)
   if (exclude_lm) {
@@ -398,7 +263,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
   # x_names <- colnames(df)[2:ncol(df)]; x_names_except_gen_and_dummy_env <- x_names[(x_names != "gen") & (x_names != "dummy_env")]; model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = TRUE, exclude_sommer = TRUE)
   model_candidates <- list()
   for (i in seq_along(model_strings)) {
-    # i <- 1
+    # i <- 30
     mod_string <- model_strings[i]
     mod_label <- unlist(strsplit(mod_string, "\\("))[1]
     if (verbose) {
@@ -454,12 +319,12 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     print("NO MODEL WAS SUCCESSFULLY FITTED!")
     return(NULL)
   }
-  df_stats <- df_stats[idx_filter, ]
-  model_candidates <- model_candidates[idx_filter]
+  df_stats = df_stats[idx_filter, ]
+  model_candidates = model_candidates[idx_filter]
   z_AIC <- scale(df_stats$AIC, scale = TRUE, center = TRUE)
   z_BIC <- scale(df_stats$BIC, scale = TRUE, center = TRUE)
   z_logLik <- -scale(df_stats$logLik, scale = TRUE, center = TRUE)
-  df_stats$z_sum <- 0.2 * z_AIC + 0.6 * z_BIC + 0.2 * z_logLik # more weight on BIC because it is better for model fit parsimony rather than predictive accuracy which AIC is better suited for
+  df_stats$z_sum <- 0.2 * z_AIC + 0.6 * z_BIC + 0.2 * z_logLik # more weight on BIC because it is better for model fit parsinomy rather than predictive accuracy which AIC is better suited for
   # Select the best model based on z_sum
   best_model_idx <- if (is.nan(df_stats$z_sum[1])) {
     # For non-varying stats or only a single model is left
@@ -506,7 +371,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     } else {
       ids <- c()
       effects <- c()
-      for (i in seq_along(best_model$uPevList)) {
+      for (i in 1:length(best_model$uPevList)) {
         # i <- 1
         # best_model = model_candidates[[23]]
         bool_gen <- grepl("gen", names(best_model$uPevList)[i])
@@ -562,158 +427,67 @@ fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, e
   fit_extract_effects(df, model_strings, time_limit_seconds = time_limit_seconds, verbose = verbose)
 }
 
-#' Compute cross-validation metrics (Pearson correlation, MAE, MSE, RMSE, R-squared) between predicted and observed values.
-cv_metrics <- function(yHat, y) {
-  # yHat = rnorm(100); y = rnorm(100)
-  n <- length(y)
-  pcor <- cor(yHat, y)
-  mae <- mean(abs(yHat - y))
-  mse <- mean((yHat - y)^2)
-  rmse <- sqrt(mse)
-  r2 <- 1.00 - (sum((yHat - y)^2) / sum((y - mean(y))^2))
-  list(
-    pcor = pcor,
-    mae = mae,
-    mse = mse,
-    rmse = rmse,
-    r2 = r2
-  )
-}
-
-#' Given an input filename, generate the corresponding output filename by replacing "input_simulated" with "output_simulated", changing the extension to "-LINEAR.tsv", and ensuring it starts with "output-".
-define_fname_output <- function(fname_input) {
-  dirname_input <- dirname(fname_input)
-  basename_input <- basename(fname_input)
-  fname_output <- gsub("input_simulated", "output_simulated", gsub(".tsv", "-LINEAR.tsv", basename_input))
-  fname_output <- if (grepl("^output", fname_output)) {
-    fname_output
+#' Run the analysis on all input files in the directory, processing simulated or empirical data and outputting results.
+run <- function(exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
+  # exclude_lm = TRUE; exclude_sommer = TRUE; verbose = FALSE
+  fnames_tmp <- list.files(path = ".", pattern = "input_simulated")
+  fnames <- if (length(fnames_tmp) != 0) {
+    fnames_tmp
   } else {
-    paste0("output-", fname_output)
+    tmp <- list.files(path = ".", pattern = ".tsv")
+    tmp[!grepl("^output", tmp)]
   }
-  file.path(dirname_input, fname_output)
-}
-
-#' Main function to extract genotype effects from either simulated or empirical data by fitting various linear models and selecting the best one based on model selection criteria, then saving the results to an output file.
-extract_entries_effects <- function(params) {
-  # params = get_params(args=c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE"))
-  input_list <- process_features(df = read.table(params$fname_input, sep = "\t", header = TRUE))
-  df <- input_list$df
-  attach(df)
-  out <- if (params$trials$is_simulated) {
-    fit_extract_effects_for_simulated_data(
-      df,
-      exclude_lm = params$trials$exclude_lm,
-      exclude_sommer = params$trials$exclude_sommer,
-      verbose = params$trials$verbose
-    )
-  } else {
-    fit_extract_effects_for_empirical_data(
-      df,
-      exclude_lm = params$trials$exclude_lm,
-      exclude_sommer = params$trials$exclude_sommer,
-      verbose = params$trials$verbose
-    )
-  }
-  if (is.null(out)) {
-    next
-  }
-  fname_output <- define_fname_output(params$fname_input)
-  write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t")
-  fname_output
-}
-
-#' Main function to perform repeated k-fold cross-validation using Bayesian genomic prediction models (e.g., BRR, BayesA, BayesB, BayesC) on a given dataset, and save the results (correlation and R-squared) for each fold and repetition to an output file.
-gp_repeated_kfold_cv <- function(params) {
-  # params = get_params(args=c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10"))
-  fname_output <- define_fname_output(params$fname_input)
-  fname_output_tmp <- paste0(fname_output, ".tmp")
-  cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
-  datasets <- c()
-  reps <- c()
-  folds <- c()
-  nt <- c()
-  nv <- c()
-  models <- c()
-  corr <- c()
-  r2 <- c()
-  df <- read.table(params$fname_input, sep = "\t", header = TRUE)
-  df < df[complete.cases(df), ]
-  n <- nrow(df)
-  p <- ncol(df) - 1
-  m <- floor(n / params$gp$n_folds)
-  if (m < 3) {
-    stop(paste0("ERROR: Skipping because the dataset (", params$fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
-  }
-  y <- df[, 1, drop = FALSE]
-  X <- df[, 2:ncol(df), drop = FALSE]
-  for (r in 1:params$gp$n_reps) {
-    # r <- 1
-    set.seed(params$gp$base_seed + r)
-    idx_shuffled <- sample(1:n, n, replace = FALSE)
-    for (f in 1:params$gp$n_folds) {
-      # f <- 2
-      bool_validation <- (1:n) %in% (((f-1)*m)+1):(f*m)
-      bool_training <- !bool_validation
-      idx_training <- idx_shuffled[bool_training]
-      idx_validation <- idx_shuffled[bool_validation]
-      yNA <- y[, 1]
-      yNA[idx_validation] <- NA
-      for (model in params$gp$models) {
-        # model = "BayesC"
-        mod <- BGLR(
-          y = yNA,
-          ETA = list(list(X = X, model = model)),
-          nIter = params$gp$n_iterations,
-          burnIn = params$gp$n_burnin_iterations,
-          saveAt = paste0(params$fname_input, "-", model, "-"),
-          verbose = params$gp$verbose
-        )
-        yHat <- mod$yHat[idx_validation]
-        res <- cv_metrics(yHat, y[idx_validation, ])
-        datasets <- c(datasets, params$fname_input)
-        reps <- c(reps, r)
-        folds <- c(folds, f)
-        nt <- c(nt, length(idx_training))
-        nv <- c(nv, length(idx_validation))
-        models <- c(models, model)
-        corr <- c(corr, res$pcor)
-        r2 <- c(r2, res$r2)
-        data <- paste(c(params$fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
-        cat(data, file = fname_output_tmp, sep = "\n", append = TRUE)
-        unlink(paste0(params$fname_input, "-", model, "-*"))
-      }
+  output <- list()
+  ###################################################
+  ###################################################
+  ###################################################
+  ##### NOTE: resuming from previous UNSUCCESSFUL RUN
+  ###################################################
+  ###################################################
+  ###################################################
+  # for (fname_input in fnames) {
+  for (fname_input in fnames[154:length(fnames)]) {
+    # fname_input <- fnames[1]
+    # fname_input <- fnames[154]
+    # fname_input = "talbot.potato.traits-score.tsv"; which(fnames == fname_input)
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    print(fname_input)
+    input_list <- process_features(df = read.table(fname_input, sep = "\t", header = TRUE))
+    df <- input_list$df
+    # str(df)
+    # ids_features <- input_list$ids_features
+    attach(df)
+    out <- if (length(fnames_tmp) != 0) {
+      fit_extract_effects_for_simulated_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
+    } else {
+      fit_extract_effects_for_empirical_data(df, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer, verbose = verbose)
     }
+    if (is.null(out)) {
+      next
+    }
+    fname_output <- if (length(fnames_tmp) != 0) {
+      paste0(
+        gsub("^input", "output", gsub(".tsv", "", fname_input)),
+        "-LINEAR_",
+        gsub(" ", "", out$formula),
+        ".tsv"
+      )
+    } else {
+      paste0("output-", gsub(".tsv$", "", fname_input),
+        "-LINEAR_",
+        gsub(" ", "", out$formula),
+        ".tsv"
+      )
+    }
+    write.table(out$df_effects,
+      file = fname_output, row.names = FALSE,
+      col.names = TRUE, sep = "\t"
+    )
+    output[[fname_input]] <- out
+    detach(df)
   }
-  file.rename(from = fname_output_tmp, to = fname_output)
-  fname_output
+  output
 }
 
-#' Simulate a dataset with specific structure and save it to a TSV file for testing the modeling functions.
-misc_sim <- function() {
-  df <- expand.grid(
-    year = c("Year➵2026", "Year➵2027"),
-    loc = c("Loc➵A", "Loc➵B"),
-    trt = c("Trt➵1", "Trt➵2"),
-    blk = c("Blk➵1", "Blk➵2", "Blk➵3"),
-    gen = paste0("Gen➵", 1:100)
-  )
-  df$y <- rnorm(nrow(df))
-  # We need to have the response variable (y) as the first column for the modeling functions to work correctly, so we reorder the columns accordingly.
-  df <- df[, c("y", "year", "loc", "trt", "blk", "gen")]
-  write.table(df, file = "input_simulated_misc.tsv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
-}
-
-###########################################################
 # Execute
-###########################################################
-# Testing: source("../../scripts/linear.R")
-# misc_sim()
-# args = c("trials", "input_simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
-# args = c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")
-# args = c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10", "BRR,BayesA", "TRUE", "42")
-params <- get_params(args)
-if (params$analysis_type == "trials") {
-  extract_entries_effects(params)
-} else {
-  gp_repeated_kfold_cv(params)
-}
+run(exclude_lm = TRUE, exclude_sommer = TRUE, verbose = FALSE) # testing ASREML only

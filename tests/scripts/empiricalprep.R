@@ -1,23 +1,41 @@
 args = commandArgs(trailingOnly=TRUE)
 
-#' This script prepares empirical datasets for testing the modeling functions. It takes an input file, identifies the response and explanatory variables, and creates output files in a standardized format for analysis. The script can handle both trial data and genotype-phenotype data.
+if (args[1] == "-h" || args[1] == "--help") {
+  cat("This script prepares empirical datasets for testing the modeling functions. It takes an input file, identifies the response and explanatory variables, and creates output files in a standardized format for analysis. The script can handle both trial data and genotype-phenotype data.\n")
+  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT\n")
+  cat("ANALYSIS_TYPE: 'trials' or 'gp'.\n")
+  cat("FNAME_INPUT: path to the input file for the analysis:\n")
+  cat("\t- For trials analysis (i.e. to extract the marginal effects of each genotype), this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
+  cat("\t- For genomic prediction analysis (i.e. repeated k-fold cross-validation), this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
+  cat("Examples:\n")
+  cat("DIR=${HOME}/Documents/mlp/tests\n")
+  cat("cd ${DIR}/scripts\n")
+  cat("mkdir tmp\n")
+  cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
+  cat("Rscript empiricalprep.R gp ${DIR}/datasets/azodi_2019/sorghum_geno.csv tmp\n")
+  quit(status = 0)
+}
 
 #' Extracts and prepares the parameters from the command line arguments, including validation of the analysis type and input file existence.
 #' For trials data, it identifies potential response and explanatory variables based on column names and data characteristics, and creates output files for each response variable.
 #' For gp (genomic prediction) data, it ensures that the genotype and phenotype files are properly formatted.
 get_params <- function(args) {
-  if (length(args) < 2) {
-    stop("At least two arguments are required: analysis_type and file names.")
+  if (length(args) < 3) {
+    stop("Three arguments are required: analysis_type, input file name, and output directory.")
   }
   params = list(
     analysis_type = args[1],
-    fname_input = args[2]
+    fname_input = args[2],
+    dirname_output = args[3]
   )
   if ((params$analysis_type != "trials") && (params$analysis_type != "gp")) {
     stop(paste0("Invalid analysis type: ", params$analysis_type, ". Please choose either 'trials' or 'gp'."))
   }
   if (!file.exists(params$fname_input)) {
     stop(paste0("Input file does not exist: ", params$fname_input))
+  }
+  if (!dir.exists(params$dirname_output)) {
+    stop(paste0("Output directory does not exist: ", params$dirname_output))
   }
   if (params$analysis_type == "gp") {
     fname_pheno <- gsub("geno", "pheno", params$fname_input)
@@ -29,11 +47,11 @@ get_params <- function(args) {
 }
 
 #' Defines the output file name based on the input file name and the response variable name. It replaces the extension with a standardized format and removes any "_geno" suffix for clarity.
-define_fname_output <- function(fname, y_name) {
-  fname_output <- gsub(".txt$", paste0("-", y_name, ".tsv"), fname)
+define_fname_output <- function(fname, y_name, dirname_output) {
+  fname_output <- gsub(".txt$", paste0("-", y_name, ".tsv"), basename(fname))
   fname_output <- gsub(".csv$", paste0("-", y_name, ".tsv"), fname_output)
   fname_output <- gsub("_geno", "", fname_output)
-  fname_output
+  file.path(dirname_output, fname_output)
 }
 
 #' Prepares trial data by reading the input file, identifying response and explanatory variables, and creating output files for each response variable. It handles various naming conventions and data characteristics to ensure that the output is suitable for analysis.
@@ -191,7 +209,7 @@ prepare_trial_data <- function(params) {
     if (nrow(df_out) < 2*length(unique(df_out$gen))) {
       next
     }
-    fname_output <- define_fname_output(params$fname_input, y_name)
+    fname_output <- define_fname_output(params$fname_input, y_name, params$dirname_output)
     write.table(df_out, file = fname_output, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
     print(paste0("Processed: `", fname_output, "`"))
   }
@@ -230,7 +248,7 @@ prepare_gp_data <- function(params) {
     if (is.numeric(y) && (length(unique(y)) > 5) && (var(y, na.rm = TRUE) > 1e-7)) {
       idx_y = which(!is.na(y))
       df_out$y <- y
-      fname_output <- define_fname_output(fname_geno, y_name)
+      fname_output <- define_fname_output(fname_geno, y_name, params$dirname_output)
       write.table(df_out[idx_y, ], file = fname_output, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
       print(paste0("Processed: `", fname_output, "`"))
     }
