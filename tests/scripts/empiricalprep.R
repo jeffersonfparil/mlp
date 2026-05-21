@@ -3,6 +3,15 @@ if (length(args) == 0) {
   stop("No file names provided as arguments.")
 }
 
+define_fname_output <- function(fname, y_name=NULL) {
+  fname_out <- if (is.null(y_name)) {
+    gsub(".txt$", ".tsv", fname)
+  } else {
+    gsub(".csv$", paste0("-", y_name, ".tsv"), fname_geno)
+  }
+  fname_out
+}
+
 prepare_trial_data <- function(fname) {
   # fname <- fnames[1]
   # fname <- "archbold.apple.txt"
@@ -162,7 +171,7 @@ prepare_trial_data <- function(fname) {
     if (nrow(df_out) < 2*length(unique(df_out$gen))) {
       next
     }
-    fname_out <- gsub(".txt", paste0("-", y_name, ".tsv"), fname)
+    fname_out <- define_fname_output(fname)
     write.table(df_out, file = fname_out, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
     print(paste0("Processed: `", fname_out, "`"))
   }
@@ -196,10 +205,10 @@ prepare_gp_data <- function(fname_geno) {
     if (is.numeric(y) && (length(unique(y)) > 5) && (var(y, na.rm = TRUE) > 1e-7)) {
       df_out <- cbind(data.frame(y = y), df_geno[, -1, drop=FALSE])
       df_out = df_out[complete.cases(df_out), ]
-      fname_out <- gsub(".csv", paste0("-", y_name, ".tsv"), fname_geno)
+      fname_out <- define_fname_output(fname_geno, y_name)
       write.table(df_out, file = fname_out, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
       print(paste0("Processed: `", fname_out, "`"))
     }
   }
-  
+  NULL
 }
