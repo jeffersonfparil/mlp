@@ -169,9 +169,37 @@ prepare_trial_data <- function(fname) {
   NULL
 }
 
-prepare_gp_data <- function(fname) {
-  # fname <- "archbold.apple.txt"
-  # fname <- "acorsi.grayleafspot.txt"
-  # fname <- "alwan.lamb.txt"
-  # fname <- "aastveit.barley.height.txt"
+prepare_gp_data <- function(fname_geno) {
+  # fname_geno <- "maize_geno.csv"
+  fname_pheno <- gsub("geno", "pheno", fname_geno)
+  df_geno <- read.table(fname_geno, header = TRUE, sep = ",", check.names = FALSE)
+  df_pheno <- read.table(fname_pheno, header = TRUE, sep = ",", check.names = FALSE)
+  if (nrows(df_geno) != nrows(df_pheno)) {
+    stop("Number of rows in genotype and phenotype files do not match.")
+  }
+  if (colnames(df_geno)[1] != "ID") {
+    stop("First column in genotype file must be named 'ID'.")
+  }
+  if (colnames(df_pheno)[1] != "ID") {
+    stop("First column in phenotype file must be named 'ID'.")
+  }
+  df_geno <- df_geno[order(df_geno$ID), ]
+  df_pheno <- df_pheno[order(df_pheno$ID), ]
+  if (!all(df_geno$ID == df_pheno$ID)) {
+    stop("IDs in genotype and phenotype files do not match.")
+  }
+  for (j in seq_len(df_pheno)) {
+    # j <- 2
+    if (j == 1) {next}
+    y_name <- names(df_pheno)[j]
+    y <- df_pheno[, j]
+    if (is.numeric(y) && (length(unique(y)) > 5) && (var(y, na.rm = TRUE) > 1e-7)) {
+      df_out <- cbind(data.frame(y = y), df_geno[, -1, drop=FALSE])
+      df_out = df_out[complete.cases(df_out), ]
+      fname_out <- gsub(".csv", paste0("-", y_name, ".tsv"), fname_geno)
+      write.table(df_out, file = fname_out, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+      print(paste0("Processed: `", fname_out, "`"))
+    }
+  }
+  
 }

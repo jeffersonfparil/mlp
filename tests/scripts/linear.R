@@ -10,14 +10,40 @@ library(BGLR)
 
 args <- commandArgs(trailingOnly = TRUE)
 
+#' Parse command-line arguments for the linear model fitting and effect extraction process, including analysis type, input file, and model fitting parameters.
+#' We expect the following arguments:
+#' 1. analysis_type: "trials" or "gp"
+#' 2. fname_input: path to the input TSV file
+#' 3. For "trials" analysis type: is_simulated (TRUE/FALSE); while for "gp" analysis type: n_folds (numeric)
+#' 4. For "trials" analysis type: exclude_lm (TRUE/FALSE); while for "gp" analysis type: n_reps (numeric)
+#' 5. For "trials" analysis type: exclude_sommer (TRUE/FALSE); while for "gp" analysis type: n_iterations (numeric)
+#' 6. For "trials" analysis type: verbose (TRUE/FALSE); while for "gp" analysis type: n_burnin_iterations (numeric)
 get_params <- function(args) {
-  # args <- c("trials", "TRUE", "TRUE", "TRUE", "TRUE")
-  # args <- c("gp", "5", "5", "6000", "1000")
+  # args <- c("trials", "input-file.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
+  # args <- c("gp", "input-file.tsv", "6", "7", "123", "4567")
   analysis_type <- args[1]
   if (!(analysis_type %in% c("trials", "gp"))) {
     stop("ERROR: Invalid analysis type. Must be either 'trials' or 'gp'.")
   }
+  fname_input <- args[2]
+  if (!file.exists(fname_input)) {
+    stop(paste0("ERROR: The input file '", fname_input, "' does not exist."))
+  }
+  if (length(args) < 6) {
+    stop(paste0(
+      "ERROR: Insufficient arguments. Please provide all 6 parameters:\n",
+      "1. analysis_type: 'trials' or 'gp'\n",
+      "2. fname_input: path to the input TSV file\n",
+      "3. For 'trials' analysis type: is_simulated (TRUE/FALSE); while for 'gp' analysis type: n_folds (numeric)\n",
+      "4. For 'trials' analysis type: exclude_lm (TRUE/FALSE); while for 'gp' analysis type: n_reps (numeric)\n",
+      "5. For 'trials' analysis type: exclude_sommer (TRUE/FALSE); while for 'gp' analysis type: n_iterations (numeric)\n",
+      "6. For 'trials' analysis type: verbose (TRUE/FALSE); while for 'gp' analysis type: n_burnin_iterations (numeric)"
+    ))
+  }
+
   params <- list(
+    analysis_type = analysis_type,
+    fname_input = fname_input,
     trials = list(
       is_simulated = NA,
       exclude_lm = NA,
@@ -33,21 +59,24 @@ get_params <- function(args) {
 
     )
   )
-  if (analysis_type == "trials") {
-    params$trials$is_simulated <- if (args[2] == "TRUE") TRUE else FALSE
-    params$trials$exclude_lm <- if (args[3] == "TRUE") TRUE else FALSE
-    params$trials$exclude_sommer <- if (args[4] == "TRUE") TRUE else FALSE
-    params$trials$verbose <- if (args[5] == "TRUE") TRUE else FALSE
-  } else if (analysis_type == "gp") {
-    params$gp$n_folds <- if (!is.na(args[2])) as.numeric(args[2]) else 5
-    params$gp$n_reps <- if (!is.na(args[3])) as.numeric(args[3]) else 5
-    params$gp$n_iterations <- if (!is.na(args[4])) as.numeric(args[4]) else 6000
-    params$gp$n_burnin_iterations <- if (!is.na(args[5])) as.numeric(args[5]) else 1000
-  }
+  suppressWarnings(
+    if (analysis_type == "trials") {
+      params$trials$is_simulated <- if (args[3] == "TRUE") TRUE else FALSE
+      params$trials$exclude_lm <- if (args[4] == "TRUE") TRUE else FALSE
+      params$trials$exclude_sommer <- if (args[5] == "TRUE") TRUE else FALSE
+      params$trials$verbose <- if (args[6] == "TRUE") TRUE else FALSE
+    } else if (analysis_type == "gp") {
+      params$gp$n_folds <- if (!is.na(args[3]) && !is.na(as.numeric(args[3]))) as.numeric(args[3]) else 5
+      params$gp$n_reps <- if (!is.na(args[4]) && !is.na(as.numeric(args[4]))) as.numeric(args[4]) else 5
+      params$gp$n_iterations <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 6000
+      params$gp$n_burnin_iterations <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 1000
+    }
+  )
   params
 }
 
 #' Process features in the dataframe by converting explanatory variables to factors and creating a dummy environment variable if needed.
+#' Importantly, we assume that the first column of the dataframe is the numeric response variable (y) and the rest are non-numeric explanatory variables. The function also identifies the feature names for modeling.
 process_features <- function(df) {
   # fname = list.files(path=".", pattern=".tsv$")[19]; df = read.table(fname, sep="\t", header=TRUE, na.strings=c("", "NA", "NAN", "NaN", "na", "nan"))
   # Assuming only the first column is the numeric response variable and the rest are non-numeric explanatory variables
@@ -304,7 +333,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
   # x_names <- colnames(df)[2:ncol(df)]; x_names_except_gen_and_dummy_env <- x_names[(x_names != "gen") & (x_names != "dummy_env")]; model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = TRUE, exclude_sommer = TRUE)
   model_candidates <- list()
   for (i in seq_along(model_strings)) {
-    # i <- 30
+    # i <- 1
     mod_string <- model_strings[i]
     mod_label <- unlist(strsplit(mod_string, "\\("))[1]
     if (verbose) {
@@ -360,12 +389,12 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     print("NO MODEL WAS SUCCESSFULLY FITTED!")
     return(NULL)
   }
-  df_stats = df_stats[idx_filter, ]
-  model_candidates = model_candidates[idx_filter]
+  df_stats <- df_stats[idx_filter, ]
+  model_candidates <- model_candidates[idx_filter]
   z_AIC <- scale(df_stats$AIC, scale = TRUE, center = TRUE)
   z_BIC <- scale(df_stats$BIC, scale = TRUE, center = TRUE)
   z_logLik <- -scale(df_stats$logLik, scale = TRUE, center = TRUE)
-  df_stats$z_sum <- 0.2 * z_AIC + 0.6 * z_BIC + 0.2 * z_logLik # more weight on BIC because it is better for model fit parsinomy rather than predictive accuracy which AIC is better suited for
+  df_stats$z_sum <- 0.2 * z_AIC + 0.6 * z_BIC + 0.2 * z_logLik # more weight on BIC because it is better for model fit parsimony rather than predictive accuracy which AIC is better suited for
   # Select the best model based on z_sum
   best_model_idx <- if (is.nan(df_stats$z_sum[1])) {
     # For non-varying stats or only a single model is left
@@ -412,7 +441,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     } else {
       ids <- c()
       effects <- c()
-      for (i in 1:length(best_model$uPevList)) {
+      for (i in seq_along(best_model$uPevList)) {
         # i <- 1
         # best_model = model_candidates[[23]]
         bool_gen <- grepl("gen", names(best_model$uPevList)[i])
@@ -500,38 +529,38 @@ define_fname_output <- function(fname_input) {
 }
 
 #' Main function to extract genotype effects from input datasets (simulated or empirical) by fitting various models and selecting the best one based on criteria, then saving the results to an output file.
-extract_entries_effects <- function(fname_input, params) {
-  input_list <- process_features(df = read.table(fname_input, sep = "\t", header = TRUE))
+extract_entries_effects <- function(params) {
+  input_list <- process_features(df = read.table(params$fname_input, sep = "\t", header = TRUE))
   df <- input_list$df
   attach(df)
   out <- if (params$trials$is_simulated) {
     fit_extract_effects_for_simulated_data(
-      df, 
-      exclude_lm = params$trials$exclude_lm, 
-      exclude_sommer = params$trials$exclude_sommer, 
+      df,
+      exclude_lm = params$trials$exclude_lm,
+      exclude_sommer = params$trials$exclude_sommer,
       verbose = params$trials$verbose
     )
   } else {
     fit_extract_effects_for_empirical_data(
-      df, 
-      exclude_lm = params$trials$exclude_lm, 
-      exclude_sommer = params$trials$exclude_sommer, 
+      df,
+      exclude_lm = params$trials$exclude_lm,
+      exclude_sommer = params$trials$exclude_sommer,
       verbose = params$trials$verbose
     )
   }
   if (is.null(out)) {
     next
   }
-  fname_output <- define_fname_output(fname_input)
+  fname_output <- define_fname_output(params$fname_input)
   write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t")
   fname_output
 }
 
 #' Perform repeated k-fold cross-validation using Bayesian models (BRR, BayesA, BayesB, BayesC) from the BGLR package and compute metrics for each fold and repetition, then save the results to an output file.
-gp_repeated_kfold_cv <- function(fname_input, params$gp$n_folds, params$gp$n_reps, params$gp$n_iterations, n_burnin_iterations) {
+gp_repeated_kfold_cv <- function(params) {
   # fname_input <- list.files(path = ".", pattern = "^input_simulated-.*.tsv")[1]
   # fname_input <- list.files(path = ".", pattern = "*.*.tsv")[1]
-  fname_output <- define_fname_output(fname_input)
+  fname_output <- define_fname_output(params$fname_input)
   fname_output_tmp <- paste0(fname_output, ".tmp")
   cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
   datasets <- c()
@@ -542,13 +571,13 @@ gp_repeated_kfold_cv <- function(fname_input, params$gp$n_folds, params$gp$n_rep
   models <- c()
   corr <- c()
   r2 <- c()
-  df <- read.table(fname_input, sep = "\t", header = TRUE)
+  df <- read.table(params$fname_input, sep = "\t", header = TRUE)
   df < df[complete.cases(df), ]
   n <- nrow(df)
   p <- ncol(df) - 1
   m <- floor(n / params$gp$n_folds)
   if (m < 3) {
-    print(paste0("ERROR: Skipping because the dataset (", fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
+    print(paste0("ERROR: Skipping because the dataset (", params$fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
     return(1)
   }
   y <- df[, 1, drop = FALSE]
@@ -568,16 +597,16 @@ gp_repeated_kfold_cv <- function(fname_input, params$gp$n_folds, params$gp$n_rep
       for (model in c("BRR", "BayesA", "BayesB", "BayesC")) {
         # model = "BayesC"
         mod <- BGLR(
-          y = yNA, 
-          ETA = list(list(X = X, model = model)), 
-          nIter = params$gp$n_iterations, 
-          burnIn = params$gp$n_burnin_iterations, 
-          saveAt = paste0(fname_input, "-", model, "-"), 
-          verbose=TRUE
+          y = yNA,
+          ETA = list(list(X = X, model = model)),
+          nIter = params$gp$n_iterations,
+          burnIn = params$gp$n_burnin_iterations,
+          saveAt = paste0(params$fname_input, "-", model, "-"),
+          verbose = TRUE
         )
         yHat <- mod$yHat[idx_validation]
         res <- cv_metrics(yHat, y[idx_validation, ])
-        datasets <- c(datasets, fname_input)
+        datasets <- c(datasets, params$fname_input)
         reps <- c(reps, r)
         folds <- c(folds, f)
         nt <- c(nt, length(idx_training))
@@ -585,12 +614,37 @@ gp_repeated_kfold_cv <- function(fname_input, params$gp$n_folds, params$gp$n_rep
         models <- c(models, model)
         corr <- c(corr, res$pcor)
         r2 <- c(r2, res$r2)
-        data <- paste(c(fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
+        data <- paste(c(params$fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
         cat(data, file = fname_output_tmp, sep = "\n", append=TRUE)
-        unlink(paste0(args[1], "-", model, "-*"))
+        unlink(paste0(params$fname_input, "-", model, "-*"))
       }
     }
   }
   file.rename(from = fname_output_tmp, to = fname_output)
   fname_output
+}
+
+misc_sim <- function() {
+  df <- expand.grid(
+    year = c("Year➵2026", "Year➵2027"),
+    loc = c("Loc➵A", "Loc➵B"),
+    trt = c("Trt➵1", "Trt➵2"),
+    blk = c("Blk➵1", "Blk➵2", "Blk➵3"),
+    gen = paste0("Gen➵", 1:100)
+  )
+  df$y <- rnorm(nrow(df))
+  # We need to have the response variable (y) as the first column for the modeling functions to work correctly, so we reorder the columns accordingly.
+  df <- df[, c("y", "year", "loc", "trt", "blk", "gen")]
+  write.table(df, file = "input_simulated_misc.tsv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+}
+
+###########################################################
+# Execute
+###########################################################
+# Testing: misc_sim(); args = c("trials", "input_simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
+params <- get_params(args)
+if (params$analysis_type == "trials") {
+  extract_entries_effects(params)
+} else {
+  gp_repeated_kfold_cv(params)
 }
