@@ -1,30 +1,50 @@
 args = commandArgs(trailingOnly=TRUE)
-if (length(args) == 0) {
-  stop("No file names provided as arguments.")
+
+#' This script prepares empirical datasets for testing the modeling functions. It takes an input file, identifies the response and explanatory variables, and creates output files in a standardized format for analysis. The script can handle both trial data and genotype-phenotype data.
+
+#' Extracts and prepares the parameters from the command line arguments, including validation of the analysis type and input file existence.
+#' For trials data, it identifies potential response and explanatory variables based on column names and data characteristics, and creates output files for each response variable.
+#' For gp (genomic prediction) data, it ensures that the genotype and phenotype files are properly formatted.
+get_params <- function(args) {
+  if (length(args) < 2) {
+    stop("At least two arguments are required: analysis_type and file names.")
+  }
+  params = list(
+    analysis_type = args[1],
+    fname_input = args[2]
+  )
+  if ((params$analysis_type != "trials") && (params$analysis_type != "gp")) {
+    stop(paste0("Invalid analysis type: ", params$analysis_type, ". Please choose either 'trials' or 'gp'."))
+  }
+  if (!file.exists(params$fname_input)) {
+    stop(paste0("Input file does not exist: ", params$fname_input))
+  }
+  if (params$analysis_type == "gp") {
+    fname_pheno <- gsub("geno", "pheno", params$fname_input)
+    if (!file.exists(fname_pheno)) {
+      stop(paste0("Phenotype file does not exist: ", fname_pheno, ". We expect the genotype file to have a corresponding phenotype file with the same name but with 'geno' replaced by 'pheno'."))
+    }
+  }
+  params
 }
 
-define_fname_output <- function(fname, y_name=NULL) {
-  fname_out <- if (is.null(y_name)) {
-    gsub(".txt$", ".tsv", fname)
-  } else {
-    gsub(".csv$", paste0("-", y_name, ".tsv"), fname_geno)
-  }
-  fname_out
+#' Defines the output file name based on the input file name and the response variable name. It replaces the extension with a standardized format and removes any "_geno" suffix for clarity.
+define_fname_output <- function(fname, y_name) {
+  fname_output <- gsub(".txt$", paste0("-", y_name, ".tsv"), fname)
+  fname_output <- gsub(".csv$", paste0("-", y_name, ".tsv"), fname_output)
+  fname_output <- gsub("_geno", "", fname_output)
+  fname_output
 }
 
-prepare_trial_data <- function(fname) {
-  # fname <- fnames[1]
-  # fname <- "archbold.apple.txt"
-  # fname <- "acorsi.grayleafspot.txt"
-  # fname <- "alwan.lamb.txt"
-  # fname <- "aastveit.barley.height.txt"
-  if (grepl(".covs.txt", fname)) {
-    stop("Covariate file found: ", fname)
+#' Prepares trial data by reading the input file, identifying response and explanatory variables, and creating output files for each response variable. It handles various naming conventions and data characteristics to ensure that the output is suitable for analysis.
+prepare_trial_data <- function(params) {
+  if (grepl(".covs.txt", params$fname_input)) {
+    stop("Covariate file found: ", params$fname_input)
   }
-  if (grepl(".uniformity.txt", fname)) {
-    stop("Uniformity file found: ", fname)
+  if (grepl(".uniformity.txt", params$fname_input)) {
+    stop("Uniformity file found: ", params$fname_input)
   }
-  df <- read.table(fname, header = TRUE, na.strings = c("", "NA", "NAN", "NaN", "na", "nan"))
+  df <- read.table(params$fname_input, header = TRUE, na.strings = c("", "NA", "NAN", "NaN", "na", "nan"))
   potential_environmental_variable_names <- c(
     "year", "years",
     "loc", "locs",
@@ -171,19 +191,21 @@ prepare_trial_data <- function(fname) {
     if (nrow(df_out) < 2*length(unique(df_out$gen))) {
       next
     }
-    fname_out <- define_fname_output(fname)
-    write.table(df_out, file = fname_out, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
-    print(paste0("Processed: `", fname_out, "`"))
+    fname_output <- define_fname_output(params$fname_input, y_name)
+    write.table(df_out, file = fname_output, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+    print(paste0("Processed: `", fname_output, "`"))
   }
   NULL
 }
 
-prepare_gp_data <- function(fname_geno) {
-  # fname_geno <- "maize_geno.csv"
+#' Prepares genomic prediction data by reading the genotype and phenotype files, ensuring they are properly formatted, and creating output files for each numeric response variable in the phenotype file. It checks for matching IDs and handles missing values appropriately.
+prepare_gp_data <- function(params) {
+  # params <- list(fname_input = "sorghum_geno.csv")
+  fname_geno <- params$fname_input
   fname_pheno <- gsub("geno", "pheno", fname_geno)
   df_geno <- read.table(fname_geno, header = TRUE, sep = ",", check.names = FALSE)
   df_pheno <- read.table(fname_pheno, header = TRUE, sep = ",", check.names = FALSE)
-  if (nrows(df_geno) != nrows(df_pheno)) {
+  if (nrow(df_geno) != nrow(df_pheno)) {
     stop("Number of rows in genotype and phenotype files do not match.")
   }
   if (colnames(df_geno)[1] != "ID") {
@@ -197,18 +219,34 @@ prepare_gp_data <- function(fname_geno) {
   if (!all(df_geno$ID == df_pheno$ID)) {
     stop("IDs in genotype and phenotype files do not match.")
   }
-  for (j in seq_len(df_pheno)) {
+  idx = which(complete.cases(df_geno))
+  df_geno <- df_geno[idx, , drop=FALSE]
+  df_pheno <- df_pheno[idx, , drop=FALSE]
+  df_out <- data.frame( y = NA, df_geno[, -1, drop=FALSE])
+  for (j in 2:ncol(df_pheno)) {
     # j <- 2
-    if (j == 1) {next}
     y_name <- names(df_pheno)[j]
     y <- df_pheno[, j]
     if (is.numeric(y) && (length(unique(y)) > 5) && (var(y, na.rm = TRUE) > 1e-7)) {
-      df_out <- cbind(data.frame(y = y), df_geno[, -1, drop=FALSE])
-      df_out = df_out[complete.cases(df_out), ]
-      fname_out <- define_fname_output(fname_geno, y_name)
-      write.table(df_out, file = fname_out, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
-      print(paste0("Processed: `", fname_out, "`"))
+      idx_y = which(!is.na(y))
+      df_out$y <- y
+      fname_output <- define_fname_output(fname_geno, y_name)
+      write.table(df_out[idx_y, ], file = fname_output, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+      print(paste0("Processed: `", fname_output, "`"))
     }
   }
   NULL
+}
+
+###########################################################
+# Execute
+###########################################################
+# Testing: source("../../scripts/empiricalprep.R")
+# args = c("trials", "australia.soybean.txt")
+# args = c("gp", "sorghum_geno.csv")
+params <- get_params(args)
+if (params$analysis_type == "trials") {
+  prepare_trial_data(params)
+} else {
+  prepare_gp_data(params)
 }

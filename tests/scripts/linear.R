@@ -7,20 +7,48 @@ if (nzchar(system.file(package = "sommer"))) {
   library("sommer") # Currently, too slow for non-trivialy large datasets, e.g. 21,000 observations simulated here
 }
 library(BGLR)
-
 args <- commandArgs(trailingOnly = TRUE)
 
 #' Parse command-line arguments for the linear model fitting and effect extraction process, including analysis type, input file, and model fitting parameters.
 #' We expect the following arguments:
 #' 1. analysis_type: "trials" or "gp"
 #' 2. fname_input: path to the input TSV file
-#' 3. For "trials" analysis type: is_simulated (TRUE/FALSE); while for "gp" analysis type: n_folds (numeric)
-#' 4. For "trials" analysis type: exclude_lm (TRUE/FALSE); while for "gp" analysis type: n_reps (numeric)
-#' 5. For "trials" analysis type: exclude_sommer (TRUE/FALSE); while for "gp" analysis type: n_iterations (numeric)
-#' 6. For "trials" analysis type: verbose (TRUE/FALSE); while for "gp" analysis type: n_burnin_iterations (numeric)
+#' For "trials" analysis type: 
+#'  3. is_simulated (TRUE/FALSE)
+#'  4. exclude_lm (TRUE/FALSE)
+#'  5. exclude_sommer (TRUE/FALSE)
+#'  6. verbose (TRUE/FALSE)
+#' For "gp" analysis type:
+#'  3. n_folds (numeric)
+#'  4. n_reps (numeric)
+#'  5. n_iterations (numeric)
+#'  6. n_burnin_iterations (numeric)
+#'  7. models (comma-separated, select from 'BRR,BayesA,BayesB,BayesC')
+#'  8. base_seed (numeric)
+#'  9. verbose (TRUE/FALSE)
 get_params <- function(args) {
   # args <- c("trials", "input-file.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
   # args <- c("gp", "input-file.tsv", "6", "7", "123", "4567")
+  if (length(args) < 6) {
+    stop(paste0(
+      "ERROR: Insufficient arguments. Please provide all 6 parameters:\n",
+      "1. analysis_type: 'trials' or 'gp'\n",
+      "2. fname_input: path to the input TSV file\n",
+      "For 'trials' analysis type:\n",
+      "  3. is_simulated (TRUE/FALSE)\n",
+      "  4. exclude_lm (TRUE/FALSE)\n",
+      "  5. exclude_sommer (TRUE/FALSE)\n",
+      "  6. verbose (TRUE/FALSE)\n",
+      "For 'gp' analysis type:\n",
+      "  3. n_folds (numeric)\n",
+      "  4. n_reps (numeric)\n",
+      "  5. n_iterations (numeric)\n",
+      "  6. n_burnin_iterations (numeric)\n",
+      "  7. models (comma-separated, select from 'BRR,BayesA,BayesB,BayesC')\n",
+      "  8. base_seed (numeric)\n",
+      "  9. verbose (TRUE/FALSE)\n"
+    ))
+  }
   analysis_type <- args[1]
   if (!(analysis_type %in% c("trials", "gp"))) {
     stop("ERROR: Invalid analysis type. Must be either 'trials' or 'gp'.")
@@ -28,19 +56,12 @@ get_params <- function(args) {
   fname_input <- args[2]
   if (!file.exists(fname_input)) {
     stop(paste0("ERROR: The input file '", fname_input, "' does not exist."))
+  } else {
+    extension_names <- rev(unlist(strsplit(args[2], split = "\\.")))[1]
+    if (extension_names != "tsv") {
+      stop(paste0("ERROR: The input file '", fname_input, "' must be a TSV file with a .tsv extension."))
+    }
   }
-  if (length(args) < 6) {
-    stop(paste0(
-      "ERROR: Insufficient arguments. Please provide all 6 parameters:\n",
-      "1. analysis_type: 'trials' or 'gp'\n",
-      "2. fname_input: path to the input TSV file\n",
-      "3. For 'trials' analysis type: is_simulated (TRUE/FALSE); while for 'gp' analysis type: n_folds (numeric)\n",
-      "4. For 'trials' analysis type: exclude_lm (TRUE/FALSE); while for 'gp' analysis type: n_reps (numeric)\n",
-      "5. For 'trials' analysis type: exclude_sommer (TRUE/FALSE); while for 'gp' analysis type: n_iterations (numeric)\n",
-      "6. For 'trials' analysis type: verbose (TRUE/FALSE); while for 'gp' analysis type: n_burnin_iterations (numeric)"
-    ))
-  }
-
   params <- list(
     analysis_type = analysis_type,
     fname_input = fname_input,
@@ -55,8 +76,9 @@ get_params <- function(args) {
       n_reps = NA,
       n_iterations  = NA,
       n_burnin_iterations = NA,
+      models = NA,
+      base_seed = NA,
       verbose = NA
-
     )
   )
   suppressWarnings(
@@ -70,6 +92,17 @@ get_params <- function(args) {
       params$gp$n_reps <- if (!is.na(args[4]) && !is.na(as.numeric(args[4]))) as.numeric(args[4]) else 5
       params$gp$n_iterations <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 6000
       params$gp$n_burnin_iterations <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 1000
+      params$gp$models <- {
+        models <- if (!is.na(args[7])) strsplit(args[7], split = ",")[[1]] else c("BRR", "BayesA", "BayesB", "BayesC")
+        for (m in models) {
+          if (!(m %in% c("BRR", "BayesA", "BayesB", "BayesC"))) {
+            stop(paste0("ERROR: Invalid model '", m, "'. Valid models are 'BRR', 'BayesA', 'BayesB', and 'BayesC'."))
+          }
+        }
+        models
+      }
+      params$gp$base_seed <- if (!is.na(args[8]) && !is.na(as.numeric(args[8]))) as.numeric(args[8]) else ceiling(100*runif(1))
+      params$gp$verbose <- if (args[9] == "TRUE") TRUE else FALSE
     }
   )
   params
@@ -515,7 +548,7 @@ cv_metrics <- function(yHat, y) {
   )
 }
 
-#' Perform repeated k-fold cross-validation using Bayesian models (BRR, BayesA, BayesB, BayesC) from the BGLR package and compute metrics for each fold and repetition.
+#' Given an input filename, generate the corresponding output filename by replacing "input_simulated" with "output_simulated", changing the extension to "-LINEAR.tsv", and ensuring it starts with "output-".
 define_fname_output <- function(fname_input) {
   dirname_input <- dirname(fname_input)
   basename_input <- basename(fname_input)
@@ -528,8 +561,9 @@ define_fname_output <- function(fname_input) {
   file.path(dirname_input, fname_output)
 }
 
-#' Main function to extract genotype effects from input datasets (simulated or empirical) by fitting various models and selecting the best one based on criteria, then saving the results to an output file.
+#' Main function to extract genotype effects from either simulated or empirical data by fitting various linear models and selecting the best one based on model selection criteria, then saving the results to an output file.
 extract_entries_effects <- function(params) {
+  # params = get_params(args=c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE"))
   input_list <- process_features(df = read.table(params$fname_input, sep = "\t", header = TRUE))
   df <- input_list$df
   attach(df)
@@ -556,10 +590,9 @@ extract_entries_effects <- function(params) {
   fname_output
 }
 
-#' Perform repeated k-fold cross-validation using Bayesian models (BRR, BayesA, BayesB, BayesC) from the BGLR package and compute metrics for each fold and repetition, then save the results to an output file.
+#' Main function to perform repeated k-fold cross-validation using Bayesian genomic prediction models (e.g., BRR, BayesA, BayesB, BayesC) on a given dataset, and save the results (correlation and R-squared) for each fold and repetition to an output file.
 gp_repeated_kfold_cv <- function(params) {
-  # fname_input <- list.files(path = ".", pattern = "^input_simulated-.*.tsv")[1]
-  # fname_input <- list.files(path = ".", pattern = "*.*.tsv")[1]
+  # params = get_params(args=c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10"))
   fname_output <- define_fname_output(params$fname_input)
   fname_output_tmp <- paste0(fname_output, ".tmp")
   cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
@@ -577,14 +610,13 @@ gp_repeated_kfold_cv <- function(params) {
   p <- ncol(df) - 1
   m <- floor(n / params$gp$n_folds)
   if (m < 3) {
-    print(paste0("ERROR: Skipping because the dataset (", params$fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
-    return(1)
+    stop(paste0("ERROR: Skipping because the dataset (", params$fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
   }
   y <- df[, 1, drop = FALSE]
   X <- df[, 2:ncol(df), drop = FALSE]
   for (r in 1:params$gp$n_reps) {
     # r <- 1
-    set.seed(r)
+    set.seed(params$gp$base_seed + r)
     idx_shuffled <- sample(1:n, n, replace = FALSE)
     for (f in 1:params$gp$n_folds) {
       # f <- 2
@@ -594,7 +626,7 @@ gp_repeated_kfold_cv <- function(params) {
       idx_validation <- idx_shuffled[bool_validation]
       yNA <- y[, 1]
       yNA[idx_validation] <- NA
-      for (model in c("BRR", "BayesA", "BayesB", "BayesC")) {
+      for (model in params$gp$models) {
         # model = "BayesC"
         mod <- BGLR(
           y = yNA,
@@ -602,7 +634,7 @@ gp_repeated_kfold_cv <- function(params) {
           nIter = params$gp$n_iterations,
           burnIn = params$gp$n_burnin_iterations,
           saveAt = paste0(params$fname_input, "-", model, "-"),
-          verbose = TRUE
+          verbose = params$gp$verbose
         )
         yHat <- mod$yHat[idx_validation]
         res <- cv_metrics(yHat, y[idx_validation, ])
@@ -615,7 +647,7 @@ gp_repeated_kfold_cv <- function(params) {
         corr <- c(corr, res$pcor)
         r2 <- c(r2, res$r2)
         data <- paste(c(params$fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
-        cat(data, file = fname_output_tmp, sep = "\n", append=TRUE)
+        cat(data, file = fname_output_tmp, sep = "\n", append = TRUE)
         unlink(paste0(params$fname_input, "-", model, "-*"))
       }
     }
@@ -624,6 +656,7 @@ gp_repeated_kfold_cv <- function(params) {
   fname_output
 }
 
+#' Simulate a dataset with specific structure and save it to a TSV file for testing the modeling functions.
 misc_sim <- function() {
   df <- expand.grid(
     year = c("Year➵2026", "Year➵2027"),
@@ -641,7 +674,11 @@ misc_sim <- function() {
 ###########################################################
 # Execute
 ###########################################################
-# Testing: misc_sim(); args = c("trials", "input_simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
+# Testing: source("../../scripts/linear.R")
+# misc_sim()
+# args = c("trials", "input_simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
+# args = c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")
+# args = c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10", "BRR,BayesA", "TRUE", "42")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
   extract_entries_effects(params)

@@ -466,13 +466,6 @@ impl Network {
             );
         }
         for p in &param_combinations {
-            if verbose {
-                println!(
-                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n[ {} / {} ]",
-                    &results.len() + 1,
-                    &param_combinations.len(),
-                );
-            }
             let (
                 n_hidden_layers,
                 n_hidden_nodes,
@@ -488,6 +481,29 @@ impl Network {
                 optimiser,
                 weights_initialisation,
             ) = p.clone();
+            if verbose {
+                println!(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n[ {} / {} ]",
+                    &results.len() + 1,
+                    &param_combinations.len(),
+                );
+                println!(
+                    "| n_hidden_layers={:13} | n_hidden_nodes={:12} | dropout_rate={:12.4} | learning_rate={:13.6} | n_epochs={:6} | n_burnin_epochs={:6} | f_patient_epochs={:14} | f_validation={:14} | n_batches={:7} | activation={:?} | cost={:?} | optimiser={:?} | weights_initialisation={:?} |",
+                    n_hidden_layers,
+                    n_hidden_nodes,
+                    dropout_rate,
+                    learning_rate,
+                    n_epochs,
+                    n_burnin_epochs,
+                    f_patient_epochs,
+                    f_validation,
+                    n_batches,
+                    activation,
+                    cost,
+                    optimiser,
+                    weights_initialisation,
+                );
+            }
             // Create a new instance of the network with the current hyperparameters
             let mut network = Network::new(
                 &self.activations_per_layer[0]

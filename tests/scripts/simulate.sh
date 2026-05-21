@@ -1,7 +1,27 @@
 #!/bin/bash
+if [[ $1 == "-h" || $1 == "--help" ]]; then
+    echo "Simulate trials or genomic prediction datasets using a multi-layer perceptron model."
+    echo "Usage: sh simulate.sh MLP_PATH ANALYSIS_TYPE [ADDITIONAL_PARAMETERS]"
+    echo "MLP: path to the mlp executable (https://github.com/jeffersonfparil/mlp)."
+    echo "ANALYSIS_TYPE: 'trials' or 'gp'."
+    echo "For 'trials', additional parameters are: "
+    echo -e "\t- N_YEARS: number of years"
+    echo -e "\t- N_SITES: number of sites"
+    echo -e "\t- N_TREATMENTS: number of treatments"
+    echo -e "\t- N_ENTRIES: number of entries"
+    echo -e "\t- N_REPLICATIONS: number of replications"
+    echo -e "\t- N_HIDDEN_LAYERS: number of hidden layers in the underlying model"
+    echo "For 'gp', additional parameters are:"
+    echo -e "\t- DATA_TYPE: type of data to simulate (CONTINUOUS or BINARY)"
+    echo -e "\t- N: number of observations"
+    echo -e "\t- P: number of features"
+    echo -e "\t- HIDDEN_LAYERS: number of hidden layers in the underlying model"
+    exit 0
+fi
 MLP=$1
 ANALYSIS_TYPE=$2
 if [[ -z $MLP ]]; then echo "Error: Missing argument for MLP path."; exit 1; fi
+if [[ ! -f $MLP ]]; then echo "Error: MLP executable not found at the specified path: '${MLP}'."; exit 1; fi
 if [[ -z $ANALYSIS_TYPE ]]; then echo "Error: Missing argument for analysis type (trials or gp)."; exit 1; fi
 if [[ $ANALYSIS_TYPE == "trials" ]]; then
     echo "###########################################"
@@ -97,7 +117,7 @@ else
     exit 1
 fi
 
-# ### Test
+# ### Tests
 # ### Simulate data for trials analysis with 3 hidden layers
 # MLP=${HOME}/Documents/mlp/target/release/mlp
 # ANALYSIS_TYPE=trials
@@ -107,7 +127,7 @@ fi
 # N_ENTRIES=13
 # N_REPLICATIONS=3
 # N_HIDDEN_LAYERS=2
-# sh ./simulate.sh  $MLP $ANALYSIS_TYPE $N_YEARS $N_SITES $N_TREATMENTS $N_ENTRIES $N_REPLICATIONS $N_HIDDEN_LAYERS
+# sh ./simulate.sh $MLP $ANALYSIS_TYPE $N_YEARS $N_SITES $N_TREATMENTS $N_ENTRIES $N_REPLICATIONS $N_HIDDEN_LAYERS
 # #### Simulate data for genomic prediction analysis with 3 hidden layers
 # MLP=${HOME}/Documents/mlp/target/release/mlp
 # ANALYSIS_TYPE=gp

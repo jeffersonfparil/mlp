@@ -24,12 +24,16 @@ impl Network {
         // Filename
         let dir: PathBuf = current_dir()?;
         let fname_loss_svg = format!(
-            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
+            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
             dir.display(),
-            self.n_hidden_layers,
             self.activation,
+            self.cost,
+            self.weights_initialisation,
             optimisation_parameters.optimiser,
+            self.n_hidden_layers,
+            self.n_hidden_nodes,
             optimisation_parameters.n_epochs,
+            optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
             optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
@@ -67,12 +71,16 @@ impl Network {
         // Filename
         let dir: PathBuf = current_dir()?;
         let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
+            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
             dir.display(),
-            self.n_hidden_layers,
             self.activation,
+            self.cost,
+            self.weights_initialisation,
             optimisation_parameters.optimiser,
+            self.n_hidden_layers,
+            self.n_hidden_nodes,
             optimisation_parameters.n_epochs,
+            optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
             optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,

@@ -1,6 +1,5 @@
 use chrono::Utc;
 use clap::Parser;
-use std::env::current_dir;
 use std::error::Error;
 use std::fs;
 use std::time::Instant;
@@ -376,8 +375,7 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
     let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
     data_simulated.write_delimited(&fname_simulated, "\t")?;
     println!(
-        "Please find simulated data: `{}/{}`",
-        current_dir()?.display(),
+        "Please find simulated data: `{}`",
         fname_simulated
     );
     Ok(())
@@ -470,8 +468,7 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     predictions.write_delimited(&fname_predictions, "\t")?;
     if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     println!(
-        "Please find the predictions in tab-delimited format: {}/{}",
-        current_dir()?.display(),
+        "Please find the predictions in tab-delimited format: {}",
         fname_predictions
     );
     Ok(())
@@ -541,8 +538,7 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     }
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
-        "Please find the estimated marginal effects in tab-delimited format: {}/{}",
-        current_dir()?.display(),
+        "Please find the estimated marginal effects in tab-delimited format: {}",
         fname_marginals
     );
     Ok(())
@@ -760,8 +756,7 @@ fn train_with_hyperparameter_optimisation(
     };
     network_hyper_optimised.save_network(&fname_network_output)?;
     println!(
-        "Please find the output model (network) in json format: {}/{}",
-        current_dir()?.display(),
+        "Please find the output model (network) in json format: {}",
         fname_network_output
     );
     Ok(fname_network_output)
@@ -809,8 +804,7 @@ fn train_with_fixed_hyperparameters(
     };
     network.save_network(&fname_network_output)?;
     println!(
-        "Please find the output model (network) in json format: {}/{}",
-        current_dir()?.display(),
+        "Please find the output model (network) in json format: {}",
         fname_network_output
     );
     Ok(fname_network_output)
@@ -862,8 +856,7 @@ fn marginals_after_training(
     }
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
-        "Please find the estimated marginal effects in tab-delimited format: {}/{}",
-        current_dir()?.display(),
+        "Please find the estimated marginal effects in tab-delimited format: {}",
         fname_marginals
     );
     Ok(())
