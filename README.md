@@ -291,7 +291,7 @@ Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimis
 cd mlp/
 snakemake --lint
 snakemake -n # or --dry-run
-pixi run snakemake --cores 20
+pixi run snakemake --cores 1
 ```
 
 # Field trial analysis

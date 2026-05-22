@@ -20,9 +20,9 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "Examples:"
     echo "MLP=\${HOME}/Documents/mlp/target/release/mlp"
     echo "mkdir tmp"
-    echo "sh simulate.sh \$MLP trials tmp 5 3 2 10 2 3"
-    echo "sh simulate.sh \$MLP gp tmp CONTINUOUS 100 50 2"
-    echo "sh simulate.sh \$MLP gp tmp BINARY 100 50 2"
+    echo "bash simulate.sh \$MLP trials tmp 5 3 2 10 2 3"
+    echo "bash simulate.sh \$MLP gp tmp CONTINUOUS 100 50 2"
+    echo "bash simulate.sh \$MLP gp tmp BINARY 100 50 2"
     exit 0
 fi
 MLP=$1

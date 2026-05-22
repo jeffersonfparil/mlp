@@ -12,8 +12,10 @@ N_ENTRIES = [10, 50]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1, 2]
 DATA_TYPES = ["CONTINUOUS", "BINARY"]
-N_OBSERVATIONS = [700]
-N_FEATURES = [42000]
+# N_OBSERVATIONS = [700]
+# N_FEATURES = [42000]
+N_OBSERVATIONS = [60]
+N_FEATURES = [100]
 TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
 
@@ -65,7 +67,7 @@ rule simulate_trials:
         """
         cd {params.root_outdir}
         time \
-        sh {params.scripts_dir}/simulate.sh \
+        bash {params.scripts_dir}/simulate.sh \
             {params.mlp} \
             trials \
             trials \
@@ -92,7 +94,7 @@ rule simulate_gp:
         """
         cd {params.root_outdir}
         time \
-        sh {params.scripts_dir}/simulate.sh \
+        bash {params.scripts_dir}/simulate.sh \
             {params.mlp} \
             gp \
             {params.root_outdir}/gp \
@@ -124,13 +126,11 @@ checkpoint empiricalprep_trials:
             {output} > {log}
         """
 
-
-# def get_outputs(wildcards):
-#     ckpt = checkpoints.empiricalprep_trials.get(agridat_dir=wildcards.agridat_dir, fname=wildcards.fname)
-#     output_dir = ckpt.output[0]
-#     import os
-#     return expand("{file}", file=os.listdir(output_dir))
-
+def get_outputs(wildcards):
+    ckpt = checkpoints.empiricalprep_trials.get(fname=wildcards.fname)
+    output_dir = ckpt.output[0]
+    data_files = [f for f in os.listdir(output_dir) if f != "log"]
+    return [os.path.join(output_dir, f) for f in data_files]
 
 # rule empiricalprep_trials:
 #     output:

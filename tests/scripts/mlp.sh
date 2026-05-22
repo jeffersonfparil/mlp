@@ -16,10 +16,10 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "mkdir tmp"
     echo "Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp"
     echo "Rscript empiricalprep.R gp ${DIR}/datasets/azodi_2019/sorghum_geno.csv tmp"
-    echo "sh simulate.sh \$MLP gp tmp BINARY 100 50 2"
-    echo "sh mlp.sh \$MLP trials tmp/australia.soybean-yield.tsv tmp"
-    echo "sh mlp.sh \$MLP gp tmp/input_simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp 3 5 123"
-    echo "sh mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp 2 5 42"
+    echo "bash simulate.sh \$MLP gp tmp BINARY 100 50 2"
+    echo "bash mlp.sh \$MLP trials tmp/australia.soybean-yield.tsv tmp"
+    echo "bash mlp.sh \$MLP gp tmp/input_simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp 3 5 123"
+    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp 2 5 42"
     exit 0
 fi
 MLP=$1
