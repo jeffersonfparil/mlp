@@ -2,9 +2,10 @@ args = commandArgs(trailingOnly=TRUE)
 
 if (args[1] == "-h" || args[1] == "--help") {
   cat("This script prepares empirical datasets for testing the modeling functions. It takes an input file, identifies the response and explanatory variables, and creates output files in a standardized format for analysis. The script can handle both trial data and genotype-phenotype data.\n")
-  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT\n")
+  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
   cat("1. ANALYSIS_TYPE: 'trials' or 'gp'.\n")
   cat("2. FNAME_INPUT: path to the input file for the analysis:\n")
+  cat("3. DIRNAME_OUTPUT: path to the output directory.\n")
   cat("\t- For trials analysis (i.e. to extract the marginal effects of each genotype), this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
   cat("\t- For genomic prediction analysis (i.e. repeated k-fold cross-validation), this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
   cat("Examples:\n")
@@ -23,7 +24,7 @@ get_params <- function(args) {
   if (length(args) < 3) {
     stop("Three arguments are required: analysis_type, input file name, and output directory.")
   }
-  params = list(
+  params <- list(
     analysis_type = args[1],
     fname_input = args[2],
     dirname_output = args[3]
