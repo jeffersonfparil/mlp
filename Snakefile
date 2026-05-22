@@ -1,7 +1,7 @@
 import os, glob
 
 MLP = "path/to/mlp_executable"
-TMP = "tmp"
+ROOT_DIR = "path/to/tmp/"
 
 # ranges for numeric args
 N_YEARS = [2, 5]
@@ -12,7 +12,7 @@ N_REPLICATIONS = [3, 10]
 N_HIDDEN_LAYERS = [1, 2, 3]
 
 ALL_RUNS = expand(
-    "results/sim_{years}_{sites}_{treatments}_{entries}_{replications}_{hidden_layers}.done",
+    "results/sim-{years}-{sites}-{treatments}-{entries}-{replications}-{hidden-layers}.done",
     years=N_YEARS, sites=N_SITES, treatments=N_TREATMENTS, entries=N_ENTRIES, replications=N_REPLICATIONS, hidden_layers=N_HIDDEN_LAYERS
 )
 
@@ -22,19 +22,19 @@ rule all:
 
 rule simulate_trials:
     output:
-        "results/sim_{years}_{sites}_{treatments}_{entries}_{replications}_{hidden_layers}.done"
+        "results/sim-{years}-{sites}-{treatments}-{entries}-{replications}-{hidden-layers}.done"
     params:
         mlp=MLP,
-        tmp=TMP
+        root_dir=ROOT_DIR
     log:
-        "logs/simulate_trials.log"
+        "logs/simulate_trials-{years}-{sites}-{treatments}-{entries}-{replications}-{hidden-layers}.log"
     shell:
         """
         time \
         sh simulate.sh \
             {params.mlp} \
             trials \
-            {params.tmp} \
+            {params.root_dir} \
             {wildcards.years} \
             {wildcards.sites} \
             {wildcards.treatments} \
