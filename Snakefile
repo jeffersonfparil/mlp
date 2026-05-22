@@ -20,12 +20,14 @@ rule all:
     input:
         ALL_RUNS
 
-rule simulate:
+rule simulate_trials:
     output:
         "results/sim_{years}_{sites}_{treatments}_{entries}_{replications}_{hidden_layers}.done"
     params:
         mlp=MLP,
         tmp=TMP
+    log:
+        "logs/simulate_trials.log"
     shell:
         """
         time \
