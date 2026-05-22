@@ -285,6 +285,14 @@ Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimis
 - Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
 - Used as delimiters in marginals' combinations: `▓`
 
+# Snakemake testing workflow
+
+```shell
+cd mlp/
+snakemake --lint
+
+```
+
 # Field trial analysis
 
 We want to show that MLP estimates genotype effects similar to those of linear models while also getting better model fit.
