@@ -29,39 +29,17 @@ GP_SIMULATED_INPUT = expand(
     data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
 )
 
-TRIALS_EMPIRICAL_LOG = expand(
-    # TODO: issue is we will have a variable number of empirical input files for each empirical dataset, e.g.:
-    #   - australia.soybean.txt:
-    #       + australia.soybean-yield.tsv
-    #       + australia.soybean-height.tsv
-    #       + australia.soybean-lodging.tsv
-    #       + australia.soybean-size.tsv
-    #       + australia.soybean-protein.tsv
-    #       + australia.soybean-oil.tsv
-    #   - ilri.sheep.txt:
-    #       + ilri.sheep-birthwt.tsv
-    #       + ilri.sheep-weanwt.tsv
-    #       + ilri.sheep-weanage.tsv
-    f"{ROOT_OUTDIR}/trials/TMPDIR-{{fname}}/log",
-    fname=TRIALS_AGRIDAT_FNAMES
-)
+TRIALS_EMPIRICAL_BASES_REGEX = "|".join([f.replace(".txt", "") for f in TRIALS_AGRIDAT_FNAMES]).replace(".", r"\.")
 
-# 1. Strip ".txt" to get the base names: ['australia.soybean', 'ilri.sheep']
-EMPIRICAL_BASES = [f.replace(".txt", "") for f in TRIALS_AGRIDAT_FNAMES]
-
-# 2. Join them into a regex pattern and escape the dots: 'australia\.soybean|ilri\.sheep'
-BASES_REGEX = "|".join(EMPIRICAL_BASES).replace(".", r"\.")
-
-# 3. Tell Snakemake that 'dynamic_file' MUST start with one of those base names
 wildcard_constraints:
-    dynamic_file=f"({BASES_REGEX}).*"
+    dynamic_file=f"({TRIALS_EMPIRICAL_BASES_REGEX}).*"
 
 def TRIALS_EMPIRICAL_INPUT(wildcards):
     final_files = []
     for fname in TRIALS_AGRIDAT_FNAMES:
         ckpt_dir = checkpoints.empiricalprep_trials.get(fname=fname).output[0]
         for f in os.listdir(ckpt_dir):
-            if f != "log":
+            if f.endswith(".tsv"):
                 final_files.append(f"{ROOT_OUTDIR}/trials/{f}")
     return final_files
 
@@ -75,7 +53,6 @@ rule all:
     input:
         TRIALS_SIMULATED_INPUT,
         GP_SIMULATED_INPUT,
-        # TRIALS_EMPIRICAL_LOG,
         TRIALS_EMPIRICAL_INPUT,
 
 rule simulate_trials:
@@ -162,3 +139,6 @@ rule move_empiricalprep_trials:
         echo "{input} --> {output}"
         mv {input} {output}
         """
+
+# TODO: clean-up:
+# - remove directory(f"{ROOT_OUTDIR}/trials/TMPDIR-{{fname}}")
