@@ -46,7 +46,7 @@ TRIALS_EMPIRICAL_LOG = expand(
     fname=TRIALS_AGRIDAT_FNAMES
 )
 
-def get_outputs(wildcards):
+def TRIALS_EMPIRICAL_INPUT(wildcards):
     final_files = []
     for fname in TRIALS_AGRIDAT_FNAMES:
         ckpt_dir = checkpoints.empiricalprep_trials.get(fname=fname).output[0]
@@ -66,7 +66,7 @@ rule all:
         TRIALS_SIMULATED_INPUT,
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_LOG,
-        get_outputs,
+        TRIALS_EMPIRICAL_INPUT,
 
 rule simulate_trials:
     output:
@@ -142,13 +142,13 @@ checkpoint empiricalprep_trials:
             {output} > {log}
         """
 
-rule move_empiricalprep_trials:
-    input:
-        get_tmpdir_source
-    output:
-        f"{ROOT_OUTDIR}/trials/{{dynamic_file}}"
-    shell:
-        """
-        # echo "{input} --> {output}"
-        # mv {input} {output}
-        """
+# rule move_empiricalprep_trials:
+#     input:
+#         get_tmpdir_source
+#     output:
+#         f"{ROOT_OUTDIR}/trials/{{dynamic_file}}"
+#     shell:
+#         """
+#         # echo "{input} --> {output}"
+#         # mv {input} {output}
+#         """
