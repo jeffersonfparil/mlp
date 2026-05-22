@@ -261,6 +261,10 @@ struct Args {
     #[arg(short = 's', long, action)]
     simulate_data_only: bool,
 
+    /// Simulated data output filename
+    #[arg(long)]
+    simulation_fname_output: Option<String>,
+
     /// Number of observations to simulate
     #[arg(short = 'n', long, default_value_t = 100)]
     simulation_n_observations: usize,
@@ -372,7 +376,21 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
         args.seed,
         args.verbose,
     )?;
-    let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
+    let fname_simulated = match &args.simulation_fname_output {
+        Some(x) => x.to_owned(),
+        None => format!("input_simulated-n_{}-p_{}-q_{}-k_{}-d_{}-D{:?}-Dp1_{}-Dp1_{}-s_{}-t_{}.tsv", 
+            args.simulation_n_observations,
+            args.simulation_n_features_continuous,
+            args.simulation_n_features_categorical.iter().fold(0, |sum, x| sum + x),
+            args.simulation_n_output_columns,
+            args.simulation_n_hidden_layers,
+            &args.simulation_weights_distribution,
+            args.simulation_weights_distribution_param_1,
+            args.simulation_weights_distribution_param_2,
+            args.seed,
+            Utc::now().format("%Y%m%d%H%M%S"),
+        ),
+    };
     data_simulated.write_delimited(&fname_simulated, "\t")?;
     println!(
         "Please find simulated data: `{}`",
