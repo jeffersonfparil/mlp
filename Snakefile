@@ -14,6 +14,8 @@ DATA_TYPES = ["CONTINUOUS", "BINARY"]
 N_OBSERVATIONS = [700]
 N_FEATURES = [42000]
 
+TRIALS_EMPIRICAL_INPUT = ["australia.soybean.txt", ]
+
 TRIALS_SIMULATED_INPUT = expand(
     "{root_outdir}/trials/input_simulated-YEARS_{year}-SITES_{site}-TREATMENTS_{treatment}-ENTRIES_{entry}-REPLICATIONS_{replication}-HIDDEN_LAYERS_{hidden_layer}.tsv",
     root_outdir=ROOT_OUTDIR,
@@ -24,6 +26,21 @@ GP_SIMULATED_INPUT = expand(
     "{root_outdir}/gp/input_simulated-DATA_TYPE_{data_type}-N_{n}-P_{p}-HIDDEN_LAYERS_{hidden_layers}.tsv",
     root_outdir=ROOT_OUTDIR,
     data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+)
+
+TRIALS_EMPIRICAL_INPUT = expand(
+    # TODO: issue is we will have a variable number of empirical input files for each empirical dataset, e.g.:
+    #   - australia.soybean.txt:
+    #       + australia.soybean-yield.tsv
+    #       + australia.soybean-height.tsv
+    #       + australia.soybean-lodging.tsv
+    #       + australia.soybean-size.tsv
+    #       + australia.soybean-protein.tsv
+    #       + australia.soybean-oil.tsv
+    #   - ilri.sheep.txt:
+    #       + ilri.sheep-birthwt.tsv
+    #       + ilri.sheep-weanwt.tsv
+    #       + ilri.sheep-weanage.tsv
 )
 
 rule all:
@@ -79,4 +96,19 @@ rule simulate_gp:
             {wildcards.n} \
             {wildcards.p} \
             {wildcards.hidden_layers} > {log}
+        """
+
+rule empiricalprep_trials:
+    output:
+    params:
+    log:
+    conda:
+        "conda.yaml"
+    shell:
+        """
+        cd {wildcards.root_outdir}
+        time \
+        Rscript {params.scripts_dir}/empiricalprep.R \
+            trials \
+            ??? > {log}
         """
