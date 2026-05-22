@@ -46,11 +46,27 @@ TRIALS_EMPIRICAL_LOG = expand(
     fname=TRIALS_AGRIDAT_FNAMES
 )
 
+def get_outputs(wildcards):
+    final_files = []
+    for fname in TRIALS_AGRIDAT_FNAMES:
+        ckpt_dir = checkpoints.empiricalprep_trials.get(fname=fname).output[0]
+        for f in os.listdir(ckpt_dir):
+            if f != "log":
+                final_files.append(f"{ROOT_OUTDIR}/trials/{f}")
+    return final_files
+
+def get_tmpdir_source(wildcards):
+    # wildcards.dynamic_file will be "australia.soybean-yield.tsv"
+    base_name = wildcards.dynamic_file.split('-')[0]
+    fname = f"{base_name}.txt"
+    return f"{ROOT_OUTDIR}/trials/TMPDIR-{fname}/{wildcards.dynamic_file}"
+
 rule all:
     input:
         TRIALS_SIMULATED_INPUT,
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_LOG,
+        get_outputs,
 
 rule simulate_trials:
     output:
@@ -126,23 +142,13 @@ checkpoint empiricalprep_trials:
             {output} > {log}
         """
 
-def get_outputs(wildcards):
-    ckpt = checkpoints.empiricalprep_trials.get(fname=wildcards.fname)
-    output_dir = ckpt.output[0]
-    data_files = [f for f in os.listdir(output_dir) if f != "log"]
-    return [os.path.join(output_dir, f) for f in data_files]
-
-# rule empiricalprep_trials:
-#     output:
-#     params:
-#     log:
-#     conda:
-#         "conda.yaml"
-#     shell:
-#         """
-#         cd {ROOT_OUTDIR}
-#         time \
-#         Rscript {params.scripts_dir}/empiricalprep.R \
-#             trials \
-#             ??? > {log}
-#         """
+rule move_empiricalprep_trials:
+    input:
+        get_tmpdir_source
+    output:
+        f"{ROOT_OUTDIR}/trials/{{dynamic_file}}"
+    shell:
+        """
+        # echo "{input} --> {output}"
+        # mv {input} {output}
+        """
