@@ -46,6 +46,16 @@ TRIALS_EMPIRICAL_LOG = expand(
     fname=TRIALS_AGRIDAT_FNAMES
 )
 
+# 1. Strip ".txt" to get the base names: ['australia.soybean', 'ilri.sheep']
+EMPIRICAL_BASES = [f.replace(".txt", "") for f in TRIALS_AGRIDAT_FNAMES]
+
+# 2. Join them into a regex pattern and escape the dots: 'australia\.soybean|ilri\.sheep'
+BASES_REGEX = "|".join(EMPIRICAL_BASES).replace(".", r"\.")
+
+# 3. Tell Snakemake that 'dynamic_file' MUST start with one of those base names
+wildcard_constraints:
+    dynamic_file=f"({BASES_REGEX}).*"
+
 def TRIALS_EMPIRICAL_INPUT(wildcards):
     final_files = []
     for fname in TRIALS_AGRIDAT_FNAMES:
@@ -65,7 +75,7 @@ rule all:
     input:
         TRIALS_SIMULATED_INPUT,
         GP_SIMULATED_INPUT,
-        TRIALS_EMPIRICAL_LOG,
+        # TRIALS_EMPIRICAL_LOG,
         TRIALS_EMPIRICAL_INPUT,
 
 rule simulate_trials:
@@ -142,13 +152,13 @@ checkpoint empiricalprep_trials:
             {output} > {log}
         """
 
-# rule move_empiricalprep_trials:
-#     input:
-#         get_tmpdir_source
-#     output:
-#         f"{ROOT_OUTDIR}/trials/{{dynamic_file}}"
-#     shell:
-#         """
-#         # echo "{input} --> {output}"
-#         # mv {input} {output}
-#         """
+rule move_empiricalprep_trials:
+    input:
+        get_tmpdir_source
+    output:
+        f"{ROOT_OUTDIR}/trials/{{dynamic_file}}"
+    shell:
+        """
+        echo "{input} --> {output}"
+        mv {input} {output}
+        """
