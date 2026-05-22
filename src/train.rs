@@ -260,7 +260,7 @@ impl Network {
         let mut costs: Vec<f64> = Vec::new();
         let n_patient_epochs = (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
-            .ceil() as usize;
+            .floor() as usize;
         // Note that for large networks this can be very VRAM-hungry! TODO: make this more efficient probably for non-vross-validating runs
         // With or without cross-validation
         let n: usize = self.targets.n_cols;
@@ -617,20 +617,20 @@ impl Network {
             ),
         ) = best_params;
         if verbose {
-            println!("Best parameter found:");
+            println!("Best hyperparameters found:");
             println!("\t- Hidden Layers: {}", n_hidden_layers);
             println!("\t- Hidden Nodes: {}", n_hidden_nodes);
             println!("\t- Dropout Rate: {}", dropout_rate);
             println!("\t- Learning Rate: {}", learning_rate);
             println!("\t- Epochs: {}", n_epochs);
-            println!("\t- Burnin epochs: {}", n_burnin_epochs);
+            println!("\t- Burnin Epochs: {}", n_burnin_epochs);
             println!(
                 "\t- Patient Epochs: {}",
-                (f_patient_epochs * n_epochs as f32).ceil() as usize
+                (f_patient_epochs * n_epochs as f32).floor() as usize
             );
             println!(
                 "\t- Validation Set: {}",
-                (f_validation * self.targets.n_cols as f32).ceil() as usize
+                (f_validation * self.targets.n_cols as f32).floor() as usize
             );
             println!("\t- Batches: {}", n_batches);
             println!("\t- Activation: {:?}", activation);

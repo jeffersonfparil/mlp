@@ -3,8 +3,8 @@ args = commandArgs(trailingOnly=TRUE)
 if (args[1] == "-h" || args[1] == "--help") {
   cat("This script prepares empirical datasets for testing the modeling functions. It takes an input file, identifies the response and explanatory variables, and creates output files in a standardized format for analysis. The script can handle both trial data and genotype-phenotype data.\n")
   cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT\n")
-  cat("ANALYSIS_TYPE: 'trials' or 'gp'.\n")
-  cat("FNAME_INPUT: path to the input file for the analysis:\n")
+  cat("1. ANALYSIS_TYPE: 'trials' or 'gp'.\n")
+  cat("2. FNAME_INPUT: path to the input file for the analysis:\n")
   cat("\t- For trials analysis (i.e. to extract the marginal effects of each genotype), this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
   cat("\t- For genomic prediction analysis (i.e. repeated k-fold cross-validation), this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
   cat("Examples:\n")
@@ -213,7 +213,6 @@ prepare_trial_data <- function(params) {
     write.table(df_out, file = fname_output, sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
     print(paste0("Processed: `", fname_output, "`"))
   }
-  NULL
 }
 
 #' Prepares genomic prediction data by reading the genotype and phenotype files, ensuring they are properly formatted, and creating output files for each numeric response variable in the phenotype file. It checks for matching IDs and handles missing values appropriately.
@@ -253,7 +252,6 @@ prepare_gp_data <- function(params) {
       print(paste0("Processed: `", fname_output, "`"))
     }
   }
-  NULL
 }
 
 ###########################################################
