@@ -5,9 +5,9 @@ ROOT_OUTDIR = str(Path.home() / "Documents/mlp/tests/tmp")
 SCRIPTS_DIR = str(Path.home() / "Documents/mlp/tests/scripts")
 MLP = str(Path.home() / "Documents/mlp/target/release/mlp")
 ANALYSIS_TYPES = ["trials", "gp"]
-N_YEARS = [1, 3]
-N_SITES = [1, 5]
-N_TREATMENTS = [1, 3]
+N_YEARS = [2]
+N_SITES = [5]
+N_TREATMENTS = [3]
 N_ENTRIES = [10, 50]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1, 2]
@@ -20,6 +20,9 @@ TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
 GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
+EXCLUDE_LM = True
+EXCLUDE_SOMMER = True
+VERBOSE = True
 
 TRIALS_SIMULATED_INPUT = expand(
     f"{ROOT_OUTDIR}/trials/simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv",
@@ -53,7 +56,7 @@ def GP_EMPIRICAL_INPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/{filename}")
     return final_files
 
-def LINEAR_OUTPUT(wildcards):
+def LINEAR_ANALYSIS_OUTPUT(wildcards):
     # TODO
     return []
 
@@ -173,3 +176,32 @@ checkpoint empiricalprep_gp:
         """
 
 # TODO: probably checkpoints again for linear and mlp analyses
+
+rule linear_analysis_trials:
+    input:
+        f"{ROOT_OUTDIR}/trials/{{fname}}.tsv"
+    output:
+        f"{ROOT_OUTDIR}/trials/output-{{fname}}-LINEAR.tsv"
+    params:
+        mlp=MLP,
+        scripts_dir=SCRIPTS_DIR,
+        exclude_lm = EXCLUDE_LM,
+        exclude_sommer = EXCLUDE_SOMMER,
+        verbose = VERBOSE
+    log:
+        f"{ROOT_OUTDIR}/trials/linear_analysis-{{fname}}.log"
+    conda:
+        "conda.yaml"
+    shell:
+        """
+        IS_SIMULATED = if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then echo "TRUE"; else echo "FALSE"; fi;
+        time \
+        Rscript {params.scripts_dir}/linear.R \
+            trials \
+            {input} \
+            {output} \
+            $IS_SIMULATED \
+            {params.exclude_lm} \
+            {params.exclude_sommer} \
+            {params.verbose} > {log}
+        """
