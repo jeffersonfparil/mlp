@@ -36,7 +36,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("###########################\n")
   cat("MLP=${HOME}/Documents/mlp/target/release/mlp\n")
   cat("sh simulate.sh $MLP gp tmp BINARY 100 50 2\n")
-  cat("Rscript linear.R gp tmp/input_simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp 5 10 100 10 'BRR,BayesA' 123 TRUE\n")
+  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp 5 10 100 10 'BRR,BayesA' 123 TRUE\n")
   quit(status = 0)
 }
 
@@ -398,7 +398,7 @@ generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dum
 
 #' Fit models using provided strings, select the best based on AIC/BIC/logLik, and extract genotype effects.
 fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbose = TRUE) {
-  # df <- process_features(df = read.table(list.files(path = ".", pattern = "input_simulated|.tsv")[1], header=TRUE))$df; time_limit_seconds = 1; verbose = TRUE;
+  # df <- process_features(df = read.table(list.files(path = ".", pattern = "simulated|.tsv")[1], header=TRUE))$df; time_limit_seconds = 1; verbose = TRUE;
   # x_names <- colnames(df)[2:ncol(df)]; x_names_except_gen_and_dummy_env <- x_names[(x_names != "gen") & (x_names != "dummy_env")]; model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = TRUE, exclude_sommer = TRUE)
   model_candidates <- list()
   for (i in seq_along(model_strings)) {
@@ -584,16 +584,11 @@ cv_metrics <- function(yHat, y) {
   )
 }
 
-#' Given an input filename, generate the corresponding output filename by replacing "input_simulated" with "output_simulated", changing the extension to "-LINEAR.tsv", and ensuring it starts with "output-".
+#' Given an input filename, generate the corresponding output filename by appending "output-", and changing the extension to "-LINEAR.tsv".
 define_fname_output <- function(fname_input) {
   dirname_input <- dirname(fname_input)
   basename_input <- basename(fname_input)
-  fname_output <- gsub("input_simulated", "output_simulated", gsub(".tsv", "-LINEAR.tsv", basename_input))
-  fname_output <- if (grepl("^output", fname_output)) {
-    fname_output
-  } else {
-    paste0("output-", fname_output)
-  }
+  fname_output <- paste0("output-", gsub(".tsv", "-LINEAR.tsv", basename_input))
   file.path(dirname_input, fname_output)
 }
 
@@ -704,7 +699,7 @@ misc_sim <- function() {
   df$y <- rnorm(nrow(df))
   # We need to have the response variable (y) as the first column for the modeling functions to work correctly, so we reorder the columns accordingly.
   df <- df[, c("y", "year", "loc", "trt", "blk", "gen")]
-  write.table(df, file = "input_simulated_misc.tsv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+  write.table(df, file = "simulated_misc.tsv", row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
 }
 
 ###########################################################
@@ -712,7 +707,7 @@ misc_sim <- function() {
 ###########################################################
 # Testing: source("../../scripts/linear.R")
 # misc_sim()
-# args = c("trials", "input_simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
+# args = c("trials", "simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
 # args = c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")
 # args = c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10", "BRR,BayesA", "TRUE", "42")
 params <- get_params(args)

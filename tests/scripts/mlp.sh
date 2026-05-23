@@ -45,10 +45,8 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     N_HIDDEN_NODES=64
     MARGINALS_ORDER=1
     BNAME_INPUT=$(basename $FNAME_INPUT)
-    BNAME_OUTPUT=$(echo $BNAME_INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv$/-MLP_E${N_EPOCHS}_F${F_PATIENT_EPOCHS}_B${N_BATCHES}_H${N_HIDDEN_LAYERS}_M${MARGINALS_ORDER}.json/g")
-    if [[ $(echo $BNAME_OUTPUT | grep "output_simulated") == "" ]]; then
-        BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
-    fi
+    BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
+    BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
     FNAME_OUTPUT_MARGINALS=${FNAME_OUTPUT_JSON%.*}-marginals.tsv
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
@@ -114,12 +112,10 @@ else
     ACTIVATIONS="ReLU"
     WEIGHTS_INITIALISATIONS="He,Cauchy"
     BNAME_INPUT=$(basename $FNAME_INPUT)
-    BNAME_OUTPUT=$(echo $BNAME_INPUT | sed 's/input_simulated/output_simulated/g' | sed "s/.tsv$/-MLP_GP_CV.json/g")
-    if [[ $(echo $BNAME_OUTPUT | grep "output_simulated") == "" ]]; then
-        BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
-    fi
+    BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
+    BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
-    FNAME_OUTPUT_CV=${FNAME_OUTPUT_JSON%.*}-cv.tsv
+    FNAME_OUTPUT_CV=${FNAME_OUTPUT_JSON%-MLP.json*}-MLP_CV.tsv
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
     mkdir $TMP_OUTDIR
     echo "INPUT: $FNAME_INPUT"
