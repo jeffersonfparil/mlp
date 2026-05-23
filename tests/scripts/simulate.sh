@@ -38,7 +38,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     echo "### Simulating data for trials analysis ###"
     echo "###########################################"
     echo "Notes:"
-    echo "- simulated file names will be of the format: input_simulated-YEARS_X-SITES_Y-TREATMENTS_Z-ENTRIES_W-REPLICATIONS_V-HIDDEN_LAYERS_HL.tsv"
+    echo "- simulated file names will be of the format: simulated-YEARS_X-SITES_Y-TREATMENTS_Z-ENTRIES_W-REPLICATIONS_V-HIDDEN_LAYERS_HL.tsv"
     echo "- this means if you rerun the script with the same parameters, it will overwrite the previously simulated data file with the same name."
     N_YEARS=$4
     N_SITES=$5
@@ -52,7 +52,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     if [[ -z $N_ENTRIES ]]; then echo "Error: Missing argument for number of entries (N_ENTRIES)."; exit 1; fi
     if [[ -z $N_REPLICATIONS ]]; then echo "Error: Missing argument for number of replications (N_REPLICATIONS)."; exit 1; fi
     if [[ -z $N_HIDDEN_LAYERS ]]; then echo "Error: Missing argument for number of hidden layers (N_HIDDEN_LAYERS)."; exit 1; fi
-    FNAME_OUTPUT=input_simulated-YEARS_${N_YEARS}-SITES_${N_SITES}-TREATMENTS_${N_TREATMENTS}-ENTRIES_${N_ENTRIES}-REPLICATIONS_${N_REPLICATIONS}-HIDDEN_LAYERS_${N_HIDDEN_LAYERS}.tsv
+    FNAME_OUTPUT=simulated-YEARS_${N_YEARS}-SITES_${N_SITES}-TREATMENTS_${N_TREATMENTS}-ENTRIES_${N_ENTRIES}-REPLICATIONS_${N_REPLICATIONS}-HIDDEN_LAYERS_${N_HIDDEN_LAYERS}.tsv
     SEED=$(echo "$N_HIDDEN_LAYERS*($N_YEARS+$N_SITES+$N_TREATMENTS+$N_ENTRIES+$N_REPLICATIONS)" | bc)
     $MLP \
         --simulate-data-only \
@@ -81,7 +81,7 @@ elif [[ $ANALYSIS_TYPE == "gp" ]]; then
     echo "### Simulating data for genomic prediction analysis ###"
     echo "#######################################################"
     echo "Notes:"
-    echo "- simulated file names will be of the format: input_simulated-DATA_TYPE_X-N_Y-P_HIDDEN_LAYERS_HL.tsv"
+    echo "- simulated file names will be of the format: simulated-DATA_TYPE_X-N_Y-P_HIDDEN_LAYERS_HL.tsv"
     echo "- this means if you rerun the script with the same parameters, it will overwrite the previously simulated data file with the same name."
     DATA_TYPE=$4
     N=$5
@@ -92,7 +92,7 @@ elif [[ $ANALYSIS_TYPE == "gp" ]]; then
     if [[ -z $P ]]; then echo "Error: Missing argument for number of features (P)."; exit 1; fi
     if [[ -z $HIDDEN_LAYERS ]]; then echo "Error: Missing argument for number of hidden layers (HIDDEN_LAYERS)."; exit 1; fi
     if [[ $DATA_TYPE != "CONTINUOUS" && $DATA_TYPE != "BINARY" ]]; then echo "Error: Invalid data type. Please specify 'CONTINUOUS' or 'BINARY' for DATA_TYPE."; exit 1; fi
-    FNAME_OUTPUT=input_simulated-DATA_TYPE_${DATA_TYPE}-N_${N}-P_${P}-HIDDEN_LAYERS_${HIDDEN_LAYERS}.tsv
+    FNAME_OUTPUT=simulated-DATA_TYPE_${DATA_TYPE}-N_${N}-P_${P}-HIDDEN_LAYERS_${HIDDEN_LAYERS}.tsv
     SEED=$(echo "$HIDDEN_LAYERS*($N+$P)" | bc)
     $MLP \
         --simulate-data-only \

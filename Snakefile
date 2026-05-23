@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-ROOT_OUTDIR = str(Path.home() / "Documents/mlp/tests/scripts/tmp")
+ROOT_OUTDIR = str(Path.home() / "Documents/mlp/tests/tmp")
 SCRIPTS_DIR = str(Path.home() / "Documents/mlp/tests/scripts")
 MLP = str(Path.home() / "Documents/mlp/target/release/mlp")
 ANALYSIS_TYPES = ["trials", "gp"]
@@ -22,12 +22,12 @@ GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
 
 TRIALS_SIMULATED_INPUT = expand(
-    f"{ROOT_OUTDIR}/trials/input_simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv",
+    f"{ROOT_OUTDIR}/trials/simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv",
     year=N_YEARS, site=N_SITES, treatment=N_TREATMENTS, entry=N_ENTRIES, replication=N_REPLICATIONS, hidden_layer=N_HIDDEN_LAYERS
 )
 
 GP_SIMULATED_INPUT = expand(
-    f"{ROOT_OUTDIR}/gp/input_simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.tsv",
+    f"{ROOT_OUTDIR}/gp/simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.tsv",
     data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
 )
 
@@ -70,7 +70,7 @@ rule all:
 
 rule simulate_trials:
     output:
-        f"{ROOT_OUTDIR}/trials/input_simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv"
+        f"{ROOT_OUTDIR}/trials/simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv"
     params:
         root_outdir=ROOT_OUTDIR,
         scripts_dir=SCRIPTS_DIR,
@@ -97,7 +97,7 @@ rule simulate_trials:
 
 rule simulate_gp:
     output:
-        f"{ROOT_OUTDIR}/gp/input_simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.tsv"
+        f"{ROOT_OUTDIR}/gp/simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.tsv"
     params:
         root_outdir=ROOT_OUTDIR,
         scripts_dir=SCRIPTS_DIR,
