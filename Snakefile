@@ -18,6 +18,8 @@ N_OBSERVATIONS = [60]
 N_FEATURES = [100]
 TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
+GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
+GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
 
 TRIALS_SIMULATED_INPUT = expand(
     f"{ROOT_OUTDIR}/trials/input_simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv",
@@ -29,31 +31,42 @@ GP_SIMULATED_INPUT = expand(
     data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
 )
 
-TRIALS_EMPIRICAL_BASES_REGEX = "|".join([f.replace(".txt", "") for f in TRIALS_AGRIDAT_FNAMES]).replace(".", r"\.")
-
-wildcard_constraints:
-    dynamic_file=f"({TRIALS_EMPIRICAL_BASES_REGEX}).*"
-
 def TRIALS_EMPIRICAL_INPUT(wildcards):
     final_files = []
     for fname in TRIALS_AGRIDAT_FNAMES:
-        ckpt_dir = checkpoints.empiricalprep_trials.get(fname=fname).output[0]
-        for f in os.listdir(ckpt_dir):
-            if f.endswith(".tsv"):
-                final_files.append(f"{ROOT_OUTDIR}/trials/{f}")
+        manifest_path = checkpoints.empiricalprep_trials.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename:
+                    final_files.append(f"{ROOT_OUTDIR}/trials/{filename}")
     return final_files
 
-def get_tmpdir_source(wildcards):
-    # wildcards.dynamic_file will be "australia.soybean-yield.tsv"
-    base_name = wildcards.dynamic_file.split('-')[0]
-    fname = f"{base_name}.txt"
-    return f"{ROOT_OUTDIR}/trials/TMPDIR-{fname}/{wildcards.dynamic_file}"
+def GP_EMPIRICAL_INPUT(wildcards):
+    final_files = []
+    for fname in GP_AZODI2019_FNAMES:
+        manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename:
+                    final_files.append(f"{ROOT_OUTDIR}/gp/{filename}")
+    return final_files
+
+def LINEAR_OUTPUT(wildcards):
+    # TODO
+    return []
+
+def MLP_OUTPUT(wildcards):
+    # TODO
+    return []
 
 rule all:
     input:
         TRIALS_SIMULATED_INPUT,
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_INPUT,
+        GP_EMPIRICAL_INPUT
 
 rule simulate_trials:
     output:
@@ -111,34 +124,52 @@ checkpoint empiricalprep_trials:
     input:
         f"{TRIALS_AGRIDAT_DIR}/{{fname}}"
     output:
-        directory(f"{ROOT_OUTDIR}/trials/TMPDIR-{{fname}}")
+        manifest=f"{ROOT_OUTDIR}/trials/{{fname}}.manifest.txt"
     params:
         mlp=MLP,
         scripts_dir=SCRIPTS_DIR,
+        tmpdir=temp(directory(f"{ROOT_OUTDIR}/trials/TMPDIR-{{fname}}"))
     log:
-        f"{ROOT_OUTDIR}/trials/TMPDIR-{{fname}}/log"
+        f"{ROOT_OUTDIR}/trials/{{fname}}.log"
     conda:
         "conda.yaml"
     shell:
         """
-        mkdir -p {output}
+        mkdir -p {params.tmpdir}
         time \
         Rscript {params.scripts_dir}/empiricalprep.R \
             trials \
             {input} \
-            {output} > {log}
+            {params.tmpdir} > {log}
+        ls -1 {params.tmpdir} > {output.manifest}
+        mv {params.tmpdir}/* {ROOT_OUTDIR}/trials/
+        rm -rf {params.tmpdir}
         """
 
-rule move_empiricalprep_trials:
+checkpoint empiricalprep_gp:
     input:
-        get_tmpdir_source
+        f"{GP_AZODI2019_DIR}/{{fname}}"
     output:
-        f"{ROOT_OUTDIR}/trials/{{dynamic_file}}"
+        manifest=f"{ROOT_OUTDIR}/gp/{{fname}}.manifest.txt"
+    params:
+        mlp=MLP,
+        scripts_dir=SCRIPTS_DIR,
+        tmpdir=temp(directory(f"{ROOT_OUTDIR}/gp/TMPDIR-{{fname}}"))
+    log:
+        f"{ROOT_OUTDIR}/gp/{{fname}}.log"
+    conda:
+        "conda.yaml"
     shell:
         """
-        echo "{input} --> {output}"
-        mv {input} {output}
+        mkdir -p {params.tmpdir}
+        time \
+        Rscript {params.scripts_dir}/empiricalprep.R \
+            gp \
+            {input} \
+            {params.tmpdir} > {log}
+        ls -1 {params.tmpdir} > {output.manifest}
+        mv {params.tmpdir}/* {ROOT_OUTDIR}/gp/
+        rm -rf {params.tmpdir}
         """
 
-# TODO: clean-up:
-# - remove directory(f"{ROOT_OUTDIR}/trials/TMPDIR-{{fname}}")
+# TODO: probably checkpoints again for linear and mlp analyses
