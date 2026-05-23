@@ -57,8 +57,20 @@ def GP_EMPIRICAL_INPUT(wildcards):
     return final_files
 
 def LINEAR_ANALYSIS_OUTPUT(wildcards):
-    # TODO
-    return []
+    final_files = []
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/trials/output-simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}-LINEAR.tsv",
+        year=N_YEARS, site=N_SITES, treatment=N_TREATMENTS, entry=N_ENTRIES, replication=N_REPLICATIONS, hidden_layer=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
+    for fname in TRIALS_AGRIDAT_FNAMES:
+        manifest_path = checkpoints.empiricalprep_trials.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename:
+                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{filename}-LINEAR.tsv")
+    return final_files
 
 def MLP_OUTPUT(wildcards):
     # TODO
@@ -69,7 +81,8 @@ rule all:
         TRIALS_SIMULATED_INPUT,
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_INPUT,
-        GP_EMPIRICAL_INPUT
+        GP_EMPIRICAL_INPUT,
+        LINEAR_ANALYSIS_OUTPUT,
 
 rule simulate_trials:
     output:
@@ -194,7 +207,11 @@ rule linear_analysis_trials:
         "conda.yaml"
     shell:
         """
-        IS_SIMULATED = if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then echo "TRUE"; else echo "FALSE"; fi;
+        if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
+            IS_SIMULATED="TRUE"
+        else 
+            IS_SIMULATED="FALSE"
+        fi;
         time \
         Rscript {params.scripts_dir}/linear.R \
             trials \
