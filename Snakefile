@@ -68,8 +68,10 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
         with open(manifest_path, "r") as f:
             for line in f:
                 filename = line.strip()
-                if filename:
-                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{filename}-LINEAR.tsv")
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{dataset_base}-LINEAR.tsv")
+                    
     return final_files
 
 def MLP_OUTPUT(wildcards):
@@ -82,7 +84,7 @@ rule all:
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
-        LINEAR_ANALYSIS_OUTPUT,
+        LINEAR_ANALYSIS_OUTPUT
 
 rule simulate_trials:
     output:
