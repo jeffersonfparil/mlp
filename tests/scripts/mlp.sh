@@ -49,7 +49,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
     FNAME_OUTPUT_MARGINALS_TMP=${FNAME_OUTPUT_JSON%.json*}-marginal_effects.tsv
-    FNAME_OUTPUT_MARGINALS=$(echo ${FNAME_OUTPUT_MARGINALS_TMP} | sed "s/-MLP-marginal_effects//g")
+    FNAME_OUTPUT_MARGINALS=$(echo ${FNAME_OUTPUT_MARGINALS_TMP} | sed "s/-marginal_effects//g")
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
     echo "INPUT: $FNAME_INPUT"
     echo "OUTPUT_TMP: $FNAME_OUTPUT_MARGINALS_TMP"
@@ -66,6 +66,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
         --n-hidden-layers=${N_HIDDEN_LAYERS} \
         --n-hidden-nodes=${N_HIDDEN_NODES} \
         --marginals-order=${MARGINALS_ORDER}
+    mv $FNAME_OUTPUT_MARGINALS_TMP $FNAME_OUTPUT_MARGINALS
     mkdir -p $TMP_OUTDIR
     mv $FNAME_OUTPUT_JSON $TMP_OUTDIR
     mv *.svg $TMP_OUTDIR
