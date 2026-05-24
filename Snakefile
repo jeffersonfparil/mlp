@@ -22,8 +22,8 @@ TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
 GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
-EXCLUDE_LM = "FALSE"
-EXCLUDE_SOMMER = "FALSE"
+EXCLUDE_LM = "TRUE"
+EXCLUDE_SOMMER = "TRUE"
 N_FOLDS = 2
 N_REPS = 1
 N_ITERATIONS = 100
@@ -94,22 +94,35 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-LINEAR.tsv")
     return final_files
 
-# def MLP_OUTPUT(wildcards):
-#     final_files = []
-#     simulated_targets = expand(
-#         f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-MLP.tsv",
-#         data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
-#     )
-#     final_files.extend(simulated_targets)
-#     for fname in GP_AZODI2019_FNAMES:
-#         manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
-#         with open(manifest_path, "r") as f:
-#             for line in f:
-#                 filename = line.strip()
-#                 if filename.endswith(".tsv"):
-#                     dataset_base = filename.replace(".tsv", "")
-#                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-MLP.tsv")
-#     return final_files
+def MLP_ANALYSIS_OUTPUT(wildcards):
+    final_files = []
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/trials/output-simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}-MLP.tsv",
+        year=N_YEARS, site=N_SITES, treatment=N_TREATMENTS, entry=N_ENTRIES, replication=N_REPLICATIONS, hidden_layer=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-MLP.tsv",
+        data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
+    for fname in TRIALS_AGRIDAT_FNAMES:
+        manifest_path = checkpoints.empiricalprep_trials.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{dataset_base}-MLP.tsv")
+    for fname in GP_AZODI2019_FNAMES:
+        manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-MLP.tsv")
+    return final_files
 
 rule all:
     input:
@@ -117,7 +130,8 @@ rule all:
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
-        LINEAR_ANALYSIS_OUTPUT
+        LINEAR_ANALYSIS_OUTPUT,
+        # MLP_ANALYSIS_OUTPUT
 
 rule simulate_trials:
     output:
@@ -229,7 +243,6 @@ rule linear_analysis:
     output:
         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR.tsv",
     params:
-        mlp=MLP,
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         exclude_lm = EXCLUDE_LM,
@@ -276,5 +289,47 @@ rule linear_analysis:
                 {params.base_seed} \
                 {params.verbose} > {log}
         fi;
-        
         """
+
+# rule mlp_analysis:
+#     input:
+#         f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+#     output:
+#         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-MLP.tsv",
+#     params:
+#         mlp=MLP,
+#         scripts_dir=SCRIPTS_DIR,
+#         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
+#         n_folds = N_FOLDS,
+#         n_reps = N_REPS,
+#         base_seed = BASE_SEED
+#     log:
+#         f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"
+#     conda:
+#         "conda.yaml"
+#     shell:
+#         """
+#         if [[ {wildcards.analysis_type} == "trials" ]]; then
+#             if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
+#                 IS_SIMULATED="TRUE"
+#             else 
+#                 IS_SIMULATED="FALSE"
+#             fi;
+#             time \
+#             bash {params.scripts_dir}/mlp.sh \
+#                 {params.mlp} \
+#                 trials \
+#                 {input} \
+#                 {params.outdir} > {log}
+#         else
+#             time \
+#             bash {params.scripts_dir}/mlp.sh \
+#                 {params.mlp} \
+#                 gp \
+#                 {input} \
+#                 {params.outdir} \
+#                 {params.n_folds} \
+#                 {params.n_reps} \
+#                 {params.base_seed} > {log}
+#         fi;
+#         """

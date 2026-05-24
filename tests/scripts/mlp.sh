@@ -46,7 +46,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     MARGINALS_ORDER=1
     BNAME_INPUT=$(basename $FNAME_INPUT)
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
-    BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
+    BNAME_OUTPUT="output-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
     FNAME_OUTPUT_MARGINALS=${FNAME_OUTPUT_JSON%.json*}.tsv
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
@@ -113,7 +113,7 @@ else
     WEIGHTS_INITIALISATIONS="He,Cauchy"
     BNAME_INPUT=$(basename $FNAME_INPUT)
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
-    BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
+    BNAME_OUTPUT="output-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
     FNAME_OUTPUT_CV=${FNAME_OUTPUT_JSON%.json*}.tsv
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
