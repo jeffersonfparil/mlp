@@ -5,6 +5,8 @@ ROOT_OUTDIR = str(Path.home() / "Documents/mlp/tests/tmp")
 SCRIPTS_DIR = str(Path.home() / "Documents/mlp/tests/scripts")
 MLP = str(Path.home() / "Documents/mlp/target/release/mlp")
 ANALYSIS_TYPES = ["trials", "gp"]
+wildcard_constraints:
+    analysis_type="trials|gp"
 N_YEARS = [2]
 N_SITES = [5]
 N_TREATMENTS = [3]
@@ -20,9 +22,15 @@ TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
 GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
-EXCLUDE_LM = True
-EXCLUDE_SOMMER = True
-VERBOSE = True
+EXCLUDE_LM = "FALSE"
+EXCLUDE_SOMMER = "FALSE"
+N_FOLDS = 2
+N_REPS = 1
+N_ITERATIONS = 100
+N_BURNIN_ITERATIONS = 10
+MODELS = "BRR,BayesA"
+BASE_SEED = 42
+VERBOSE = "TRUE"
 
 TRIALS_SIMULATED_INPUT = expand(
     f"{ROOT_OUTDIR}/trials/simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv",
@@ -63,6 +71,11 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
         year=N_YEARS, site=N_SITES, treatment=N_TREATMENTS, entry=N_ENTRIES, replication=N_REPLICATIONS, hidden_layer=N_HIDDEN_LAYERS
     )
     final_files.extend(simulated_targets)
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-LINEAR.tsv",
+        data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
     for fname in TRIALS_AGRIDAT_FNAMES:
         manifest_path = checkpoints.empiricalprep_trials.get(fname=fname).output.manifest
         with open(manifest_path, "r") as f:
@@ -71,12 +84,32 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
                     final_files.append(f"{ROOT_OUTDIR}/trials/output-{dataset_base}-LINEAR.tsv")
-                    
+    for fname in GP_AZODI2019_FNAMES:
+        manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-LINEAR.tsv")
     return final_files
 
-def MLP_OUTPUT(wildcards):
-    # TODO
-    return []
+# def MLP_OUTPUT(wildcards):
+#     final_files = []
+#     simulated_targets = expand(
+#         f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-MLP.tsv",
+#         data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+#     )
+#     final_files.extend(simulated_targets)
+#     for fname in GP_AZODI2019_FNAMES:
+#         manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
+#         with open(manifest_path, "r") as f:
+#             for line in f:
+#                 filename = line.strip()
+#                 if filename.endswith(".tsv"):
+#                     dataset_base = filename.replace(".tsv", "")
+#                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-MLP.tsv")
+#     return final_files
 
 rule all:
     input:
@@ -190,37 +223,58 @@ checkpoint empiricalprep_gp:
         rm -rf {params.tmpdir}
         """
 
-# TODO: probably checkpoints again for linear and mlp analyses
-
-rule linear_analysis_trials:
+rule linear_analysis:
     input:
-        f"{ROOT_OUTDIR}/trials/{{fname}}.tsv"
+        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
     output:
-        f"{ROOT_OUTDIR}/trials/output-{{fname}}-LINEAR.tsv"
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR.tsv",
     params:
         mlp=MLP,
         scripts_dir=SCRIPTS_DIR,
+        outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         exclude_lm = EXCLUDE_LM,
         exclude_sommer = EXCLUDE_SOMMER,
+        n_folds = N_FOLDS,
+        n_reps = N_REPS,
+        n_iterations = N_ITERATIONS,
+        n_burnin_iterations = N_BURNIN_ITERATIONS,
+        models = MODELS,
+        base_seed = BASE_SEED,
         verbose = VERBOSE
     log:
-        f"{ROOT_OUTDIR}/trials/linear_analysis-{{fname}}.log"
+        f"{ROOT_OUTDIR}/{{analysis_type}}/linear_analysis-{{fname}}.log"
     conda:
         "conda.yaml"
     shell:
         """
-        if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
-            IS_SIMULATED="TRUE"
-        else 
-            IS_SIMULATED="FALSE"
+        if [[ {wildcards.analysis_type} == "trials" ]]; then
+            if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
+                IS_SIMULATED="TRUE"
+            else 
+                IS_SIMULATED="FALSE"
+            fi;
+            time \
+            Rscript {params.scripts_dir}/linear.R \
+                trials \
+                {input} \
+                {params.outdir} \
+                $IS_SIMULATED \
+                {params.exclude_lm} \
+                {params.exclude_sommer} \
+                {params.verbose} > {log}
+        else
+            time \
+            Rscript {params.scripts_dir}/linear.R \
+                gp \
+                {input} \
+                {params.outdir} \
+                {params.n_folds} \
+                {params.n_reps} \
+                {params.n_iterations} \
+                {params.n_burnin_iterations} \
+                {params.models} \
+                {params.base_seed} \
+                {params.verbose} > {log}
         fi;
-        time \
-        Rscript {params.scripts_dir}/linear.R \
-            trials \
-            {input} \
-            {output} \
-            $IS_SIMULATED \
-            {params.exclude_lm} \
-            {params.exclude_sommer} \
-            {params.verbose} > {log}
+        
         """

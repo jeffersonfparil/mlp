@@ -48,7 +48,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
     BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
-    FNAME_OUTPUT_MARGINALS=${FNAME_OUTPUT_JSON%.*}-marginals.tsv
+    FNAME_OUTPUT_MARGINALS=${FNAME_OUTPUT_JSON%.json*}.tsv
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
     echo "INPUT: $FNAME_INPUT"
     echo "OUTPUT: $FNAME_OUTPUT_MARGINALS"
@@ -115,7 +115,7 @@ else
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
     BNAME_OUTPUT="output_empirical-${BNAME_OUTPUT}"
     FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
-    FNAME_OUTPUT_CV=${FNAME_OUTPUT_JSON%-MLP.json*}-MLP_CV.tsv
+    FNAME_OUTPUT_CV=${FNAME_OUTPUT_JSON%.json*}.tsv
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
     mkdir $TMP_OUTDIR
     echo "INPUT: $FNAME_INPUT"

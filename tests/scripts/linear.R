@@ -614,7 +614,7 @@ extract_entries_effects <- function(params) {
     )
   }
   if (is.null(out)) {
-    next
+    out = list(df_effects = data.frame(ids = character(), effects = numeric()), formula = NA)
   }
   fname_output <- define_fname_output(params$fname_input)
   write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t")
@@ -627,14 +627,6 @@ gp_repeated_kfold_cv <- function(params) {
   fname_output <- define_fname_output(params$fname_input)
   fname_output_tmp <- paste0(fname_output, ".tmp")
   cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
-  datasets <- c()
-  reps <- c()
-  folds <- c()
-  nt <- c()
-  nv <- c()
-  models <- c()
-  corr <- c()
-  r2 <- c()
   df <- read.table(params$fname_input, sep = "\t", header = TRUE)
   df < df[complete.cases(df), ]
   n <- nrow(df)
@@ -669,15 +661,7 @@ gp_repeated_kfold_cv <- function(params) {
         )
         yHat <- mod$yHat[idx_validation]
         res <- cv_metrics(yHat, y[idx_validation, ])
-        datasets <- c(datasets, params$fname_input)
-        reps <- c(reps, r)
-        folds <- c(folds, f)
-        nt <- c(nt, length(idx_training))
-        nv <- c(nv, length(idx_validation))
-        models <- c(models, model)
-        corr <- c(corr, res$pcor)
-        r2 <- c(r2, res$r2)
-        data <- paste(c(params$fname_input, r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
+        data <- paste(c(basename(params$fname_input), r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
         cat(data, file = fname_output_tmp, sep = "\n", append = TRUE)
         unlink(paste0(params$fname_input, "-", model, "-*"))
       }
