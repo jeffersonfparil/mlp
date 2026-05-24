@@ -14,8 +14,6 @@ N_ENTRIES = [10, 50]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1, 2]
 DATA_TYPES = ["CONTINUOUS", "BINARY"]
-# N_OBSERVATIONS = [700]
-# N_FEATURES = [42000]
 N_OBSERVATIONS = [60]
 N_FEATURES = [100]
 TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
@@ -26,10 +24,8 @@ EXCLUDE_LM = "TRUE"
 EXCLUDE_SOMMER = "TRUE"
 N_FOLDS = 2
 N_REPS = 1
-N_ITERATIONS_LINEAR = 100
-N_BURNIN_ITERATIONS_LINEAR = 10
-N_ITERATIONS_MLP = 1000
-N_BURNIN_ITERATIONS_MLP = 100
+N_ITERATIONS = 100
+N_BURNIN_ITERATIONS = 10
 MODELS = "BRR,BayesA"
 BASE_SEED = 42
 VERBOSE = "TRUE"
@@ -251,8 +247,8 @@ rule linear_analysis:
         exclude_sommer = EXCLUDE_SOMMER,
         n_folds = N_FOLDS,
         n_reps = N_REPS,
-        n_iterations = N_ITERATIONS_LINEAR,
-        n_burnin_iterations = N_BURNIN_ITERATIONS_LINEAR,
+        n_iterations = N_ITERATIONS,
+        n_burnin_iterations = N_BURNIN_ITERATIONS,
         models = MODELS,
         base_seed = BASE_SEED,
         verbose = VERBOSE
@@ -304,8 +300,8 @@ rule mlp_analysis:
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
-        n_iterations = N_ITERATIONS_MLP,
-        n_burnin_iterations = N_BURNIN_ITERATIONS_MLP,
+        n_iterations = N_ITERATIONS,
+        n_burnin_iterations = N_BURNIN_ITERATIONS,
         base_seed = BASE_SEED
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"
