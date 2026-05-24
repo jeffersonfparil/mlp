@@ -15,8 +15,8 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t\t6. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
   cat("\t\t7. verbose: TRUE/FALSE (Default: FALSE)\n")
   cat("For genomic prediction analysis, additional arguments are:\n")
-  cat("\t\t4. n_folds: numeric (Default: 5)\n")
-  cat("\t\t5. n_reps: numeric (Default: 1)\n")
+  cat("\t\t4. n_reps: numeric (Default: 1)\n")
+  cat("\t\t5. n_folds: numeric (Default: 5)\n")
   cat("\t\t6. n_iterations: numeric (Default: 1000)\n")
   cat("\t\t7. n_burnin_iterations: numeric (Default: 100)\n")
   cat("\t\t8. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
@@ -74,8 +74,8 @@ get_params <- function(args) {
       "\t1. analysis_type",
       "\t2. input file name",
       "\t3. output directory",
-      "\t4. n_folds (numeric)",
-      "\t5. n_reps (numeric)",
+      "\t4. n_reps (numeric)",
+      "\t5. n_folds (numeric)",
       "\t6. n_iterations (numeric)",
       "\t7. n_burnin_iterations (numeric)",
       "\t8. models (comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC')",
@@ -124,8 +124,8 @@ get_params <- function(args) {
       params$trials$exclude_sommer <- if (args[6] == "TRUE") TRUE else FALSE
       params$trials$verbose <- if (args[7] == "TRUE") TRUE else FALSE
     } else if (analysis_type == "gp") {
-      params$gp$n_folds <- if (!is.na(args[4]) && !is.na(as.numeric(args[4]))) as.numeric(args[4]) else 5
-      params$gp$n_reps <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 5
+      params$gp$n_folds <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 5
+      params$gp$n_reps <- if (!is.na(args[4]) && !is.na(as.numeric(args[4]))) as.numeric(args[4]) else 5
       params$gp$n_iterations <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 6000
       params$gp$n_burnin_iterations <- if (!is.na(args[7]) && !is.na(as.numeric(args[7]))) as.numeric(args[7]) else 1000
       params$gp$models <- {

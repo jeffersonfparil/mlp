@@ -281,8 +281,8 @@ rule linear_analysis:
                 gp \
                 {input} \
                 {params.outdir} \
-                {params.n_folds} \
                 {params.n_reps} \
+                {params.n_folds} \
                 {params.n_iterations} \
                 {params.n_burnin_iterations} \
                 {params.models} \
@@ -310,11 +310,6 @@ rule mlp_analysis:
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
-            if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
-                IS_SIMULATED="TRUE"
-            else 
-                IS_SIMULATED="FALSE"
-            fi;
             time \
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
@@ -328,8 +323,8 @@ rule mlp_analysis:
                 gp \
                 {input} \
                 {params.outdir} \
-                {params.n_folds} \
                 {params.n_reps} \
+                {params.n_folds} \
                 {params.base_seed} > {log}
         fi;
         """
