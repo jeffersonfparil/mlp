@@ -131,7 +131,7 @@ rule all:
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
         LINEAR_ANALYSIS_OUTPUT,
-        # MLP_ANALYSIS_OUTPUT
+        MLP_ANALYSIS_OUTPUT
 
 rule simulate_trials:
     output:
@@ -291,45 +291,45 @@ rule linear_analysis:
         fi;
         """
 
-# rule mlp_analysis:
-#     input:
-#         f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
-#     output:
-#         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-MLP.tsv",
-#     params:
-#         mlp=MLP,
-#         scripts_dir=SCRIPTS_DIR,
-#         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
-#         n_folds = N_FOLDS,
-#         n_reps = N_REPS,
-#         base_seed = BASE_SEED
-#     log:
-#         f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"
-#     conda:
-#         "conda.yaml"
-#     shell:
-#         """
-#         if [[ {wildcards.analysis_type} == "trials" ]]; then
-#             if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
-#                 IS_SIMULATED="TRUE"
-#             else 
-#                 IS_SIMULATED="FALSE"
-#             fi;
-#             time \
-#             bash {params.scripts_dir}/mlp.sh \
-#                 {params.mlp} \
-#                 trials \
-#                 {input} \
-#                 {params.outdir} > {log}
-#         else
-#             time \
-#             bash {params.scripts_dir}/mlp.sh \
-#                 {params.mlp} \
-#                 gp \
-#                 {input} \
-#                 {params.outdir} \
-#                 {params.n_folds} \
-#                 {params.n_reps} \
-#                 {params.base_seed} > {log}
-#         fi;
-#         """
+rule mlp_analysis:
+    input:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+    output:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-MLP.tsv",
+    params:
+        mlp=MLP,
+        scripts_dir=SCRIPTS_DIR,
+        outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
+        n_folds = N_FOLDS,
+        n_reps = N_REPS,
+        base_seed = BASE_SEED
+    log:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"
+    conda:
+        "conda.yaml"
+    shell:
+        """
+        if [[ {wildcards.analysis_type} == "trials" ]]; then
+            if [[ $(basename {input} | grep -c "^simulated") -gt 0 ]]; then 
+                IS_SIMULATED="TRUE"
+            else 
+                IS_SIMULATED="FALSE"
+            fi;
+            time \
+            bash {params.scripts_dir}/mlp.sh \
+                {params.mlp} \
+                trials \
+                {input} \
+                {params.outdir} > {log}
+        else
+            time \
+            bash {params.scripts_dir}/mlp.sh \
+                {params.mlp} \
+                gp \
+                {input} \
+                {params.outdir} \
+                {params.n_folds} \
+                {params.n_reps} \
+                {params.base_seed} > {log}
+        fi;
+        """
