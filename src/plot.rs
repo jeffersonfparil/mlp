@@ -10,6 +10,7 @@ use std::env::current_dir;
 use std::error::Error;
 use std::path::PathBuf;
 use std::cmp::Ordering;
+use rand::prelude::*;
 
 impl From<PlottingError> for TrainingError {
     fn from(err: PlottingError) -> Self {
@@ -23,8 +24,9 @@ impl Network {
     pub fn plot_loss(self: &Self, epochs: Vec<Vec<f64>>, costs: Vec<Vec<f64>>, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
+        let mut rng = rand::rng();
         let fname_loss_svg = format!(
-            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
+            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
             self.activation,
             self.cost,
@@ -38,7 +40,8 @@ impl Network {
             optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S"),
+            rng.sample(rand::distr::Alphanumeric) as char,
         );
         // Plot loss curve
         let mut ylabel = String::from("Cost");
@@ -70,8 +73,9 @@ impl Network {
     pub fn plot_true_vs_pred(self: &Self, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
+        let mut rng = rand::rng();
         let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}.svg",
+            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
             self.activation,
             self.cost,
@@ -85,7 +89,8 @@ impl Network {
             optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S"),
+            rng.sample(rand::distr::Alphanumeric) as char,
         );
         // Scatter plot of observed vs predicted values
         let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
@@ -156,10 +161,12 @@ impl Marginals {
         // Note that we only plot the marginal effects and leave it to the use to plot the R2 using their preferred plotting software/library
         // Filename
         let dir: PathBuf = current_dir()?;
+        let mut rng = rand::rng();            
         let fname_main_effects_png = format!(
-            "{}/Marginal_effects-T{}.png",
+            "{}/Marginal_effects-T{}-R{}.png",
             dir.display(),
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S"),
+            rng.sample(rand::distr::Alphanumeric) as char,
         );
         // Extract ids and effects
         let mut ids_all: Vec<String> = Vec::new();

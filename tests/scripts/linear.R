@@ -279,46 +279,50 @@ generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dum
       "lm(y ~ dummy_env + gen, data=df)",
       "lm(y ~ dummy_env*gen, data=df)",
       paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + gen, data=df)"),
-      paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env + gen, data=df)"),
-      paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env*gen, data=df)"),
-      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lm(y ~ ", x, " + gen, data=df)")})),
-      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lm(y ~ ", x, "*gen, data=df)")}))
+      paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env + gen, data=df)")
+      # paste0("lm(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env*gen, data=df)"),
+      # unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lm(y ~ ", x, " + gen, data=df)")})),
+      # unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lm(y ~ ", x, "*gen, data=df)")}))
+    )
+    # if (m > 1) {
+    #   for (i in 1:(m - 1)) {
+    #     x1 <- x_names_except_gen_and_dummy_env[i]
+    #     for (j in (i + 1):m) {
+    #       x2 <- x_names_except_gen_and_dummy_env[j]
+    #       lm_model_strings <- c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen, data=df)"))
+    #       lm_model_strings <- c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen + ", x1, ":gen, data=df)"))
+    #       lm_model_strings <- c(lm_model_strings, paste0("lm(y ~ ", x1, "*", x2, " + gen, data=df)"))
+    #     }
+    #   }
+    # }
+  }
+  if (exclude_sommer) {
+    lmer_model_strings <- c()
+  } else {
+    lmer_model_strings <- c(
+      "lmer(y ~ (1|gen), data=df)",
+      "lmer(y ~ dummy_env + (1|gen), data=df)",
+      "lmer(y ~ dummy_env + (1|gen:dummy_env), data=df)",
+      "lmer(y ~ (1|gen:dummy_env), data=df)",
+      "lmer(y ~ (1|dummy_env) + (1|gen:dummy_env), data=df)",
+      paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + (1|gen), data=df)"),
+      paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env + (1|gen), data=df)"),
+      paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + (1|gen) + (1|gen:dummy_env), data=df)"),
+      paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env + (1|gen) + (1|gen:dummy_env), data=df)"),
+      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lmer(y ~ ", x, " + (1|gen), data=df)")})),
+      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lmer(y ~ ", x, " + (1|gen) + (1|gen:", x, "), data=df)")})),
+      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lmer(y ~ (1|gen) + (1|gen:", x, "), data=df)")}))
     )
     if (m > 1) {
       for (i in 1:(m - 1)) {
         x1 <- x_names_except_gen_and_dummy_env[i]
         for (j in (i + 1):m) {
           x2 <- x_names_except_gen_and_dummy_env[j]
-          lm_model_strings <- c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen, data=df)"))
-          lm_model_strings <- c(lm_model_strings, paste0("lm(y ~ ", x1, " + ", x2, " + gen + ", x1, ":gen, data=df)"))
-          lm_model_strings <- c(lm_model_strings, paste0("lm(y ~ ", x1, "*", x2, " + gen, data=df)"))
+          lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen), data=df)"))
+          lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x1, "), data=df)"))
+          lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x2, "), data=df)"))
+          lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x1, ") + (1|gen:", x2, "), data=df)"))
         }
-      }
-    }
-  }
-  lmer_model_strings <- c(
-    "lmer(y ~ (1|gen), data=df)",
-    "lmer(y ~ dummy_env + (1|gen), data=df)",
-    "lmer(y ~ dummy_env + (1|gen:dummy_env), data=df)",
-    "lmer(y ~ (1|gen:dummy_env), data=df)",
-    "lmer(y ~ (1|dummy_env) + (1|gen:dummy_env), data=df)",
-    paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + (1|gen), data=df)"),
-    paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env + (1|gen), data=df)"),
-    paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + (1|gen) + (1|gen:dummy_env), data=df)"),
-    paste0("lmer(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), " + dummy_env + (1|gen) + (1|gen:dummy_env), data=df)"),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lmer(y ~ ", x, " + (1|gen), data=df)")})),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lmer(y ~ ", x, " + (1|gen) + (1|gen:", x, "), data=df)")})),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("lmer(y ~ (1|gen) + (1|gen:", x, "), data=df)")}))
-  )
-  if (m > 1) {
-    for (i in 1:(m - 1)) {
-      x1 <- x_names_except_gen_and_dummy_env[i]
-      for (j in (i + 1):m) {
-        x2 <- x_names_except_gen_and_dummy_env[j]
-        lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen), data=df)"))
-        lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x1, "), data=df)"))
-        lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x2, "), data=df)"))
-        lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x1, ") + (1|gen:", x2, "), data=df)"))
       }
     }
   }
@@ -449,7 +453,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     BIC = sapply(model_candidates, bic_lm_lmer_asreml),
     logLik = sapply(model_candidates, loglik_lm_lmer_asreml)
   )
-  idx_filter = which(!is.na(df_stats$AIC) & is.finite(df_stats$AIC))
+  idx_filter <- which(!is.na(df_stats$AIC) & is.finite(df_stats$AIC))
   if (length(idx_filter) == 0) {
     print("NO MODEL WAS SUCCESSFULLY FITTED!")
     return(NULL)
@@ -500,7 +504,8 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
       effects = as.vector(coef(best_model)$random)
     )
     df_sub <- df_effects_temp[grepl("gen", df_effects_temp$ids) &
-                               !grepl(":", df_effects_temp$ids), ]
+
+              !grepl(":", df_effects_temp$ids), ]
     df_sub$ids <- gsub("^gen_", "", df_sub$ids)
     df_sub
   } else if (class(best_model) == "mmes") {
@@ -691,9 +696,10 @@ misc_sim <- function() {
 ###########################################################
 # Testing: source("../../scripts/linear.R")
 # misc_sim()
-# args = c("trials", "simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
-# args = c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")
-# args = c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10", "BRR,BayesA", "TRUE", "42")
+# args <- c("trials", "simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
+# args <- c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")
+# args <- c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10", "BRR,BayesA", "TRUE", "42")
+# args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/ilri.sheep-birthwt.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials", "FALSE", "FALSE", "TRUE", "TRUE")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
   extract_entries_effects(params)

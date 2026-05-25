@@ -65,12 +65,14 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
         --n-batches=${N_BATCHES} \
         --n-hidden-layers=${N_HIDDEN_LAYERS} \
         --n-hidden-nodes=${N_HIDDEN_NODES} \
-        --marginals-order=${MARGINALS_ORDER}
-    mv $FNAME_OUTPUT_MARGINALS_TMP $FNAME_OUTPUT_MARGINALS
+        --marginals-order=${MARGINALS_ORDER} > ${FNAME_OUTPUT_JSON}.log
+    # Clean-up just a bit
     mkdir -p $TMP_OUTDIR
+    for f in $(grep "Find the loss curve saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
+    for f in $(grep "Find the observed vs predicted scatterplot saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
+    for f in $(grep "Find the marginal effects (perturbation estimates) barplot saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
     mv $FNAME_OUTPUT_JSON $TMP_OUTDIR
-    mv *.svg $TMP_OUTDIR
-    mv *.png $TMP_OUTDIR
+    mv $FNAME_OUTPUT_MARGINALS_TMP $FNAME_OUTPUT_MARGINALS
 else
     echo "#########################################################################################################"
     echo "### Running multi-layer perceptron model for genomic prediction with repeated k-fold cross-validation ###"
@@ -101,9 +103,10 @@ else
     else
         echo "Using $N_FOLDS folds for k-fold cross-validation (M=$M observations per fold)."
     fi
-    N_EPOCHS=1000
-    N_BURNIN_EPOCHS=100
-    F_PATIENT_EPOCHS=0.01
+    N_EPOCHS=100
+    N_BURNIN_EPOCHS=10
+    # F_PATIENT_EPOCHS=0.01
+    F_PATIENT_EPOCHS=0.1
     F_VALIDATION=1e-42
     N_BATCHES=1
     N_HIDDEN_LAYERS=1
@@ -111,15 +114,17 @@ else
     DROPOUT_RATE=0.0
     LEARNING_RATE=1e-5
     COST="MSE"
-    OPTIMISERS="Adam,GradientDescent"
-    # ACTIVATIONS="ReLU,Linear"
-    ACTIVATIONS="ReLU"
-    WEIGHTS_INITIALISATIONS="He,Cauchy"
+    # OPTIMISERS="Adam,GradientDescent"
+    OPTIMISERS="Adam"
+    ACTIVATIONS="ReLU,Linear"
+    # ACTIVATIONS="ReLU"
+    # ACTIVATIONS="Linear"
+    # WEIGHTS_INITIALISATIONS="He,Cauchy"
+    WEIGHTS_INITIALISATIONS="He"
     BNAME_INPUT=$(basename $FNAME_INPUT)
-    BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
+    BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.tsv/g")
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
-    FNAME_OUTPUT_JSON=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
-    FNAME_OUTPUT_CV=${FNAME_OUTPUT_JSON%.json*}.tsv
+    FNAME_OUTPUT_CV=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
     rm -R $TMP_OUTDIR $FNAME_OUTPUT_JSON $FNAME_OUTPUT_CV 2> /dev/null
     mkdir $TMP_OUTDIR

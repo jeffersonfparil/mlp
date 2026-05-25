@@ -52,10 +52,11 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     if [[ -z $N_ENTRIES ]]; then echo "Error: Missing argument for number of entries (N_ENTRIES)."; exit 1; fi
     if [[ -z $N_REPLICATIONS ]]; then echo "Error: Missing argument for number of replications (N_REPLICATIONS)."; exit 1; fi
     if [[ -z $N_HIDDEN_LAYERS ]]; then echo "Error: Missing argument for number of hidden layers (N_HIDDEN_LAYERS)."; exit 1; fi
-    FNAME_OUTPUT=simulated-YEARS_${N_YEARS}-SITES_${N_SITES}-TREATMENTS_${N_TREATMENTS}-ENTRIES_${N_ENTRIES}-REPLICATIONS_${N_REPLICATIONS}-HIDDEN_LAYERS_${N_HIDDEN_LAYERS}.tsv
+    FNAME_OUTPUT=${DIR_OUTPUT}/simulated-YEARS_${N_YEARS}-SITES_${N_SITES}-TREATMENTS_${N_TREATMENTS}-ENTRIES_${N_ENTRIES}-REPLICATIONS_${N_REPLICATIONS}-HIDDEN_LAYERS_${N_HIDDEN_LAYERS}.tsv
     SEED=$(echo "$N_HIDDEN_LAYERS*($N_YEARS+$N_SITES+$N_TREATMENTS+$N_ENTRIES+$N_REPLICATIONS)" | bc)
     $MLP \
         --simulate-data-only \
+        --simulation-fname-output ${FNAME_OUTPUT}.tmp \
         --simulation-n-observations $(echo "$N_YEARS*$N_SITES*$N_TREATMENTS*$N_ENTRIES*$N_REPLICATIONS" | bc) \
         --simulation-n-features-continuous 0 \
         --simulation-n-features-categorical "$N_YEARS,$N_SITES,$N_TREATMENTS,$N_ENTRIES,$N_REPLICATIONS" \
@@ -65,16 +66,15 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
         --simulation-weights-distribution-param-1 0 \
         --simulation-weights-distribution-param-2 1 \
         --seed $SEED \
-        --verbose > ${FNAME_OUTPUT}.log
-    F=$(grep "Please find simulated data:" ${FNAME_OUTPUT}.log | cut -d '`' -f2)
-    sed 's/target_0/y/g' $F | sed 's/fcat_0/year/g' | sed 's/fcat_1/loc/g' | sed 's/fcat_2/trt/g' | sed 's/fcat_3/gen/g' | sed 's/fcat_4/blk/g' | \
+        --verbose
+    sed 's/target_0/y/g' ${FNAME_OUTPUT}.tmp | sed 's/fcat_0/year/g' | sed 's/fcat_1/loc/g' | sed 's/fcat_2/trt/g' | sed 's/fcat_3/gen/g' | sed 's/fcat_4/blk/g' | \
         awk '{FS="\t"; OFS="\t"} {gsub(/level/,"year➵level",$2); print }' | \
         awk '{FS="\t"; OFS="\t"} {gsub(/level/,"loc➵level",$3); print }' | \
         awk '{FS="\t"; OFS="\t"} {gsub(/level/,"trt➵level",$4); print }' | \
         awk '{FS="\t"; OFS="\t"} {gsub(/level/,"gen➵level",$5); print }' | \
-        awk '{FS="\t"; OFS="\t"} {gsub(/level/,"blk➵level",$6); print }' > ${FNAME_OUTPUT}.tmp
-    mv ${FNAME_OUTPUT}.tmp ${DIR_OUTPUT}/${FNAME_OUTPUT}
-    rm $F ${FNAME_OUTPUT}.log
+        awk '{FS="\t"; OFS="\t"} {gsub(/level/,"blk➵level",$6); print }' > ${FNAME_OUTPUT}.tmp2
+    rm ${FNAME_OUTPUT}.tmp
+    mv ${FNAME_OUTPUT}.tmp2 ${FNAME_OUTPUT}
     echo "OUTPUT: '${DIR_OUTPUT}/${FNAME_OUTPUT}'"
 elif [[ $ANALYSIS_TYPE == "gp" ]]; then
     echo "#######################################################"
@@ -92,10 +92,11 @@ elif [[ $ANALYSIS_TYPE == "gp" ]]; then
     if [[ -z $P ]]; then echo "Error: Missing argument for number of features (P)."; exit 1; fi
     if [[ -z $HIDDEN_LAYERS ]]; then echo "Error: Missing argument for number of hidden layers (HIDDEN_LAYERS)."; exit 1; fi
     if [[ $DATA_TYPE != "CONTINUOUS" && $DATA_TYPE != "BINARY" ]]; then echo "Error: Invalid data type. Please specify 'CONTINUOUS' or 'BINARY' for DATA_TYPE."; exit 1; fi
-    FNAME_OUTPUT=simulated-DATA_TYPE_${DATA_TYPE}-N_${N}-P_${P}-HIDDEN_LAYERS_${HIDDEN_LAYERS}.tsv
+    FNAME_OUTPUT=${DIR_OUTPUT}/simulated-DATA_TYPE_${DATA_TYPE}-N_${N}-P_${P}-HIDDEN_LAYERS_${HIDDEN_LAYERS}.tsv
     SEED=$(echo "$HIDDEN_LAYERS*($N+$P)" | bc)
     $MLP \
         --simulate-data-only \
+        --simulation-fname-output ${FNAME_OUTPUT}.tmp \
         --simulation-n-observations $N \
         --simulation-n-features-continuous $P \
         --simulation-n-features-categorical 0 \
@@ -105,24 +106,22 @@ elif [[ $ANALYSIS_TYPE == "gp" ]]; then
         --simulation-weights-distribution-param-1 0 \
         --simulation-weights-distribution-param-2 1 \
         --seed $SEED \
-        --verbose > ${FNAME_OUTPUT}.log
-    F=$(grep "Please find simulated data:" ${FNAME_OUTPUT}.log | cut -d '`' -f2)
-    rm ${FNAME_OUTPUT}.log
+        --verbose
     if [[ $DATA_TYPE == "CONTINUOUS" ]]; then
-        mv $F $FNAME_OUTPUT
+        mv ${FNAME_OUTPUT}.tmp ${FNAME_OUTPUT}
     else [[ $DATA_TYPE == "BINARY" ]]
-        head -n1 $F > $FNAME_OUTPUT
-        tail -n+2 $F | 
+        head -n1 ${FNAME_OUTPUT}.tmp > ${FNAME_OUTPUT}.tmp2
+        tail -n+2 ${FNAME_OUTPUT}.tmp | 
         awk '{
             FS="\t"; OFS="\t"; 
             for (i=2; i<=NF; i++) {
                 $i = sprintf("%.0f", $i)
             }
-        }{print}' - >> $FNAME_OUTPUT
-        rm $F
+        }{print}' - >> ${FNAME_OUTPUT}.tmp2
+        rm ${FNAME_OUTPUT}.tmp
+        mv ${FNAME_OUTPUT}.tmp2 $FNAME_OUTPUT
     fi
-    mv $FNAME_OUTPUT $DIR_OUTPUT/$FNAME_OUTPUT
-    echo "OUTPUT: '${DIR_OUTPUT}/${FNAME_OUTPUT}'"
+    echo "OUTPUT: '${FNAME_OUTPUT}'"
 else
     echo "Invalid analysis type. Please specify 'trials' or 'gp'."
     exit 1

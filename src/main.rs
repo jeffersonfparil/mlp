@@ -3,6 +3,7 @@ use clap::Parser;
 use std::error::Error;
 use std::fs;
 use std::time::Instant;
+use rand::prelude::*;
 
 mod activations;
 mod backward;
@@ -378,18 +379,22 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
     )?;
     let fname_simulated = match &args.simulation_fname_output {
         Some(x) => x.to_owned(),
-        None => format!("input_simulated-n_{}-p_{}-q_{}-k_{}-d_{}-D{:?}-Dp1_{}-Dp1_{}-s_{}-t_{}.tsv", 
-            args.simulation_n_observations,
-            args.simulation_n_features_continuous,
-            args.simulation_n_features_categorical.iter().fold(0, |sum, x| sum + x),
-            args.simulation_n_output_columns,
-            args.simulation_n_hidden_layers,
-            &args.simulation_weights_distribution,
-            args.simulation_weights_distribution_param_1,
-            args.simulation_weights_distribution_param_2,
-            args.seed,
-            Utc::now().format("%Y%m%d%H%M%S"),
-        ),
+        None => {
+            let mut rng = rand::rng();
+            format!("input_simulated-n_{}-p_{}-q_{}-k_{}-d_{}-D{:?}-Dp1_{}-Dp1_{}-s_{}-t_{}-r_{}.tsv", 
+                args.simulation_n_observations,
+                args.simulation_n_features_continuous,
+                args.simulation_n_features_categorical.iter().fold(0, |sum, x| sum + x),
+                args.simulation_n_output_columns,
+                args.simulation_n_hidden_layers,
+                &args.simulation_weights_distribution,
+                args.simulation_weights_distribution_param_1,
+                args.simulation_weights_distribution_param_2,
+                args.seed,
+                Utc::now().format("%Y%m%d%H%M%S"),
+                rng.sample(rand::distr::Alphanumeric) as char,
+            )
+        }
     };
     data_simulated.write_delimited(&fname_simulated, "\t")?;
     println!(
@@ -770,7 +775,10 @@ fn train_with_hyperparameter_optimisation(
     // Save the hyperparameter-optimised-trained network
     let fname_network_output = match &args.fname_network_output {
         Some(x) => x.to_owned(),
-        None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
+        None => {
+            let mut rng = rand::rng();
+            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.sample(rand::distr::Alphanumeric) as char,)
+        },
     };
     network_hyper_optimised.save_network(&fname_network_output)?;
     println!(
@@ -818,7 +826,10 @@ fn train_with_fixed_hyperparameters(
     // Save the trained network
     let fname_network_output = match &args.fname_network_output {
         Some(x) => x.to_owned(),
-        None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
+        None => {
+            let mut rng = rand::rng();
+            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.sample(rand::distr::Alphanumeric) as char,)
+        },
     };
     network.save_network(&fname_network_output)?;
     println!(
