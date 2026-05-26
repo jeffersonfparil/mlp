@@ -694,7 +694,7 @@ misc_sim <- function() {
 ###########################################################
 # Execute
 ###########################################################
-# Testing: source("../../scripts/linear.R")
+# Testing: source("scripts/linear.R")
 # misc_sim()
 # args <- c("trials", "simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
 # args <- c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")

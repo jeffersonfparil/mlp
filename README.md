@@ -289,11 +289,13 @@ Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimis
 
 ```shell
 cd mlp/
+pixi shell
 snakemake --lint
 snakemake -n # or --dry-run
 N_CORES=24
 # N_CORES=3
-time pixi run snakemake --cores $N_CORES
+time snakemake --cores $N_CORES
+# time pixi run snakemake --cores $N_CORES
 ```
 
 # TODO: Remote-sensing modelling

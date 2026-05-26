@@ -11,17 +11,17 @@ for (file_name_input in file_names_input) {
   if ((length(idx_linear) == 0) || (length(idx_mlp) == 0)) {
     next
   }
-  file_name_linear <- file_names_linear[tail(idx_linear, 1)]
-  file_name_mlp <- file_names_mlp[tail(idx_mlp, 1)]
+  fname_linear <- file_names_linear[tail(idx_linear, 1)]
+  fname_mlp <- file_names_mlp[tail(idx_mlp, 1)]
   # Load the effects from the best linear model
-  df_linear <- read.delim(file_name_linear, TRUE)
+  df_linear <- read.delim(fname_linear, TRUE)
   if (length(grep("➵", df_linear$ids)) > 0) {
     df_linear <- df_linear[grep("^gen", df_linear$ids), ]
     df_linear$ids <- gsub("gen➵", "", df_linear$ids)
   }
   colnames(df_linear)[2] <- "linear"
   # Load the marginal effects from mlp
-  df_mlp <- read.delim(file_name_mlp, TRUE)
+  df_mlp <- read.delim(fname_mlp, TRUE)
   df_mlp <- df_mlp[grep("^gen", df_mlp$ids), 1:2]
   df_mlp$ids <- gsub("gen➵", "", df_mlp$ids)
   colnames(df_mlp)[2] <- "mlp"
@@ -57,7 +57,7 @@ for (file_name_input in file_names_input) {
   file_name_png <- paste0("comparison-", id, ".png")
   linear_model_formula <- gsub(
     paste0("output-", id, "-LINEAR_"), "",
-    gsub("output_simulated-", "", gsub(id, "", gsub("-LINEAR_", "", gsub(",random=~", ",\nrandom=~", gsub(",data=df", "", gsub(",trace=FALSE", "", gsub(".tsv", "", file_name_linear)))))))
+    gsub("output_simulated-", "", gsub(id, "", gsub("-LINEAR_", "", gsub(",random=~", ",\nrandom=~", gsub(",data=df", "", gsub(",trace=FALSE", "", gsub(".tsv", "", fname_linear)))))))
   )
   png(file_name_png, type="cairo")
   par(mar=c(5, 6, 3, 1), mgp=c(4, 1, 0))

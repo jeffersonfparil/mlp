@@ -14,16 +14,16 @@ N_ENTRIES = [10, 50]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1, 2]
 DATA_TYPES = ["CONTINUOUS", "BINARY"]
-N_OBSERVATIONS = [60]
-N_FEATURES = [100]
+N_OBSERVATIONS = [500]
+N_FEATURES = [1000]
 TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
 GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
-GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
+GP_AZODI2019_FNAMES = ["rice_geno.csv", "sorghum_geno.csv", "spruce_geno.csv"]
 EXCLUDE_LM = "FALSE"
 EXCLUDE_SOMMER = "TRUE"
-N_FOLDS = 2
-N_REPS = 1
+N_FOLDS = 5
+N_REPS = 3
 N_ITERATIONS = 100
 N_BURNIN_ITERATIONS = 10
 MODELS = "BRR,BayesA"
@@ -122,6 +122,15 @@ def MLP_ANALYSIS_OUTPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-MLP.tsv")
     return final_files
 
+def COMPARISONS_OUTPUT(wildcards):
+    fnames_tmp = LINEAR_ANALYSIS_OUTPUT(wildcards) + MLP_ANALYSIS_OUTPUT(wildcards)
+    final_files = []
+    for fname in fnames_tmp:
+        fname = fname.replace("-LINEAR.tsv", "-COMPARISON.tsv")
+        fname = fname.replace("-MLP.tsv", "-COMPARISON.tsv")
+        final_files.append(fname)
+    return final_files
+
 rule all:
     input:
         TRIALS_SIMULATED_INPUT,
@@ -129,7 +138,8 @@ rule all:
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
         LINEAR_ANALYSIS_OUTPUT,
-        MLP_ANALYSIS_OUTPUT
+        MLP_ANALYSIS_OUTPUT,
+        COMPARISONS_OUTPUT
 
 rule simulate_trials:
     output:
@@ -327,4 +337,27 @@ rule mlp_analysis:
                 {params.n_folds} \
                 {params.base_seed} > {log}
         fi;
+        """
+
+rule comparisons:
+    input:
+        linear=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR.tsv",
+        mlp=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-MLP.tsv"
+    output:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-COMPARISON.tsv"
+    params:
+        scripts_dir=SCRIPTS_DIR,
+        outdir=f"{ROOT_OUTDIR}/{{analysis_type}}"
+    log:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/comparison-{{fname}}.log"
+    conda:
+        "conda.yaml"
+    shell:
+        """
+        time \
+        Rscript {params.scripts_dir}/comparison.R \
+            {wildcards.analysis_type} \
+            {input.linear} \
+            {input.mlp} \
+            {params.outdir} > {log}
         """

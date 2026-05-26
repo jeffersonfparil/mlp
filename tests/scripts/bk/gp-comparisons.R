@@ -16,11 +16,11 @@ for (file_name_input in file_names_input) {
   if ((length(idx_linear) == 0) || (length(idx_mlp) == 0)) {
     next
   }
-  file_name_linear <- file_names_linear[tail(idx_linear, 1)]
-  file_name_mlp <- file_names_mlp[tail(idx_mlp, 1)]
+  fname_linear <- file_names_linear[tail(idx_linear, 1)]
+  fname_mlp <- file_names_mlp[tail(idx_mlp, 1)]
 
-  df_linear <- read.delim(file_name_linear, sep = "\t", header = TRUE)
-  df_mlp <- read.delim(file_name_mlp, sep = "\t", header = TRUE)
+  df_linear <- read.delim(fname_linear, sep = "\t", header = TRUE)
+  df_mlp <- read.delim(fname_mlp, sep = "\t", header = TRUE)
   # df_linear_tmp = aggregate(corr ~ reps + models, FUN=mean, data=df_linear)
   # df_mlp_tmp = aggregate(corr ~ reps + models, FUN=mean, data=df_mlp)
   df_merged <- rbind(
