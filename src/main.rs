@@ -1,8 +1,9 @@
 use chrono::Utc;
 use clap::Parser;
-use std::env::current_dir;
 use std::error::Error;
 use std::fs;
+use std::time::Instant;
+use rand::prelude::*;
 
 mod activations;
 mod backward;
@@ -20,7 +21,7 @@ mod plot;
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::io::Data;
-use crate::network::Network;
+use crate::network::{Network, WeightsInitialisation, NetworkError};
 use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
 use crate::marginal::Marginals;
 
@@ -61,7 +62,7 @@ struct Args {
     #[arg(long, value_parser, value_delimiter = ',', default_value = "0.0")]
     dropout_rates: Vec<f32>,
 
-    /// Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent") (Note: "LeakyReLU" under construction)
+    /// Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear") (Note: "LeakyReLU" under construction)
     #[arg(long, default_value = "ReLU")]
     activation: String,
 
@@ -73,13 +74,25 @@ struct Args {
     #[arg(long, default_value = "Adam")]
     optimiser: String,
 
+    /// Weights initialisation (Choose: "He", "Cauchy", "Unifoirm", "StandardNormal")
+    #[arg(long, default_value = "He")]
+    weights_initialisation: String,
+
     /// Maximum number of training epochs
     #[arg(long, default_value_t = 10)]
     n_epochs: usize,
 
+    /// Number of burnin epochs (initial training epochs to discard)
+    #[arg(long, default_value_t = 0)]
+    n_burnin_epochs: usize,
+
     /// Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping
-    #[arg(long, default_value_t = 0.25)]
+    #[arg(long, default_value_t = 0.01)]
     f_patient_epochs: f32,
+
+    /// Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs)
+    #[arg(long, default_value_t = 0.00)]
+    f_validation: f32,
 
     /// Number of training batches to split the input data into
     #[arg(long, default_value_t = 2)]
@@ -127,7 +140,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "100,100,100"
+        default_value = "128,128,128"
     )]
     range_hidden_layer_nodes: Vec<usize>,
 
@@ -145,7 +158,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1e-5,1e-5,1e-5"
+        default_value = "1e-5,1e-3,1e-4"
     )]
     range_learning_rates: Vec<f32>,
 
@@ -153,17 +166,30 @@ struct Args {
     #[arg(long, value_parser, value_delimiter = ',', default_value = "10,10,10")]
     range_n_epochs: Vec<usize>,
 
+    /// Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "0,0,1")]
+    range_n_burnin_epochs: Vec<usize>,
+
     /// Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "0.5,1.0,0.5"
+        default_value = "0.01,0.01,0.01"
     )]
     range_f_patient_epochs: Vec<f32>,
 
+    /// Range of proportions of the observations to be used in within training validation set
+    #[arg(
+        long,
+        value_parser,
+        value_delimiter = ',',
+        default_value = "0.0,0.0,0.01"
+    )]
+    range_f_validation: Vec<f32>,
+
     /// Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2,1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,1,1")]
     range_n_batches: Vec<usize>,
 
     /// Activation functions to test
@@ -182,6 +208,15 @@ struct Args {
         default_value = "GradientDescent,Adam"
     )]
     selection_optimisers: Vec<String>,
+
+    /// Weights initialisations to test
+    #[arg(
+        long,
+        value_parser,
+        value_delimiter = ',',
+        default_value = "He,Cauchy"
+    )]
+    selection_weights_initialisations: Vec<String>,
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Predict using a fitted network (fitted MLP model)
@@ -226,6 +261,10 @@ struct Args {
     /// Simulate data only
     #[arg(short = 's', long, action)]
     simulate_data_only: bool,
+
+    /// Simulated data output filename
+    #[arg(long)]
+    simulation_fname_output: Option<String>,
 
     /// Number of observations to simulate
     #[arg(short = 'n', long, default_value_t = 100)]
@@ -282,6 +321,7 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
                 args.simulation_weights_distribution_param_1,
                 args.simulation_weights_distribution_param_2,
                 args.seed,
+                args.verbose,
             )?;
             let fname_simulated =
                 format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
@@ -305,13 +345,23 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
     } else {
         args.dropout_rates.clone()
     };
-    // Return the network with the input data
+    let weights_initialisation = match args.weights_initialisation.as_ref() {
+        "He" => WeightsInitialisation::He,
+        "Cauchy" => WeightsInitialisation::Cauchy,
+        "Uniform" => WeightsInitialisation::Uniform,
+        "StandardNormal" => WeightsInitialisation::StandardNormal,
+        e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
+    };
+    // Return the initialised network
     data.init_network(
         n_hidden_layers,
         n_hidden_nodes,
         dropout_rates,
+        weights_initialisation,
         args.seed,
     )
+    // Re-initialise the weights
+    
 }
 
 fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
@@ -325,12 +375,30 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
         args.simulation_weights_distribution_param_1,
         args.simulation_weights_distribution_param_2,
         args.seed,
+        args.verbose,
     )?;
-    let fname_simulated = format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
+    let fname_simulated = match &args.simulation_fname_output {
+        Some(x) => x.to_owned(),
+        None => {
+            let mut rng = rand::rng();
+            format!("input_simulated-n_{}-p_{}-q_{}-k_{}-d_{}-D{:?}-Dp1_{}-Dp1_{}-s_{}-t_{}-r_{}.tsv", 
+                args.simulation_n_observations,
+                args.simulation_n_features_continuous,
+                args.simulation_n_features_categorical.iter().fold(0, |sum, x| sum + x),
+                args.simulation_n_output_columns,
+                args.simulation_n_hidden_layers,
+                &args.simulation_weights_distribution,
+                args.simulation_weights_distribution_param_1,
+                args.simulation_weights_distribution_param_2,
+                args.seed,
+                Utc::now().format("%Y%m%d%H%M%S"),
+                rng.sample(rand::distr::Alphanumeric) as char,
+            )
+        }
+    };
     data_simulated.write_delimited(&fname_simulated, "\t")?;
     println!(
-        "Please find simulated data: `{}/{}`",
-        current_dir()?.display(),
+        "Please find simulated data: `{}`",
         fname_simulated
     );
     Ok(())
@@ -362,23 +430,34 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
     }
     // Prepare the network
     // Load input data
+    if args.verbose {println!("(1/5) Loading input data...")}; let time = Instant::now();
     let data = read_data(&args)?;
+    if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
+    if args.verbose {println!("(2/5) Loading model...")}; let time = Instant::now();
     let network_fitted = Network::read_network(&model)?;
+    if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     // Initialise the network containing the input data and fitted model
+    if args.verbose {println!("(3/5) Preparing the network...")}; let time = Instant::now();
     let mut network = data.init_network(
         network_fitted.n_hidden_layers,
         network_fitted.n_hidden_nodes.clone(),
         network_fitted.dropout_rates.clone(),
+        network_fitted.weights_initialisation.clone(),
         network_fitted.seed,
     )?;
     network.replace_model(&network_fitted)?;
+    if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     // Predict
+    if args.verbose {println!("(4/5) Predicting...")}; let time = Instant::now();
     network.predict()?;
+    if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     // Define the output Data struct containing the prediction
+    if args.verbose {println!("(5/5) Saving the predictions...")}; let time = Instant::now();
     let n = data.features.n_cols;
     let p = data.features.n_rows;
     let k = data.targets.n_rows + network.predictions.n_rows;
     // println!("n={}; p={}; k={}; data.targets.n_rows={}; network.predictions.n_rows={}", n, p, k, data.targets.n_rows, network.predictions.n_rows);
+    // First column/s is/are the predictions and the rest are the observed/expected values
     let mut predictions = Data::new(n, p, k)?;
     predictions.feature_names = data.feature_names.clone();
     predictions.features = data.features.clone();
@@ -392,23 +471,27 @@ fn predict_only(args: &Args) -> Result<(), Box<dyn Error>> {
         }
         target_names
     };
+    // Use the mean and sd to unstandardise the predictions
+    let mu: f32 = network.targets_mean_sd.0;
+    let sd: f32 = network.targets_mean_sd.1;
     predictions.targets.data = {
         let y_pred = network.predictions.to_host()?;
         let y_true = data.targets.to_host()?;
         let mut source = vec![f32::NAN; k*n];
         for i in 0..y_pred.len() {
-            source[i] = y_pred[i];
+            source[i] = (y_pred[i] * sd) + mu; // unstandardise
         }
         for i in 0..y_true.len() {
-            source[y_pred.len() + i] = y_true[i];
+            source[y_pred.len() + i] = (y_true[i] * sd) + mu; // unstandardise
         }
         let stream = data.targets.data.context().default_stream();
         stream.clone_htod(&source)?
-    };    
+    };
+
     predictions.write_delimited(&fname_predictions, "\t")?;
+    if args.verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
     println!(
-        "Please find the predictions in tab-delimited format: {}/{}",
-        current_dir()?.display(),
+        "Please find the predictions in tab-delimited format: {}",
         fname_predictions
     );
     Ok(())
@@ -478,8 +561,7 @@ fn marginals_only(args: &Args) -> Result<(), Box<dyn Error>> {
     }
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
-        "Please find the estimated marginal effects in tab-delimited format: {}/{}",
-        current_dir()?.display(),
+        "Please find the estimated marginal effects in tab-delimited format: {}",
         fname_marginals
     );
     Ok(())
@@ -564,6 +646,21 @@ fn train_with_hyperparameter_optimisation(
             args.range_n_epochs[2],
         )),
     };
+    let range_n_burnin_epochs = match args.range_n_burnin_epochs.len() != 3 {
+        true => {
+            return Err(Box::new(OptimiserError::OptimisationParameterError(
+                format!(
+                    "Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_n_burnin_epochs={:?})",
+                    args.range_n_burnin_epochs
+                ),
+            )));
+        }
+        false => Some((
+            args.range_n_burnin_epochs[0],
+            args.range_n_burnin_epochs[1],
+            args.range_n_burnin_epochs[2],
+        )),
+    };
     let range_f_patient_epochs = match args.range_f_patient_epochs.len() != 3 {
         true => {
             return Err(Box::new(OptimiserError::OptimisationParameterError(
@@ -577,6 +674,21 @@ fn train_with_hyperparameter_optimisation(
             args.range_f_patient_epochs[0],
             args.range_f_patient_epochs[1],
             args.range_f_patient_epochs[2],
+        )),
+    };
+    let range_f_validation = match args.range_f_validation.len() != 3 {
+        true => {
+            return Err(Box::new(OptimiserError::OptimisationParameterError(
+                format!(
+                    "Range of proportions of the observations to be used in within training validation for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_f_validation={:?})",
+                    args.range_f_validation
+                ),
+            )));
+        }
+        false => Some((
+            args.range_f_validation[0],
+            args.range_f_validation[1],
+            args.range_f_validation[2],
         )),
     };
     let range_n_batches = match args.range_n_batches.len() != 3 {
@@ -601,6 +713,7 @@ fn train_with_hyperparameter_optimisation(
                 "ReLU" => Activation::ReLU,
                 "Sigmoid" => Activation::Sigmoid,
                 "HyperbolicTangent" => Activation::HyperbolicTangent,
+                "Linear" => Activation::Linear,
                 _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
             });
         }
@@ -630,28 +743,46 @@ fn train_with_hyperparameter_optimisation(
         }
         Some(v)
     };
+    let selection_weights_initialisations: Option<Vec<WeightsInitialisation>> = {
+        let mut v: Vec<WeightsInitialisation> = Vec::new();
+        for x in &args.selection_weights_initialisations {
+            v.push(match x.as_ref() {
+                "He" => WeightsInitialisation::He,
+                "Cauchy" => WeightsInitialisation::Cauchy,
+                "Uniform" => WeightsInitialisation::Uniform,
+                "StandardNormal" => WeightsInitialisation::StandardNormal,
+                e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
+            });
+        }
+        Some(v)
+    };
     let network_hyper_optimised = network.hyperoptimise(
         range_hidden_layers,
         range_hidden_layer_nodes,
         range_dropout_rates,
         range_learning_rates,
         range_n_epochs,
+        range_n_burnin_epochs,
         range_f_patient_epochs,
+        range_f_validation,
         range_n_batches,
         selection_activations,
         selection_costs,
         selection_optimisers,
+        selection_weights_initialisations,
         args.verbose,
     )?;
     // Save the hyperparameter-optimised-trained network
     let fname_network_output = match &args.fname_network_output {
         Some(x) => x.to_owned(),
-        None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
+        None => {
+            let mut rng = rand::rng();
+            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.sample(rand::distr::Alphanumeric) as char,)
+        },
     };
     network_hyper_optimised.save_network(&fname_network_output)?;
     println!(
-        "Please find the output model (network) in json format: {}/{}",
-        current_dir()?.display(),
+        "Please find the output model (network) in json format: {}",
         fname_network_output
     );
     Ok(fname_network_output)
@@ -665,6 +796,7 @@ fn train_with_fixed_hyperparameters(
         "ReLU" => Activation::ReLU,
         "Sigmoid" => Activation::Sigmoid,
         "HyperbolicTangent" => Activation::HyperbolicTangent,
+        "Linear" => Activation::Linear,
         _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
     };
     network.cost = match args.cost.as_ref() {
@@ -681,7 +813,9 @@ fn train_with_fixed_hyperparameters(
         _ => return Err(Box::new(OptimiserError::UnimplementedOptimiser)),
     };
     optimisation_parameters.n_epochs = args.n_epochs;
+    optimisation_parameters.n_burnin_epochs = args.n_burnin_epochs;
     optimisation_parameters.f_patient_epochs = args.f_patient_epochs;
+    optimisation_parameters.f_validation = args.f_validation;
     optimisation_parameters.n_batches = args.n_batches;
     optimisation_parameters.learning_rate = args.learning_rate;
     optimisation_parameters.first_moment_decay = args.first_moment_decay;
@@ -692,12 +826,14 @@ fn train_with_fixed_hyperparameters(
     // Save the trained network
     let fname_network_output = match &args.fname_network_output {
         Some(x) => x.to_owned(),
-        None => format!("output_network-{}.json", Utc::now().format("%Y%m%d%H%M%S")),
+        None => {
+            let mut rng = rand::rng();
+            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.sample(rand::distr::Alphanumeric) as char,)
+        },
     };
     network.save_network(&fname_network_output)?;
     println!(
-        "Please find the output model (network) in json format: {}/{}",
-        current_dir()?.display(),
+        "Please find the output model (network) in json format: {}",
         fname_network_output
     );
     Ok(fname_network_output)
@@ -749,8 +885,7 @@ fn marginals_after_training(
     }
     marginals.write_delimited(&fname_marginals, "\t")?;
     println!(
-        "Please find the estimated marginal effects in tab-delimited format: {}/{}",
-        current_dir()?.display(),
+        "Please find the estimated marginal effects in tab-delimited format: {}",
         fname_marginals
     );
     Ok(())
@@ -792,20 +927,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         return marginals_only(&args)
     }
     // Load the data including targets and features
+    let n_steps: usize = if args.skip_marginals {3} else {4};
+    if args.verbose {println!("(1/{}) Loading data...", n_steps)};
     let data = read_data(&args)?;
     // Prepare the network
+    if args.verbose {println!("(2/{}) Preparing network...", n_steps)};
     let mut network = prepare_network(&args, &data)?; 
     // Network training and save
     let fname_network_output: String = if args.hyperparameter_optimisation {
         // Perform hyperparameter optimisation then use the best hyperparameters to train the network
+        if args.verbose {println!("(3/{}) Training with hyperparameter optimisation...", n_steps)};
         train_with_hyperparameter_optimisation(&args, &mut network)?
     } else {
         // Train the network using the supplied and/or default hyperparameters
+        if args.verbose {println!("(3/{}) Training with user-supplied/default hyperparameters...", n_steps)};
         train_with_fixed_hyperparameters(&args, &mut network)?
     };
     // println!("network before saving and reloading: {}", network);
     // Estimate marginal effects after training
     if !args.skip_marginals {
+        if args.verbose {println!("(4/{}) Extracting marginal effects...", n_steps)};
         marginals_after_training(&args, &data, &mut network, fname_network_output)?;
     }
     Ok(())

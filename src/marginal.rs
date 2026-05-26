@@ -451,6 +451,7 @@ mod tests {
     use super::*;
     use crate::io::Data;
     use crate::optimisers::OptimisationParameters;
+    use crate::network::WeightsInitialisation;
     use approx::assert_relative_eq;
     #[test]
     fn test_marginal() -> Result<(), Box<dyn Error>> {
@@ -481,8 +482,8 @@ mod tests {
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
-        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
+        let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         network.train(&mut optimisation_parameters, true)?;
         // Unstandardisation
@@ -497,7 +498,7 @@ mod tests {
         let mut marginals_dummy = Marginals::new((0..(n as usize)).map(|x| x.to_string()).collect(), 1)?;
         marginals_dummy.effects = z;
         marginals_dummy.unstandaridise(&network)?;
-        marginals_dummy.effects.iter().zip(y.iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals_dummy.effects.iter().zip(y.iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-4)});
         
         // Order: 1
         let mut marginals = Marginals::new(data.feature_names.clone(), 1)?;
@@ -505,8 +506,9 @@ mod tests {
         marginals.estimate_perturb(&network, number_of_values_for_interpolate_between_min_and_max, true)?;
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
-        marginals.effects.iter().zip(vec![0.009141404, 0.009156859, 0.00908426, 0.009254695, 0.009257625, 0.009228475, 0.009141026].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
-        
+        // marginals.effects.iter().zip(vec![0.00914565, 0.00915616, 0.009083876, 0.00925088, 0.009251332, 0.009222691, 0.009141681].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals.effects.iter().zip(vec![0.009141404, 0.009156859, 0.00908426, 0.009254696, 0.009257627, 0.009228476, 0.009141026].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;

@@ -59,6 +59,7 @@ impl Network {
             self.weights_x_biases_per_layer[i] =
                 weights_x_activations.rowmatadd(&self.biases_per_layer[i])?;
             if i < n {
+                // No activation function for the output layer
                 self.activations_per_layer[i + 1] = self
                     .activation
                     .activate(&self.weights_x_biases_per_layer[i])?;
@@ -73,6 +74,7 @@ impl Network {
 mod tests {
     use super::*;
     use cudarc::driver::CudaContext;
+    use crate::network::WeightsInitialisation;
     #[test]
     fn test_forward() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -97,6 +99,7 @@ mod tests {
             10,
             vec![256; 10],
             vec![0.0f32; 10],
+            WeightsInitialisation::He,
             42,
         )?;
         let i: usize = network.n_hidden_layers - 1;

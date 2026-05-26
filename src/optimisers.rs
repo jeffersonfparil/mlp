@@ -38,7 +38,9 @@ pub enum Optimiser {
 pub struct OptimisationParameters {
     pub optimiser: Optimiser,     // Adam by default
     pub n_epochs: usize,          // t = 10
+    pub n_burnin_epochs: usize,   // h = 0 // number of initial epochs run to discard
     pub f_patient_epochs: f32,    // f = 0.25 // fraction of n_epochs to wait before early stopping
+    pub f_validation: f32,        // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
     pub n_batches: usize,         // b = 1
     pub learning_rate: f32,       // η = 0.001
     pub first_moment_decay: f32,  // β₁ = 0.900
@@ -59,6 +61,7 @@ impl fmt::Display for OptimisationParameters {
                 - optimiser = {:?}
                 - number of epochs = {}
                 - fraction of patient epochs = {}
+                - fraction of observations used as validation set on every epoch = {}
                 - number of batches = {}
                 - base learning rate = {}
                 - first moment decay coefficient = {}
@@ -73,6 +76,7 @@ impl fmt::Display for OptimisationParameters {
             self.optimiser,
             self.n_epochs,
             self.f_patient_epochs,
+            self.f_validation,
             self.n_batches,
             self.learning_rate,
             self.first_moment_decay,
@@ -292,7 +296,9 @@ impl OptimisationParameters {
         let out = Self {
             optimiser: Optimiser::Adam,
             n_epochs: 10,
+            n_burnin_epochs: 0,
             f_patient_epochs: 0.25,
+            f_validation: 0.00,
             n_batches: 1,
             learning_rate: 0.001,
             first_moment_decay: 0.900,
@@ -326,6 +332,7 @@ impl Network {
 mod tests {
     use super::*;
     use cudarc::driver::{CudaContext, CudaSlice};
+    use crate::network::WeightsInitialisation;
     #[test]
     fn test_optimisers() -> Result<(), Box<dyn Error>> {
         let ctx = CudaContext::new(0)?;
@@ -351,6 +358,7 @@ mod tests {
             n_hidden_layers,
             vec![256; n_hidden_layers],
             vec![0.0f32; n_hidden_layers],
+            WeightsInitialisation::He,
             42,
         )?;
         println!("network (init): {}", network);

@@ -147,6 +147,7 @@ impl Network {
 mod tests {
     use super::*;
     use cudarc::driver::{CudaContext, CudaSlice};
+    use crate::network::WeightsInitialisation;
 
     #[test]
     fn test_backward() -> Result<(), Box<dyn Error>> {
@@ -173,6 +174,7 @@ mod tests {
             h,
             vec![256; h],
             vec![0.0f32; h],
+            WeightsInitialisation::He,
             42,
         )?;
         // Assess the weights at the ith layer
@@ -239,6 +241,7 @@ mod tests {
             h,
             vec![256; h],
             vec![0.0f32; h],
+            WeightsInitialisation::He,
             42,
         )?;
         let mut input_reference_1_host: Vec<f32> = vec![0.0f32; p * n]; // p x n

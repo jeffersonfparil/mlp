@@ -3,13 +3,14 @@ use crate::marginal::Marginals;
 use crate::optimisers::OptimisationParameters;
 use crate::train::TrainingError;
 use chrono::Utc;
-use ruviz::core::{Plot, PlottingError, SubplotFigure, subplots};
+use ruviz::core::{Plot, PlottingError, SubplotFigure};
 use ruviz::prelude::{LegendPosition, PlotBuilder};
 use ruviz::plots::BarConfig;
 use std::env::current_dir;
 use std::error::Error;
 use std::path::PathBuf;
 use std::cmp::Ordering;
+use rand::prelude::*;
 
 impl From<PlottingError> for TrainingError {
     fn from(err: PlottingError) -> Self {
@@ -23,17 +24,24 @@ impl Network {
     pub fn plot_loss(self: &Self, epochs: Vec<Vec<f64>>, costs: Vec<Vec<f64>>, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
+        let mut rng = rand::rng();
         let fname_loss_svg = format!(
-            "{}/Loss_curve-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
+            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
-            self.n_hidden_layers,
             self.activation,
+            self.cost,
+            self.weights_initialisation,
             optimisation_parameters.optimiser,
+            self.n_hidden_layers,
+            self.n_hidden_nodes,
             optimisation_parameters.n_epochs,
+            optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
+            optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S"),
+            rng.sample(rand::distr::Alphanumeric) as char,
         );
         // Plot loss curve
         let mut ylabel = String::from("Cost");
@@ -65,17 +73,24 @@ impl Network {
     pub fn plot_true_vs_pred(self: &Self, optimisation_parameters: &OptimisationParameters) -> Result<String, Box<dyn Error>> {
         // Filename
         let dir: PathBuf = current_dir()?;
+        let mut rng = rand::rng();
         let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-HL{}-{:?}-{:?}-E{}-FPE{}-B{}-LR{}-T{}.svg",
+            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
-            self.n_hidden_layers,
             self.activation,
+            self.cost,
+            self.weights_initialisation,
             optimisation_parameters.optimiser,
+            self.n_hidden_layers,
+            self.n_hidden_nodes,
             optimisation_parameters.n_epochs,
+            optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
+            optimisation_parameters.f_validation,
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S"),
+            rng.sample(rand::distr::Alphanumeric) as char,
         );
         // Scatter plot of observed vs predicted values
         let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
@@ -142,15 +157,16 @@ impl Network {
 }
 
 impl Marginals {
-
     pub fn plot(self: &Self, main_only: bool) -> Result<String, Box<dyn Error>> {
         // Note that we only plot the marginal effects and leave it to the use to plot the R2 using their preferred plotting software/library
         // Filename
         let dir: PathBuf = current_dir()?;
+        let mut rng = rand::rng();            
         let fname_main_effects_png = format!(
-            "{}/Marginal_effects-T{}.png",
+            "{}/Marginal_effects-T{}-R{}.png",
             dir.display(),
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S"),
+            rng.sample(rand::distr::Alphanumeric) as char,
         );
         // Extract ids and effects
         let mut ids_all: Vec<String> = Vec::new();
@@ -223,6 +239,7 @@ impl Marginals {
 mod test {
     use super::*;
     use crate::io::Data;
+    use crate::network::WeightsInitialisation;
     use rand::Rng;
     #[test]
     fn test_plot() -> Result<(), Box<dyn Error>> {
@@ -233,8 +250,8 @@ mod test {
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42)?;
-        let network = data.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
+        let network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         let optimisation_parameters = OptimisationParameters::new(&network)?;
         // Network-related plots
         let mut rng = rand::rng();

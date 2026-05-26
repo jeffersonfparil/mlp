@@ -1,7 +1,7 @@
 use crate::activations::{Activation, ActivationError};
 use crate::costs::{Cost, CostError};
 use crate::linalg::matrix::{Matrix, MatrixError};
-use crate::network::Network;
+use crate::network::{Network, WeightsInitialisation, NetworkError};
 use crate::marginal::{Marginals, MarginalError};
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
@@ -13,6 +13,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, Write};
 use std::io::{BufReader, BufWriter};
+use std::time::Instant;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -87,11 +88,23 @@ fn simulate_weights(dist: &str, par1: f64, par2: f64, p: usize, seed: usize) -> 
         },
         _ => {
             let distribution = Normal::new(par1, par2)?;
-            (&mut rng)
-                .sample_iter(distribution)
-                .take(p)
-                .map(|x| x as f32)
-                .collect::<Vec<f32>>()
+            // (&mut rng)
+            //     .sample_iter(distribution)
+            //     .take(p)
+            //     .map(|x| x as f32)
+            //     .collect::<Vec<f32>>()
+            let mut b: Vec<f32> = Vec::with_capacity(p);
+            let step_size: usize = 1_000_000;
+            for j in (0..p).step_by(step_size) {
+                let m = if j+step_size > p {
+                    p - j
+                } else {
+                    step_size
+                };
+                let tmp: Vec<f32> = (&mut rng).sample_iter(distribution).take(m) .map(|x| x as f32).collect();
+                b.extend(&tmp);
+            }
+            b
         },
     };
     Ok(weights)
@@ -125,6 +138,7 @@ impl Data {
         par1: f64,
         par2: f64,
         seed: usize,
+        verbose: bool,
     ) -> Result<Self, Box<dyn Error>> {
         // n = total number of observations
         // p = number of continuous explanatory variables or features
@@ -135,7 +149,11 @@ impl Data {
         // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
         // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
         // seed = randomisation seed for repeatability
-        let n_features = p + q.iter().fold(0, |sum, &x| sum + x);
+
+        if verbose {println!("(1/8) Simulating feature ids...")}
+        let time = Instant::now();
+        let n_features_categorical = q.iter().fold(0, |sum, &x| sum + x);
+        let n_features = p + n_features_categorical;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         // Features simulation
         let mut feature_names: Vec<String> = Vec::with_capacity(n_features);
@@ -147,30 +165,38 @@ impl Data {
                 features_host.push(rng.random());
             }
         }
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Categorical features (one-hot encoded) exploring all level combinations
-        let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
-        let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
-        for i in 0..n { // For each observation
-            let mut combo_index = i % n_combinations; // Get the combination index for this observation, cycling through all combinations if n > n_combinations
-            for (id, &n_levels) in q.iter().enumerate() { // For each categorical variable
-                categorical_levels[id][i] = combo_index % n_levels; // Assign the level for this variable in this observation by taking modulo of the current combo_index
-                // println!("i={}' combo_index={} id={} n_levels={} level={}", i, combo_index, id, n_levels, categorical_levels[id][i]);
-                combo_index /= n_levels; // Divide combo_index by n_levels to shift to the next variable's level (like mixed radix conversion)
+        if verbose {println!("(2/8) Simulating categorical features (if any) ...")}
+        let time = Instant::now();
+        if n_features_categorical > 0 {
+            let n_combinations = q.iter().product::<usize>(); // Calculate total number of combinations by multiplying all levels in q
+            let mut categorical_levels: Vec<Vec<usize>> = vec![vec![0; n]; q.len()]; // Initialize a vector of vectors to store levels for each categorical variable, each with n observations
+            for i in 0..n { // For each observation
+                let mut combo_index = i % n_combinations; // Get the combination index for this observation, cycling through all combinations if n > n_combinations
+                for (id, &n_levels) in q.iter().enumerate() { // For each categorical variable
+                    categorical_levels[id][i] = combo_index % n_levels; // Assign the level for this variable in this observation by taking modulo of the current combo_index
+                    // println!("i={}' combo_index={} id={} n_levels={} level={}", i, combo_index, id, n_levels, categorical_levels[id][i]);
+                    combo_index /= n_levels; // Divide combo_index by n_levels to shift to the next variable's level (like mixed radix conversion)
+                }
             }
-        }
-        for (id, &n_levels) in q.iter().enumerate() {
-            for j in 0..n_levels {
-                feature_names.push(format!("fcat_{}➵{}", id, j));
-                for i in 0..n {
-                    features_host.push(if categorical_levels[id][i] == j {
-                        1.0
-                    } else {
-                        0.0
-                    });
+            for (id, &n_levels) in q.iter().enumerate() {
+                for j in 0..n_levels {
+                    feature_names.push(format!("fcat_{}➵{}", id, j));
+                    for i in 0..n {
+                        features_host.push(if categorical_levels[id][i] == j {
+                            1.0
+                        } else {
+                            0.0
+                        });
+                    }
                 }
             }
         }
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
+        if verbose {println!("(3/8) Simulating dummy targets...")}
+        let time = Instant::now();
         let targets_host: Vec<f32> = (0..(k*n)).map(|_| rng.random()).collect();
         // println!("n = {}", n);
         // println!("p = {}", p);
@@ -179,20 +205,23 @@ impl Data {
         // println!("q = {:?}", q);
         // println!("features_host.len() = {}", features_host.len());
         // println!("targets_host.len() = {}", targets_host.len());
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Instantiate the Data and extract the CUDA device stream for instantiating the features and target matrices
+        if verbose {println!("(4/8) Simulating Data struct...")}
+        let time = Instant::now();
         let mut data = Data::new(n, n_features, k)?;
-        let stream = data.features.data.context().default_stream();
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Instantiate the Network
+        let stream = data.features.data.context().default_stream();
         let features: Matrix = Matrix::new(stream.clone_htod(&features_host)?, n_features, n)?;
+        // println!("features={}", features);
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
+        // println!("targets={}", targets);
         let n_hidden_layers: usize = d;
         let n_hidden_nodes: Vec<usize> = vec![(n_features as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
-        // println!("features: {}", features);
-        // println!("targets: {}", targets);
-        // println!("n_hidden_layers: {}", n_hidden_layers);
-        // println!("n_hidden_nodes: {:?}", n_hidden_nodes);
-        // println!("dropout_rates: {:?}", dropout_rates);
+        if verbose {println!("(5/8) Simulating Network struct...")}
+        let time = Instant::now();
         let mut network = Network::new(
             &stream,
             features,
@@ -200,23 +229,39 @@ impl Data {
             n_hidden_layers,
             n_hidden_nodes,
             dropout_rates,
+            WeightsInitialisation::He,
             seed,
         )?;
         // println!("network: {}", network);
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Redefine the weights
+        if verbose {println!("(6/8) Simulating weights and replacing the ones initialised in the Network struct...")}
+        let time = Instant::now();
+        let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
         for i in 0..(network.n_hidden_layers+1) {
-            let m = network.weights_per_layer[i].n_rows * network.weights_per_layer[i].n_cols;
+            let n_rows = network.weights_per_layer[i].n_rows;
+            let n_cols = network.weights_per_layer[i].n_cols;
+            let m = n_rows * n_cols;
             let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
-            let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
-            network.weights_per_layer[i] = weights;
+            // let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
+            // println!("i={}; weights={}", i, weights);
+            network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
+            network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
         }
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Extract non-dummy targets
+        if verbose {println!("(7/8) Simulating non-dummy targets...")}
+        let time = Instant::now();
         network.predict()?;
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Update the feature names
+        if verbose {println!("(8/8) Outputing the final simulated Data struct...")}
+        let time = Instant::now();
         data.feature_names = feature_names.clone();
         // Update the features and targets with the simulated data
         data.features = network.activations_per_layer[0].clone();
         data.targets = network.predictions.clone();
+        if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         Ok(data)
     }
 
@@ -483,7 +528,7 @@ impl Data {
                         Value::Numeric(x) => *x,
                         Value::Text(_) => {
                             return Err(Box::new(MatrixError::TypeMismatch(
-                                format!("Unexpected type mismatch in target variable: {}. We expected a numeric variable.", target_names_tmp[j])
+                                format!("Unexpected type mismatch in target variable: {}. We expected a numeric variable. Please remove rows with missing data.", target_names_tmp[j])
                             )));
                         },
                     };
@@ -503,7 +548,7 @@ impl Data {
                         },
                         Value::Numeric(_) => {
                             return Err(Box::new(MatrixError::TypeMismatch(
-                                format!("Unexpected type mismatch in target variable: {}. We expected a non-numeric.", target_names_tmp[j])
+                                format!("Unexpected type mismatch in target variable: {}. We expected a non-numeric variable. Please remove rows with missing data.", target_names_tmp[j])
                             )));
                         },
                     };
@@ -618,6 +663,7 @@ impl Data {
         n_hidden_layers: usize,
         n_hidden_nodes: Vec<usize>,
         dropout_rates: Vec<f32>,
+        weights_initialisation: WeightsInitialisation,
         seed: usize,
     ) -> Result<Network, Box<dyn Error>> {
         self.check_dimensions()?;
@@ -627,8 +673,9 @@ impl Data {
             self.features.clone(),
             self.targets.clone(),
             n_hidden_layers,
-            n_hidden_nodes,
+            n_hidden_nodes.clone(),
             dropout_rates,
+            weights_initialisation,
             seed,
         )?;
         Ok(network)
@@ -654,6 +701,7 @@ pub struct SerdifiableNetwork {
     biases_gradients_per_layer: Vec<Vec<f32>>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
     activation: String, // activation function enum (includes derivative)
     cost: String, // cost function
+    weights_initialisation: String, // weights initialisation, i.e. He, Cauchy, Uniform or StandardNormal
     n_epochs: usize, // number of training epochs
     seed: usize, // random seed for dropouts
     loss: f32, // mean loss (additional field not part of the actual Network struct)
@@ -712,6 +760,7 @@ impl Network {
                 .collect(),
             activation: self.activation.to_string(),
             cost: self.cost.to_string(),
+            weights_initialisation: self.weights_initialisation.to_string(),
             n_epochs: self.n_epochs,
             seed: self.seed,
             loss: self.loss()?,
@@ -741,7 +790,13 @@ impl Network {
         let unstandardised_output_data: Vec<f32> = serdifiable_network.targets.iter().map(|&x| (x * serdifiable_network.targets_mean_sd.1) + serdifiable_network.targets_mean_sd.0).collect();
         let output_data = Matrix::new(stream.clone_htod(&unstandardised_output_data)?, k, n)?;
         let predictions = Matrix::new(stream.clone_htod(&serdifiable_network.predictions)?, k, n)?;
-
+        let weights_initialisation = match serdifiable_network.weights_initialisation.as_ref() {
+            "He" => WeightsInitialisation::He,
+            "Cauchy" => WeightsInitialisation::Cauchy,
+            "Uniform" => WeightsInitialisation::Uniform,
+            "StandardNormal" => WeightsInitialisation::StandardNormal,
+            e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
+        };
         let mut network: Network = Network::new(
             &stream,
             input_data,
@@ -749,6 +804,7 @@ impl Network {
             serdifiable_network.n_hidden_layers.clone(),
             serdifiable_network.n_hidden_nodes.clone(),
             serdifiable_network.dropout_rates.clone(),
+            weights_initialisation,
             serdifiable_network.seed.clone(),
         )?;
         network.predictions = predictions;
@@ -756,6 +812,7 @@ impl Network {
             "ReLU" => Activation::ReLU,
             "Sigmoid" => Activation::Sigmoid,
             "HyperbolicTangent" => Activation::HyperbolicTangent,
+            "Linear" => Activation::Linear,
             _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
         };
         network.cost = match serdifiable_network.cost.as_ref() {
@@ -888,7 +945,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let data_simulated = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42)?;
+        let data_simulated = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42, true)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);
@@ -921,7 +978,7 @@ mod tests {
         println!("data_reloaded: {}", data_reloaded);
         println!("data_simulated_reloaded: {}", data_simulated_reloaded);
         // Initialise the network from reloaded data
-        let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], 42)?;
+        let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
         assert!(
             network.activations_per_layer[0].summat()?
