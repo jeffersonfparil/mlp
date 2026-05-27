@@ -8,116 +8,207 @@ Simple multilayer perceptron (MLP) from scratch
 
 # Quickstart
 
-```shell
-Usage: mlp [OPTIONS]
+## Quick demo
 
-Options:
-  -f, --fname <FNAME>
-          Input file name
-  -d, --delim <DELIM>
-          Delimiter for the input data file [default: "\t"]
-  -t, --column-indices-of-targets <COLUMN_INDICES_OF_TARGETS>
-          Vector of column indexes corresponding to the target values in the input data file [default: 0]
-      --n-hidden-layers <N_HIDDEN_LAYERS>
-          Number of hidden layers [default: 1]
-      --n-hidden-nodes <N_HIDDEN_NODES>
-          Number of nodes per hidden layer [default: 128]
-      --dropout-rates <DROPOUT_RATES>
-          Dropout rates per hidden layer [default: 0.0]
-      --activation <ACTIVATION>
-          Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear") (Note: "LeakyReLU" under construction) [default: ReLU]
-      --cost <COST>
-          Cost function (Choose: "MSE", "MAE", "HL") [default: MSE]
-      --optimiser <OPTIMISER>
-          Optimiser (Choose: "Adam", "AdamMax", "GradientDescent") [default: Adam]
-      --n-epochs <N_EPOCHS>
-          Maximum number of training epochs [default: 10]
-      --n-burnin-epochs <N_BURNIN_EPOCHS>
-          Number of burnin epochs (initial training epochs to discard) [default: 0]
-      --f-patient-epochs <F_PATIENT_EPOCHS>
-          Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping [default: 0.25]
-      --f-validation <F_VALIDATION>
-          Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs) [default: 0]
-      --n-batches <N_BATCHES>
-          Number of training batches to split the input data into [default: 2]
-      --learning-rate <LEARNING_RATE>
-          Learning rate (η) [default: 0.001]
-      --first-moment-decay <FIRST_MOMENT_DECAY>
-          First moment decay (β₁) [default: 0.001]
-      --second-moment-decay <SECOND_MOMENT_DECAY>
-          Second moment decay (β₁) [default: 0.999]
-      --epsilon <EPSILON>
-          Small value used for numerical stability (ϵ; usually to avoid dividing by zero) [default: 0.00000001]
-      --seed <SEED>
-          Randomisation seed [default: 123]
-  -o, --fname-network-output <FNAME_NETWORK_OUTPUT>
-          Filename of the output model (Default: "output_network-{%Y%m%d%H%M%S}.json")
-  -v, --verbose
-          Verbose
-      --hyperparameter-optimisation
-          Hyperparameter optimisation
-      --range-hidden-layers <RANGE_HIDDEN_LAYERS>
-          Range of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1,2,1]
-      --range-hidden-layer-nodes <RANGE_HIDDEN_LAYER_NODES>
-          Range of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 100,100,100]
-      --range-dropout-rates <RANGE_DROPOUT_RATES>
-          Range of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0.0,0.0,0.01]
-      --range-learning-rates <RANGE_LEARNING_RATES>
-          Range of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1e-3,1e-3,1e-3]
-      --range-n-epochs <RANGE_N_EPOCHS>
-          Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 10,10,10]
-      --range-n-burnin-epochs <RANGE_N_BURNIN_EPOCHS>
-          Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0,1,1]
-      --range-f-patient-epochs <RANGE_F_PATIENT_EPOCHS>
-          Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0.5,1.0,0.5]
-      --range-f-validation <RANGE_F_VALIDATION>
-          Range of proportions of the observations to be used in within training validation set [default: 0.0,0.25,0.01]
-      --range-n-batches <RANGE_N_BATCHES>
-          Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1,2,1]
-      --selection-activations <SELECTION_ACTIVATIONS>
-          Activation functions to test [default: ReLU]
-      --selection-costs <SELECTION_COSTS>
-          Cost functions to test [default: MSE]
-      --selection-optimisers <SELECTION_OPTIMISERS>
-          Optimisers to test [default: GradientDescent,Adam]
-      --predict-only
-          Predict using a fitted network (fitted MLP model)
-  -m, --model <MODEL>
-          File name of the MLP model in JSON format
-  -M, --marginals-only
-          Marginal effects estimation only
-      --skip-marginals
-          
-      --marginals-order <MARGINALS_ORDER>
-          Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on [default: 1]
-      --n-interpolate-min-max <N_INTERPOLATE_MIN_MAX>
-          Number of input values across the observed range per feature (or input node) to use in predictions i.e. number of values for interpolate between minimum and maximum values observed in each feature or input node [default: 10]
-  -D, --deep-shap
-          Use DeepSHAP instead of the perturbation method Note that the current implementation of DeepSHAP generates only main effects and no interaction effects. Do not enable this flag to use the default perturbation method if you require marginal interaction effects
-      --deep-shap-reps <DEEP_SHAP_REPS>
-          Number of replications for DeepSHAP main effects estimation Each replication samples feature values from their normally distributed values [default: 10]
-  -s, --simulate-data-only
-          Simulate data only
-  -n, --simulation-n-observations <SIMULATION_N_OBSERVATIONS>
-          Number of observations to simulate [default: 100]
-  -p, --simulation-n-features-continuous <SIMULATION_N_FEATURES_CONTINUOUS>
-          Number of continuous features to simulate [default: 10]
-  -q, --simulation-n-features-categorical <SIMULATION_N_FEATURES_CATEGORICAL>
-          Number of continuous features to simulate [default: 2,3,5]
-  -k, --simulation-n-output-columns <SIMULATION_N_OUTPUT_COLUMNS>
-          Number of simulated output column [default: 1]
-  -l, --simulation-n-hidden-layers <SIMULATION_N_HIDDEN_LAYERS>
-          Number of hidden layers to use to simulate the output data [default: 2]
-      --simulation-weights-distribution <SIMULATION_WEIGHTS_DISTRIBUTION>
-          Two-parameter distribution from which the simulated weights will be sample from Select from: "normal","lognormal","cauchy","weibull","gamma","beta" [default: normal]
-      --simulation-weights-distribution-param-1 <SIMULATION_WEIGHTS_DISTRIBUTION_PARAM_1>
-          First parameter of the distribution from which the weights will be sampled from [default: 0]
-      --simulation-weights-distribution-param-2 <SIMULATION_WEIGHTS_DISTRIBUTION_PARAM_2>
-          First parameter of the distribution from which the weights will be sampled from [default: 1]
-  -h, --help
-          Print help (see more with '--help')
-  -V, --version
-          Print version
+Simulate data, fit, and extract marginal effects (`-v` for verbose):
+
+```shell
+./mlp -v
+```
+
+## Using default hyperparameters
+
+Using the default hyperparamereters should suffice for trial analyses where the main objective is the estimation of the ranks of the entries, treatments, sites, etc.
+
+1. Simulate a field trial dataset:
+
+```shell
+INPUT="input.tsv"
+time \
+./mlp \
+    --simulate-data-only \
+    --simulation-fname-output=$INPUT \
+    --simulation-n-observations $(echo "2*3*5*6*10" | bc) \
+    --simulation-n-features-continuous 0 \
+    --simulation-n-features-categorical 2,3,5,6,10 \
+    --simulation-n-output-columns 1 \
+    --verbose
+```
+
+2. Fit without extracting marginal effects:
+
+```shell
+INPUT="input.tsv"
+OUTPUT="output.json"
+./mlp -f $INPUT -o $OUTPUT --skip-marginals
+```
+
+3. Extract marginal effects:
+
+```shell
+INPUT="input.tsv"
+OUTPUT="output.json"
+./mlp --marginals-only --model $OUTPUT -f $INPUT
+cat ${OUTPUT%.json*}-marginal_effects.tsv
+```
+
+## Using fixed hyperparameters
+
+Here we demonstrate fitting a dataset with more predictors than observations using fixed hyperparameters where our objective is prediction rather than description, i.e. we do not intend to estimate marginal effects.
+
+1. Simulate a genomic prediction dataset:
+
+```shell
+INPUT="input_n1k.tsv"
+time \
+./mlp \
+    --simulate-data-only \
+    --simulation-fname-output=$INPUT \
+    --simulation-n-observations 1000 \
+    --simulation-n-features-continuous 23000 \
+    --simulation-n-features-categorical 0 \
+    --simulation-n-output-columns 1 \
+    --simulation-n-hidden-layers 2 \
+    --simulation-weights-distribution normal \
+    --simulation-weights-distribution-param-1 0.0 \
+    --simulation-weights-distribution-param-2 0.01 \
+    --verbose
+head  $INPUT | cut -f1-5
+head -n901 $INPUT > ${INPUT%.tsv*}-TRAINING.tsv
+head -n1 $INPUT > ${INPUT%.tsv*}-VALIDATION.tsv
+tail -n100 $INPUT >> ${INPUT%.tsv*}-VALIDATION.tsv
+```
+
+2. Fit the training set without extracting marginal effects:
+(**Note**: make sure to use the `--skip-marginals` flag because with large number of predictors, extracting marginal effects of each will take a long time)
+
+```shell
+INPUT="input_n1k-TRAINING.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    -f $INPUT \
+    -o $OUTPUT \
+    --n-batches=1 \
+    --n-hidden-layers=2 \
+    --n-hidden-nodes=1024,128 \
+    --n-epochs=1000 \
+    --n-burnin-epochs=10 \
+    --f-patient-epochs=0.1 \
+    --f-validation=0.1 \
+    --skip-marginals \
+    --verbose
+```
+
+3. Predict the validation set
+
+```shell
+INPUT_TO_PREDICT="input_n1k-VALIDATION.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    --predict-only \
+    -f $INPUT_TO_PREDICT \
+    --model $OUTPUT \
+    --verbose
+# Extract true and predicted values for assessment
+PREDICTIONS=${OUTPUT%.json*}-predictions.tsv
+cut -f1 $INPUT_TO_PREDICT > TRUE.tmp
+cut -f1 $PREDICTIONS > PREDICTED.tmp
+paste -d'\t' TRUE.tmp PREDICTED.tmp > TRUE_VS_PREDICTED.tsv
+rm TRUE.tmp PREDICTED.tmp
+```
+
+4. Assess prediction:
+
+```R
+df = read.delim("TRUE_VS_PREDICTED.tsv", header=TRUE)
+colnames(df) <- c("true", "predicted")
+cor(df$true, df$predicted)
+txtplot::txtplot(df$true, df$predicted)
+```
+
+## Using hyperparameter optimisation
+
+We also demonstrate fitting a dataset with more predictors than observations but now using hyperparameter optimisation.
+
+1. Simulate a genomic prediction dataset:
+
+```shell
+INPUT="input_n1k.tsv"
+time \
+./mlp \
+    --simulate-data-only \
+    --simulation-fname-output=$INPUT \
+    --simulation-n-observations 1000 \
+    --simulation-n-features-continuous 23000 \
+    --simulation-n-features-categorical 0 \
+    --simulation-n-output-columns 1 \
+    --simulation-n-hidden-layers 2 \
+    --simulation-weights-distribution normal \
+    --simulation-weights-distribution-param-1 0.0 \
+    --simulation-weights-distribution-param-2 0.01 \
+    --verbose
+head  $INPUT | cut -f1-5
+head -n901 $INPUT > ${INPUT%.tsv*}-TRAINING.tsv
+head -n1 $INPUT > ${INPUT%.tsv*}-VALIDATION.tsv
+tail -n100 $INPUT >> ${INPUT%.tsv*}-VALIDATION.tsv
+```
+
+2. Fit the training set without extracting marginal effects:
+(**Note**: again make sure to use the `--skip-marginals` flag because with large number of predictors, extracting marginal effects of each will take a long time)
+
+```shell
+INPUT="input_n1k-TRAINING.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    -f $INPUT \
+    -o $OUTPUT \
+    --hyperparameter-optimisation \
+    --range-hidden-layers=1,2,1 \
+    --range-hidden-layer-nodes=100,1000,900 \
+    --range-dropout-rates=0.0,0.0,0.01 \
+    --range-learning-rates=1e-3,1e-3,1e-3 \
+    --range-n-epochs=1000,1000,1000 \
+    --range-n-burnin-epochs=10,10,10 \
+    --range-f-patient-epochs=0.1,0.1,0.1 \
+    --range-f-validation=0.0,0.2,0.1 \
+    --range-n-batches=1,1,1 \
+    --selection-activations=ReLU \
+    --selection-costs=MSE \
+    --selection-optimisers=Adam \
+    --selection-weights-initialisations=He,Cauchy \
+    --skip-marginals \
+    --verbose
+```
+
+3. Predict the validation set
+
+```shell
+INPUT_TO_PREDICT="input_n1k-VALIDATION.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    --predict-only \
+    -f $INPUT_TO_PREDICT \
+    --model $OUTPUT \
+    --verbose
+# Extract true and predicted values for assessment
+PREDICTIONS=${OUTPUT%.json*}-predictions.tsv
+cut -f1 $INPUT_TO_PREDICT > TRUE.tmp
+cut -f1 $PREDICTIONS > PREDICTED.tmp
+paste -d'\t' TRUE.tmp PREDICTED.tmp > TRUE_VS_PREDICTED.tsv
+rm TRUE.tmp PREDICTED.tmp
+```
+
+4. Assess prediction:
+
+```R
+df = read.delim("TRUE_VS_PREDICTED.tsv", header=TRUE)
+colnames(df) <- c("true", "predicted")
+cor(df$true, df$predicted)
+txtplot::txtplot(df$true, df$predicted)
 ```
 
 # Development setup
@@ -168,7 +259,7 @@ time cargo run -- -s -n1000 -p10 -v
 
 # TESTING CROSS-VALIDATION FOR N << P DATASETS
 time cargo run -- -s -n100 -p2000 -q0 -v
-# time cargo run -- -s -n500 -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
+# time cargo run -- -s -n1k -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
 INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
 N=$(cat $INPUT | wc -l)
 V=$(printf %.0f $(echo  "scale=0; $N * 0.1" | bc))

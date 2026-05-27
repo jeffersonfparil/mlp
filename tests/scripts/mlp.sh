@@ -103,7 +103,7 @@ else
     else
         echo "Using $N_FOLDS folds for k-fold cross-validation (M=$M observations per fold)."
     fi
-    N_EPOCHS=100
+    N_EPOCHS=1000
     N_BURNIN_EPOCHS=10
     # F_PATIENT_EPOCHS=0.01
     F_PATIENT_EPOCHS=0.1
