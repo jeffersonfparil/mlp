@@ -25,8 +25,10 @@ EXCLUDE_LM = "FALSE"
 EXCLUDE_SOMMER = "TRUE"
 N_FOLDS = 5
 N_REPS = 3
-N_ITERATIONS = 100
-N_BURNIN_ITERATIONS = 10
+N_ITERATIONS_LINEAR = 6000
+N_BURNIN_ITERATIONS_LINEAR = 1000
+# N_EPOCHS_MLP = 1000
+# N_BURNIN_EPOCHS_MLP = 100
 MODELS = "BRR,BayesA"
 BASE_SEED = 42
 VERBOSE = "TRUE"
@@ -61,6 +63,23 @@ def GP_EMPIRICAL_INPUT(wildcards):
                 filename = line.strip()
                 if filename:
                     final_files.append(f"{ROOT_OUTDIR}/gp/{filename}")
+    return final_files
+
+def RANDOMISATION_GP_OUTPUT(wildcards):
+    final_files = []
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-RANDOMISATION.tsv",
+        data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
+    for fname in GP_AZODI2019_FNAMES:
+        manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-RANDOMISATION.tsv")
     return final_files
 
 def LINEAR_ANALYSIS_OUTPUT(wildcards):
@@ -138,9 +157,10 @@ rule all:
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
-        LINEAR_ANALYSIS_OUTPUT,
-        MLP_ANALYSIS_OUTPUT,
-        COMPARISONS_OUTPUT
+        RANDOMISATION_GP_OUTPUT,
+        # LINEAR_ANALYSIS_OUTPUT,
+        # MLP_ANALYSIS_OUTPUT,
+        # COMPARISONS_OUTPUT
 
 rule simulate_trials:
     output:
@@ -246,6 +266,32 @@ checkpoint empiricalprep_gp:
         rm -rf {params.tmpdir}
         """
 
+rule randomisation_gp:
+    input:
+        f"{ROOT_OUTDIR}/gp/{{fname}}.tsv",
+    output:
+        f"{ROOT_OUTDIR}/gp/output-{{fname}}-RANDOMISATION.tsv",
+    params:
+        scripts_dir=SCRIPTS_DIR,
+        outdir=f"{ROOT_OUTDIR}/gp",
+        n_folds = N_FOLDS,
+        n_reps = N_REPS,
+        base_seed = BASE_SEED
+    log:
+        f"{ROOT_OUTDIR}/gp/randomisation-{{fname}}.log"
+    conda:
+        "conda.yaml"
+    shell:
+        """
+        time \
+        bash {params.scripts_dir}/randomisationgp.sh \
+            {input} \
+            {params.outdir} \
+            {params.n_reps} \
+            {params.n_folds} \
+            {params.base_seed} > {log}
+        """
+
 rule linear_analysis:
     input:
         f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
@@ -258,8 +304,8 @@ rule linear_analysis:
         exclude_sommer = EXCLUDE_SOMMER,
         n_folds = N_FOLDS,
         n_reps = N_REPS,
-        n_iterations = N_ITERATIONS,
-        n_burnin_iterations = N_BURNIN_ITERATIONS,
+        n_iterations = N_ITERATIONS_LINEAR,
+        n_burnin_iterations = N_BURNIN_ITERATIONS_LINEAR,
         models = MODELS,
         base_seed = BASE_SEED,
         verbose = VERBOSE
@@ -311,8 +357,6 @@ rule mlp_analysis:
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
-        n_iterations = N_ITERATIONS,
-        n_burnin_iterations = N_BURNIN_ITERATIONS,
         base_seed = BASE_SEED
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"

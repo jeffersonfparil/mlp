@@ -8,6 +8,14 @@ Simple multilayer perceptron (MLP) from scratch
 
 # Quickstart
 
+## Installation
+
+Download the binary compatible with your hardware:
+
+- [Linux x86 with NVIDIA H100 or NVIDIA V100](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp)
+
+This list is severely limited at the moment, but please feel free to build it from source. The [instructions are found below](#development-setup).
+
 ## Quick demo
 
 Simulate data, fit, and extract marginal effects (`-v` for verbose):
@@ -211,7 +219,7 @@ cor(df$true, df$predicted)
 txtplot::txtplot(df$true, df$predicted)
 ```
 
-# Development setup
+# Build from source code
 
 1. Install [pixi](https://pixi.prefix.dev/):
 
@@ -238,111 +246,7 @@ which cargo
 ls -lhtr ${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib/libnvrtc*
 ```
 
-# Unit testing
-
-```shell
-cd mlp
-pixi shell
-# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
-time cargo test -- --show-output
-```
-
-# More testing
-
-```shell
-cd mlp
-pixi shell
-# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
-time cargo run -- -h
-time cargo run -- -s -n1000 -p10 -v
-
-
-# TESTING CROSS-VALIDATION FOR N << P DATASETS
-time cargo run -- -s -n100 -p2000 -q0 -v
-# time cargo run -- -s -n1k -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
-INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-N=$(cat $INPUT | wc -l)
-V=$(printf %.0f $(echo  "scale=0; $N * 0.1" | bc))
-T=$(echo  "$N - $V" | bc)
-
-echo $N
-echo $V
-echo $T
-
-head -n$T $INPUT > training_data.tsv
-head -n1 $INPUT > validation_data.tsv
-tail -n$V $INPUT >> validation_data.tsv
-time cargo run -- -f training_data.tsv -o output.json -v --n-batches=1 --n-epochs=1000 --f-patient-epochs=0.5 --skip-marginals
-time cargo run -- -f validation_data.tsv -m output.json -v --predict-only
-PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
-echo $PREDICTED
-
-cut -f1 validation_data.tsv > true.tmp
-cut -f1 $PREDICTED > pred.tmp
-paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
-head true_vs_pred.tsv
-
-# R --> ...
-# df = read.table("true_vs_pred.tsv", T)
-# cor(df)
-# plot(df[, 1], df[, 2])
-# dev.off()
-
-
-
-INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-head $INPUT | cut -f1-10
-head -n1 $INPUT | awk '{print NF}'
-time cargo run -- -f $INPUT -v --n-batches=1 --n-epochs=1000 --skip-marginals
-MODEL=$(ls -t1 | grep "output.*.json" | head -n1)
-head $MODEL | cut -f1-10
-tail $MODEL | cut -f1-10
-time cargo run -- -f $INPUT -v -m $MODEL --predict-only
-PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
-head $PREDICTED | cut -f1-10
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=1
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS marginal_main.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=2
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS marginal_2nd.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=3
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS marginal_3rd.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --deep-shap --deep-shap-reps=100
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS deep_shap.tsv
-head marginal_main.tsv
-head marginal_2nd.tsv
-head marginal_3rd.tsv
-head deep_shap.tsv
-
-
-# time cargo run -- -s -n1000 -p10 -v
-# INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-# time cargo run -- \
-#    -f $INPUT \
-#    -o OUTPUT.tmp.json \
-#    -v \
-#    --hyperparameter-optimisation \
-#    --range-hidden-layers="1,1,1" \
-#    --range-hidden-layer-nodes="700,700,700" \
-#    --range-dropout-rates="0.0,0.0,0.01" \
-#    --range-learning-rates="1e-5,1e-5,1e-5" \
-#    --range-n-epochs="1000,1000,1000" \
-#    --range-n-burnin-epochs="100,100,100" \
-#    --range-f-patient-epochs="0.01,0.01,0.01" \
-#    --range-f-validation="0.1,0.1,0.1" \
-#    --range-n-batches="1,1,1" \
-#    --selection-costs="MSE" \
-#    --selection-optimisers="Adam,GradientDescent" \
-#    --selection-activations="ReLU,Linear" \
-#    --selection-weights-initialisations="He,Cauchy" \
-#    --skip-marginals
-
-```
-
-# Compile for release
+4. Build:
 
 ```shell
 cd mlp
@@ -350,43 +254,92 @@ cargo build --release
 ./target/release/mlp -h
 ```
 
-# Example Fits
+# Unit testing
 
-Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimiser, 0.001 learning rate and, 25% patient epochs:
+```shell
+cd mlp
+pixi shell
+# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib # in case the dynamic linker library is not in the path
+time cargo test -- --show-output
+```
 
-## 10 Epochs
+# Data formats
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E10-FPE0.25-B1-LR0.001-T20260408052818.svg)
+1. Input data:
+    - Default format is `TSV` (tab-delimited); other delimiters are supported via `-d` or `--delim`
+    - The first column is assumed to contain numeric response values, but you may use one or more target columns anywhere in the file
+    - Remaining columns are explanatory variables:
+      + numeric → continuous or binary
+      + non-numeric → categorical factor levels, converted to binary via one-hot encoding
+    - See example: [`./misc/input_simulated-T20260527230243-R43101535.tsv`](./misc/input_simulated-T20260527230243-R43101535.tsv)
 
-## 20 Epochs
+2. Model:
+    - `JSON`: network model exported from the `Network` struct
+    - `n_observations` (usize): number of observations
+    - `n_features` (usize): number of input features
+    - `n_targets` (usize): number of output dimensions
+    - `n_hidden_layers` (usize): number of hidden layers
+    - `n_hidden_nodes` (Vec<usize>): nodes per hidden layer
+    - `dropout_rates` (Vec<f32>): dropout rate for each hidden layer
+    - `targets` (Vec<f32>): observed values, standardised
+    - `targets_mean_sd` (f32,f32): mean and standard deviation of targets
+    - `predictions` (Vec<f32>): predicted values
+    - `weights_per_layer` (Vec<Vec<f32>>): weight matrices by layer
+    - `biases_per_layer` (Vec<Vec<f32>>): bias vectors by layer
+    - `weights_x_biases_per_layer` (Vec<Vec<f32>>): pre-activation sums by layer
+    - `activations_per_layer` (Vec<Vec<f32>>): layer outputs, including input layer
+    - `weights_gradients_per_layer` (Vec<Vec<f32>>): weight gradients by layer
+    - `biases_gradients_per_layer` (Vec<Vec<f32>>): bias gradients by layer
+    - `activation` (String): activation function
+    - `cost` (String): cost function
+    - `weights_initialisation` (String): weights initialisation method (He, Cauchy, Uniform, StandardNormal)
+    - `n_epochs` (usize): number of training epochs
+    - `seed` (usize): random seed used for dropouts
+    - `loss` (f32): mean loss (not part of the actual `Network` struct)
+    - See example: [`./misc/output_network-T20260527230245-R616739134.json`](./misc/output_network-T20260527230245-R616739134.json)
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E20-FPE0.25-B1-LR0.001-T20260408052908.svg)
+3. Predictions: same as the input format, but response columns hold predicted values
 
-## 50 Epochs
+4. Marginal effects:
+    - `TSV`: tab-delimited
+    - Estimates come from perturbation or SHAP methods
+    - See example: [`./misc/output_network-T20260527230245-R616739134-marginal_effects.tsv`](./misc/output_network-T20260527230245-R616739134-marginal_effects.tsv)
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E50-FPE0.25-B1-LR0.001-T20260408053111.svg)
+5. Figures/plots:
+    - `SVG`: loss curve and observed vs predicted scatterplot
+    - `PNG`: marginal effects barplot
+    - See examples: 
+      + [`./misc/Loss_curve-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R3399378659.svg`](./misc/Loss_curve-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R3399378659.svg)
+      + [`./misc/Observed_vs_predicted-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R13995183.svg`](./misc/Observed_vs_predicted-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R13995183.svg)
+      + [`./misc/Marginal_effects-T20260527230245-R3240974675.png`](./misc/Marginal_effects-T20260527230245-R3240974675.png)
 
-## 100 Epochs
+6. Special characters
+    - Used in progress bars: `█`
+    - Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
+    - Used as delimiters in marginals' combinations: `▓`
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E100-FPE0.25-B1-LR0.001-T20260408053517.svg)
+# Benchmarking
 
-# Special characters
+Install Snakemake:
 
-- Used in progress bars: `█`
-- Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
-- Used as delimiters in marginals' combinations: `▓`
+```shell
+pixi global install snakemake conda -c conda-forge -c bioconda
+```
 
-# Systematic testing workflow using Snakemake
+Run the workflow:
+
+*Note*: comment-out the modelling part in `rule all` to use more compute cores and speed-up simulations and empirical data preparations, 
+after which uncomment them and run with less cores to avoid running out of GPU memory.
 
 ```shell
 cd mlp/
-pixi shell
-snakemake --lint
-snakemake -n # or --dry-run
 N_CORES=24
 # N_CORES=3
-time snakemake --cores $N_CORES
-# time pixi run snakemake --cores $N_CORES
+time pixi run snakemake --cores $N_CORES
+# ### Debugging and development
+# pixi shell
+# snakemake --lint
+# snakemake -n # or --dry-run
 ```
 
 # TODO: Remote-sensing modelling

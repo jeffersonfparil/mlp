@@ -5,7 +5,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t1. ANALYSIS_TYPE:\n")
   cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
   cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
-  cat("\t2. FNAME_INPUT: The input file name.\n")
+  cat("\t2. FNAME_INPUT: The input file name which should not have any missing values, i.e. pre-filtered.\n")
   cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
   cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
   cat("\t3. DIRNAME_OUTPUT: The output directory.\n")
@@ -15,12 +15,12 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t\t6. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
   cat("\t\t7. verbose: TRUE/FALSE (Default: FALSE)\n")
   cat("For genomic prediction analysis, additional arguments are:\n")
-  cat("\t\t4. n_reps: numeric (Default: 1)\n")
-  cat("\t\t5. n_folds: numeric (Default: 5)\n")
-  cat("\t\t6. n_iterations: numeric (Default: 1000)\n")
-  cat("\t\t7. n_burnin_iterations: numeric (Default: 100)\n")
-  cat("\t\t8. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
-  cat("\t\t9. base_seed: numeric (Default: 123)\n")
+  cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
+  cat("\t\t5. n_reps: numeric (Default: 3)\n")
+  cat("\t\t6. n_folds: numeric (Default: 10)\n")
+  cat("\t\t7. n_iterations: numeric (Default: 1000)\n")
+  cat("\t\t8. n_burnin_iterations: numeric (Default: 100)\n")
+  cat("\t\t9. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
   cat("\t\t10. verbose: TRUE/FALSE (Default: FALSE)\n")
   cat("Examples:\n")
   cat("DIR=${HOME}/Documents/mlp/tests\n")
@@ -36,7 +36,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("###########################\n")
   cat("MLP=${HOME}/Documents/mlp/target/release/mlp\n")
   cat("sh simulate.sh $MLP gp tmp BINARY 100 50 2\n")
-  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp 5 10 100 10 'BRR,BayesA' 123 TRUE\n")
+  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDN_LAYERS_2-RANDOMISATION.tsv 3 5 100 10 'BRR,BayesA' TRUE\n")
   quit(status = 0)
 }
 
@@ -52,8 +52,7 @@ library(BGLR)
 
 #' Parse command-line arguments for the linear model fitting and effect extraction process, including analysis type, input file, and model fitting parameters.
 get_params <- function(args) {
-  # args <- c("trials", "input-file.tsv", "tmp", "TRUE", "TRUE", "TRUE", "TRUE")
-  # args <- c("gp", "input-file.tsv", "tmp", "6", "7", "123", "4567")
+  # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "42", "TRUE")
   analysis_type <- args[1]
   if (!(analysis_type %in% c("trials", "gp"))) {
     stop("ERROR: Invalid analysis type. Must be either 'trials' or 'gp'.")
@@ -74,16 +73,18 @@ get_params <- function(args) {
       "\t1. analysis_type",
       "\t2. input file name",
       "\t3. output directory",
-      "\t4. n_reps (numeric)",
-      "\t5. n_folds (numeric)",
-      "\t6. n_iterations (numeric)",
-      "\t7. n_burnin_iterations (numeric)",
-      "\t8. models (comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC')",
-      "\t9. base_seed (numeric)",
+      "\t4. fname_randomisation: text file containing randomisation indices",
+      "\t5. n_reps (numeric)",
+      "\t6. n_folds (numeric)",
+      "\t7. n_iterations (numeric)",
+      "\t8. n_burnin_iterations (numeric)",
+      "\t9. models (comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC')",
       "\t10. verbose (TRUE/FALSE)"
     ))
+    if (!file.exists(args[4])) {
+      stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
+    }
   }
-
   fname_input <- args[2]
   if (!file.exists(fname_input)) {
     stop(paste0("ERROR: The input file '", fname_input, "' does not exist."))
@@ -97,6 +98,9 @@ get_params <- function(args) {
   if (!dir.exists(dirname_output)) {
     stop(paste0("ERROR: The output directory '", dirname_output, "' does not exist."))
   }
+  if (!file.exists(args[4])) {
+    stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
+  }
   params <- list(
     analysis_type = analysis_type,
     fname_input = fname_input,
@@ -108,8 +112,9 @@ get_params <- function(args) {
       verbose = NA
     ),
     gp = list(
-      n_folds = NA,
+      fname_randomisation = NA,
       n_reps = NA,
+      n_folds = NA,
       n_iterations  = NA,
       n_burnin_iterations = NA,
       models = NA,
@@ -124,12 +129,13 @@ get_params <- function(args) {
       params$trials$exclude_sommer <- if (args[6] == "TRUE") TRUE else FALSE
       params$trials$verbose <- if (args[7] == "TRUE") TRUE else FALSE
     } else if (analysis_type == "gp") {
-      params$gp$n_folds <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 5
-      params$gp$n_reps <- if (!is.na(args[4]) && !is.na(as.numeric(args[4]))) as.numeric(args[4]) else 5
-      params$gp$n_iterations <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 6000
-      params$gp$n_burnin_iterations <- if (!is.na(args[7]) && !is.na(as.numeric(args[7]))) as.numeric(args[7]) else 1000
+      params$gp$fname_randomisation <- args[4]
+      params$gp$n_reps <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 3
+      params$gp$n_folds <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 10
+      params$gp$n_iterations <- if (!is.na(args[7]) && !is.na(as.numeric(args[7]))) as.numeric(args[7]) else 6000
+      params$gp$n_burnin_iterations <- if (!is.na(args[8]) && !is.na(as.numeric(args[8]))) as.numeric(args[8]) else 1000
       params$gp$models <- {
-        models <- if (!is.na(args[8])) strsplit(args[8], split = ",")[[1]] else c("BRR", "BayesA", "BayesB", "BayesC")
+        models <- if (!is.na(args[9])) strsplit(args[9], split = ",")[[1]] else c("BRR", "BayesA", "BayesB", "BayesC")
         for (m in models) {
           if (!(m %in% c("BRR", "BayesA", "BayesB", "BayesC"))) {
             stop(paste0("ERROR: Invalid model '", m, "'. Valid models are 'BRR', 'BayesA', 'BayesB', and 'BayesC'."))
@@ -137,7 +143,6 @@ get_params <- function(args) {
         }
         models
       }
-      params$gp$base_seed <- if (!is.na(args[9]) && !is.na(as.numeric(args[9]))) as.numeric(args[9]) else ceiling(100*runif(1))
       params$gp$verbose <- if (args[10] == "TRUE") TRUE else FALSE
     }
   )
@@ -628,34 +633,52 @@ extract_entries_effects <- function(params) {
 
 #' Main function to perform repeated k-fold cross-validation using Bayesian genomic prediction models (e.g., BRR, BayesA, BayesB, BayesC) on a given dataset, and save the results (correlation and R-squared) for each fold and repetition to an output file.
 gp_repeated_kfold_cv <- function(params) {
-  # params = get_params(args=c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10"))
+  # params = get_params(args = c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "42", "TRUE"))
   fname_output <- define_fname_output(params$fname_input)
   fname_output_tmp <- paste0(fname_output, ".tmp")
   cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
   df <- read.table(params$fname_input, sep = "\t", header = TRUE)
-  df < df[complete.cases(df), ]
-  n <- nrow(df)
-  p <- ncol(df) - 1
-  m <- floor(n / params$gp$n_folds)
-  if (m < 3) {
-    stop(paste0("ERROR: Skipping because the dataset (", params$fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
-  }
+  # df < df[complete.cases(df), ]
+  # n <- nrow(df)
+  # p <- ncol(df) - 1
+  # m <- floor(n / params$gp$n_folds)
+  # if (m < 3) {
+  #   stop(paste0("ERROR: Skipping because the dataset (", params$fname_input, ") is too small (n=", n, "; m=", m, ") for ", params$gp$n_reps, "-reps of ", params$gp$n_folds, "-fold cross-validation"))
+  # }
   y <- df[, 1, drop = FALSE]
   X <- df[, 2:ncol(df), drop = FALSE]
+  n <- nrow(X)
+  randomisation <- read.table(params$gp$fname_randomisation, sep = "\t", header = FALSE)$V1
+  idx_randomisation <- list()
+  i <- 0
+  for (r in 1:params$gp$n_reps) {
+    idx_randomisation[[paste0("rep_", r)]] <- list()
+    for (f in 1:params$gp$n_folds) {
+      # r <- 1; f <- 2
+      i <- i + 2
+      idx_randomisation[[paste0("rep_", r)]][[paste0("training_", f)]] <- as.numeric(unlist(strsplit(randomisation[i-1], ",")))
+      idx_randomisation[[paste0("rep_", r)]][[paste0("validation_", f)]] <- as.numeric(unlist(strsplit(randomisation[i], ",")))
+      if (max(c(idx_randomisation[[paste0("rep_", r)]][[paste0("training_", f)]], idx_randomisation[[paste0("rep_", r)]][[paste0("validation_", f)]])) > n) {
+        stop(paste0("ERROR: The randomisation indices in ", params$gp$fname_randomisation, " exceed the number of samples (n=", n, ") in the dataset (", params$fname_input, ")"))
+      }
+    }
+  }
   for (r in 1:params$gp$n_reps) {
     # r <- 1
-    set.seed(params$gp$base_seed + r)
-    idx_shuffled <- sample(1:n, n, replace = FALSE)
+    # set.seed(params$gp$base_seed + r)
+    # idx_shuffled <- sample(1:n, n, replace = FALSE)
     for (f in 1:params$gp$n_folds) {
       # f <- 2
-      bool_validation <- (1:n) %in% (((f-1)*m)+1):(f*m)
-      bool_training <- !bool_validation
-      idx_training <- idx_shuffled[bool_training]
-      idx_validation <- idx_shuffled[bool_validation]
+      # bool_validation <- (1:n) %in% (((f-1)*m)+1):(f*m)
+      # bool_training <- !bool_validation
+      # idx_training <- idx_shuffled[bool_training]
+      # idx_validation <- idx_shuffled[bool_validation]
+      idx_training <- idx_randomisation[[paste0("rep_", r)]][[paste0("training_", f)]]
+      idx_validation <- idx_randomisation[[paste0("rep_", r)]][[paste0("validation_", f)]]
       yNA <- y[, 1]
       yNA[idx_validation] <- NA
       for (model in params$gp$models) {
-        # model = "BayesC"
+        # model = "BRR"
         mod <- BGLR(
           y = yNA,
           ETA = list(list(X = X, model = model)),
@@ -694,12 +717,8 @@ misc_sim <- function() {
 ###########################################################
 # Execute
 ###########################################################
-# Testing: source("scripts/linear.R")
-# misc_sim()
-# args <- c("trials", "simulated_misc.tsv", "TRUE", "TRUE", "TRUE", "TRUE")
-# args <- c("trials", "australia.soybean-yield.tsv", "FALSE", "TRUE", "TRUE", "TRUE")
-# args <- c("gp", "sorghum-YLD.tsv", "2", "1", "100", "10", "BRR,BayesA", "TRUE", "42")
 # args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/ilri.sheep-birthwt.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials", "FALSE", "FALSE", "TRUE", "TRUE")
+# args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "TRUE")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
   extract_entries_effects(params)

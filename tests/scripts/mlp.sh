@@ -8,9 +8,11 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo -e "\t- For trials analysis (i.e. to extract the marginal effects of each genotype), this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable."
     echo -e "\t- For genomic prediction analysis (i.e. repeated k-fold cross-validation), this should be a tab-separated file with a header row and columns for the response variable followed by the features."
     echo "GP ARGS: additional arguments for genomic prediction analysis. These are: "
-    echo -e "\t5. N_REPS: number of replications of k-fold cross-validation"
-    echo -e "\t6. N_FOLDS: number of folds for k-fold cross-validation"
-    echo -e "\t7. BASE_SEED: base seed for reshuffling genotypes per replication of k-fold cross-validation (the seed for each replication will be BASE_SEED + REP)"
+    echo -e "\t5. FNAME_RANDOMISATION: path to the file containing randomisation indices"
+    echo -e "\t6. N_REPS: number of replications of k-fold cross-validation"
+    echo -e "\t7. N_FOLDS: number of folds for k-fold cross-validation"
+    # echo -e "\t8. N_EPOCHS: number of epochs for training the multi-layer perceptron model"
+    # echo -e "\t9. N_BURNIN_EPOCHS: number of burn-in epochs for training the multi-layer perceptron model"
     echo "Examples:"
     echo "MLP=\${HOME}/Documents/mlp/target/release/mlp"
     echo "mkdir tmp"
@@ -18,8 +20,8 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "Rscript empiricalprep.R gp ${DIR}/datasets/azodi_2019/sorghum_geno.csv tmp"
     echo "bash simulate.sh \$MLP gp tmp BINARY 100 50 2"
     echo "bash mlp.sh \$MLP trials tmp/australia.soybean-yield.tsv tmp"
-    echo "bash mlp.sh \$MLP gp tmp/input_simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp 3 5 123"
-    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp 2 5 42"
+    echo "bash mlp.sh \$MLP gp tmp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/ tmp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANOMISATION.tsv 3 5"
+    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp/ tmp/output-sorghum-YLD-RANDOMISATION.tsv 2 5"
     exit 0
 fi
 MLP=$1
@@ -77,32 +79,33 @@ else
     echo "#########################################################################################################"
     echo "### Running multi-layer perceptron model for genomic prediction with repeated k-fold cross-validation ###"
     echo "#########################################################################################################"
-    N_REPS=$5
-    N_FOLDS=$6
-    BASE_SEED=$7
+    FNAME_RANDOMISATION=$5
+    N_REPS=$6
+    N_FOLDS=$7
     # MLP=${HOME}/Documents/mlp/target/release/mlp
     # ANALYSIS_TYPE=gp
-    # FNAME_INPUT=${HOME}/Documents/mlp/tests/scripts/tmp/input_simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv
-    # DIRNAME_OUTPUT=${HOME}/Documents/mlp/tests/scripts/tmp
+    # FNAME_INPUT=${HOME}/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv
+    # DIRNAME_OUTPUT=${HOME}/Documents/mlp/tests/tmp/gp
+    # FNAME_RANDOMISATION=${HOME}/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANDOMISATION.tsv
     # N_REPS=2
     # N_FOLDS=2
-    # BASE_SEED=42
-    if [[ -z $BASE_SEED ]]; then echo "Error: Missing argument for base seed for random number generation (BASE_SEED)."; exit 1; fi
+    if [[ -z $FNAME_RANDOMISATION ]]; then echo "Error: Missing argument for path to the file containing randomisation indices (FNAME_RANDOMISATION)."; exit 1; fi
+    if [[ ! -f $FNAME_RANDOMISATION ]]; then echo "Error: Randomisation file not found at the specified path: '${FNAME_RANDOMISATION}'."; exit 1; fi
     if [[ -z $N_REPS ]]; then echo "Error: Missing argument for number of replications of k-fold cross-validation (N_REPS)."; exit 1; fi
     if [[ -z $N_FOLDS ]]; then echo "Error: Missing argument for number of folds for k-fold cross-validation (N_FOLDS)."; exit 1; fi
     N=$(echo $(cut -f1 $FNAME_INPUT | wc -l) - 1 | bc)
     M=$(echo "scale=0; $N / $N_FOLDS" | bc)
     P=$(head -n1 $FNAME_INPUT | cut -f2- | awk '{print NF}')
-    while [[ $M -lt 10 ]]; do
-        N_FOLDS=$(echo "$N_FOLDS - 1" | bc)
-        M=$(echo "scale=0; $N / $N_FOLDS" | bc)
-    done
-    if [[ $N_FOLDS -lt 2 ]]; then
-        echo "Error: Not enough folds for k-fold cross-validation. Please reduce the number of folds or increase the number of observations."
-        exit 1
-    else
-        echo "Using $N_FOLDS folds for k-fold cross-validation (M=$M observations per fold)."
-    fi
+    # while [[ $M -lt 10 ]]; do
+    #     N_FOLDS=$(echo "$N_FOLDS - 1" | bc)
+    #     M=$(echo "scale=0; $N / $N_FOLDS" | bc)
+    # done
+    # if [[ $N_FOLDS -lt 2 ]]; then
+    #     echo "Error: Not enough folds for k-fold cross-validation. Please reduce the number of folds or increase the number of observations."
+    #     exit 1
+    # else
+    #     echo "Using $N_FOLDS folds for k-fold cross-validation (M=$M observations per fold)."
+    # fi
     N_EPOCHS=1000
     N_BURNIN_EPOCHS=10
     # F_PATIENT_EPOCHS=0.01
@@ -145,34 +148,39 @@ else
     echo -ne "n_epochs\tn_burnin_epochs\tn_patient_epochs\tn_validation\t" >> ${FNAME_OUTPUT_CV}.tmp
     echo -ne "n_batches\tactivation\tcost\toptimiser\tweights_initialisation\t" >> ${FNAME_OUTPUT_CV}.tmp
     echo -e "corr\tr2" >> ${FNAME_OUTPUT_CV}.tmp
-    head -n1 ${FNAME_OUTPUT_CV}.tmp
+    # head -n1 ${FNAME_OUTPUT_CV}.tmp
+    IDX_RANDOMISATION=0
     for REP in $(seq 1 $N_REPS); do
         # REP=1
-        SEED=$(echo "$BASE_SEED + $REP" | bc)
-        IDX_SHUFFLED=($(shuf --random-source=<(yes $SEED) -e $(seq 2 $(echo $N + 1 | bc))))
+        # SEED=$(echo "$BASE_SEED + $REP" | bc)
+        # IDX_SHUFFLED=($(shuf --random-source=<(yes $SEED) -e $(seq 2 $(echo $N + 1 | bc))))
         # echo "IDX_SHUFFLED: ${IDX_SHUFFLED[@]}"
         for FOLD in $(seq 1 $N_FOLDS); do
             # FOLD=1
-            IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
-            IDX_FIN=$(echo "$FOLD * $M" | bc)
-            IDX_TRAINING=()
-            IDX_VALIDATION=()
-            for i in $(seq 0 $N); do
-                if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]; then
-                    # echo "$i; ${IDX_SHUFFLED[i]}"
-                    IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
-                else
-                    IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
-                fi
-            done
-            # echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-            # echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
-            TRAINING_IDX=${IDX_TRAINING[@]}
-            VALIDATION_IDX=${IDX_VALIDATION[@]}
+            IDX_RANDOMISATION=$(echo "$IDX_RANDOMISATION + 2" | bc)
+            # echo $IDX_RANDOMISATION
+            # IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
+            # IDX_FIN=$(echo "$FOLD * $M" | bc)
+            # IDX_TRAINING=()
+            # IDX_VALIDATION=()
+            # for i in $(seq 0 $N); do
+            #     if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]; then
+            #         # echo "$i; ${IDX_SHUFFLED[i]}"
+            #         IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
+            #     else
+            #         IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
+            #     fi
+            # done
+            # # echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
+            # # echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
+            # TRAINING_IDX=${IDX_TRAINING[@]}
+            # VALIDATION_IDX=${IDX_VALIDATION[@]}
+            TRAINING_IDX=$(head -n$(echo "$IDX_RANDOMISATION - 1" | bc) $FNAME_RANDOMISATION | tail -n1)
+            VALIDATION_IDX=$(head -n${IDX_RANDOMISATION} $FNAME_RANDOMISATION | tail -n1)
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/TRAINING_SET.tmp
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/VALIDATION_SET.tmp
-            awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/TRAINING_SET.tmp
-            awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, " "); for (i in a) b[a[i]] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/VALIDATION_SET.tmp
+            awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
             # Fit with hyperparameter optimisation for optimiser, and weights initialisation
             ${MLP} \
                 -f ${TMP_OUTDIR}/TRAINING_SET.tmp \

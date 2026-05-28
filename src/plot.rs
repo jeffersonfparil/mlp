@@ -26,14 +26,18 @@ impl Network {
         let dir: PathBuf = current_dir()?;
         let mut rng = rand::rng();
         let fname_loss_svg = format!(
-            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
+            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
             self.activation,
             self.cost,
             self.weights_initialisation,
             optimisation_parameters.optimiser,
             self.n_hidden_layers,
-            self.n_hidden_nodes,
+            {
+                let mut nodes = self.n_hidden_nodes.iter().fold("".to_owned(), |x, y| format!("{},{}", x, y.to_string()));
+                nodes.remove(0);
+                nodes
+            },
             optimisation_parameters.n_epochs,
             optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
@@ -75,14 +79,18 @@ impl Network {
         let dir: PathBuf = current_dir()?;
         let mut rng = rand::rng();
         let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
+            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
             self.activation,
             self.cost,
             self.weights_initialisation,
             optimisation_parameters.optimiser,
             self.n_hidden_layers,
-            self.n_hidden_nodes,
+            {
+                let mut nodes = self.n_hidden_nodes.iter().fold("".to_owned(), |x, y| format!("{},{}", x, y.to_string()));
+                nodes.remove(0);
+                nodes
+            },
             optimisation_parameters.n_epochs,
             optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
