@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io::{BufRead, Write};
 use std::io::{BufReader, BufWriter};
 use std::time::Instant;
+use chrono::Utc;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -139,7 +140,7 @@ impl Data {
         par2: f64,
         seed: usize,
         verbose: bool,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<(Self, Network), Box<dyn Error>> {
         // n = total number of observations
         // p = number of continuous explanatory variables or features
         // q = vector of the number of levels in categorical variable
@@ -262,7 +263,7 @@ impl Data {
         data.features = network.activations_per_layer[0].clone();
         data.targets = network.predictions.clone();
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
-        Ok(data)
+        Ok((data, network))
     }
 
     pub fn check_dimensions(&self) -> Result<(), MatrixError> {
@@ -699,7 +700,7 @@ pub struct SerdifiableNetwork {
     activations_per_layer: Vec<Vec<f32>>, // activation function output including the input layer as the first element ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
     weights_gradients_per_layer: Vec<Vec<f32>>, // gradients of the weights ((n_hidden_nodes[i+1] x n_hidden_nodes[i]) for i in 0:(k-1))
     biases_gradients_per_layer: Vec<Vec<f32>>, // gradients of the biases ((n_hidden_nodes[i+1] x 1) for i in 0:(k-1))
-    activation: String, // activation function enum (includes derivative)
+    activation: String, // activation function
     cost: String, // cost function
     weights_initialisation: String, // weights initialisation, i.e. He, Cauchy, Uniform or StandardNormal
     n_epochs: usize, // number of training epochs
@@ -945,7 +946,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let data_simulated = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42, true)?;
+        let (data_simulated, _network_simulated) = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42, true)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);

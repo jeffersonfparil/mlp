@@ -26,14 +26,18 @@ impl Network {
         let dir: PathBuf = current_dir()?;
         let mut rng = rand::rng();
         let fname_loss_svg = format!(
-            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
+            "{}/Loss_curve-{:?}-{:?}-{:?}-{:?}-HL{}-HN{}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
             self.activation,
             self.cost,
             self.weights_initialisation,
             optimisation_parameters.optimiser,
             self.n_hidden_layers,
-            self.n_hidden_nodes,
+            {
+                let mut nodes = self.n_hidden_nodes.iter().fold("".to_owned(), |x, y| format!("{},{}", x, y.to_string()));
+                nodes.remove(0);
+                nodes
+            },
             optimisation_parameters.n_epochs,
             optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
@@ -41,7 +45,7 @@ impl Network {
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
             Utc::now().format("%Y%m%d%H%M%S"),
-            rng.sample(rand::distr::Alphanumeric) as char,
+            rng.random::<u32>(),
         );
         // Plot loss curve
         let mut ylabel = String::from("Cost");
@@ -75,14 +79,18 @@ impl Network {
         let dir: PathBuf = current_dir()?;
         let mut rng = rand::rng();
         let fname_scatter_svg = format!(
-            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{:?}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
+            "{}/Observed_vs_predicted-{:?}-{:?}-{:?}-{:?}-HL{}-HN{}-E{}-BE{}-FPE{}-FV{}-B{}-LR{}-T{}-R{}.svg",
             dir.display(),
             self.activation,
             self.cost,
             self.weights_initialisation,
             optimisation_parameters.optimiser,
             self.n_hidden_layers,
-            self.n_hidden_nodes,
+            {
+                let mut nodes = self.n_hidden_nodes.iter().fold("".to_owned(), |x, y| format!("{},{}", x, y.to_string()));
+                nodes.remove(0);
+                nodes
+            },
             optimisation_parameters.n_epochs,
             optimisation_parameters.n_burnin_epochs,
             optimisation_parameters.f_patient_epochs,
@@ -90,7 +98,7 @@ impl Network {
             optimisation_parameters.n_batches,
             optimisation_parameters.learning_rate,
             Utc::now().format("%Y%m%d%H%M%S"),
-            rng.sample(rand::distr::Alphanumeric) as char,
+            rng.random::<u32>(),
         );
         // Scatter plot of observed vs predicted values
         let y_observed: Vec<f64> = self.targets.to_host()?.iter().map(|&x| x as f64).collect();
@@ -166,7 +174,7 @@ impl Marginals {
             "{}/Marginal_effects-T{}-R{}.png",
             dir.display(),
             Utc::now().format("%Y%m%d%H%M%S"),
-            rng.sample(rand::distr::Alphanumeric) as char,
+            rng.random::<u32>(),
         );
         // Extract ids and effects
         let mut ids_all: Vec<String> = Vec::new();
@@ -250,7 +258,7 @@ mod test {
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let data = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
+        let (data, _network_simulated) = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
         let network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         let optimisation_parameters = OptimisationParameters::new(&network)?;
         // Network-related plots

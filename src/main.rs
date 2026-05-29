@@ -311,7 +311,7 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
         Some(x) => x.to_owned(),
         None => {
             println!("No input file provided. Simulating data...");
-            let data_simulated = Data::simulate(
+            let (data_simulated, network_simulated) = Data::simulate(
                 args.simulation_n_observations,
                 args.simulation_n_features_continuous,
                 args.simulation_n_features_categorical.clone(),
@@ -323,8 +323,12 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
                 args.seed,
                 args.verbose,
             )?;
-            let fname_simulated =
-                format!("input_simulated-{}.tsv", Utc::now().format("%Y%m%d%H%M%S"));
+            let mut rng = rand::rng();
+            let fname_simulated = format!(
+                    "input_simulated-T{}-R{}.tsv", 
+                    Utc::now().format("%Y%m%d%H%M%S"),
+                    rng.random::<u32>(),
+            );
             data_simulated.write_delimited(&fname_simulated, "\t")?;
             fname_simulated
         }
@@ -365,7 +369,7 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
 }
 
 fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
-    let data_simulated = Data::simulate(
+    let (data_simulated, network_simulated) = Data::simulate(
         args.simulation_n_observations,
         args.simulation_n_features_continuous,
         args.simulation_n_features_categorical.clone(),
@@ -392,14 +396,16 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
                 args.simulation_weights_distribution_param_2,
                 args.seed,
                 Utc::now().format("%Y%m%d%H%M%S"),
-                rng.sample(rand::distr::Alphanumeric) as char,
+                rng.random::<u32>(),
             )
         }
     };
+    let fname_simulated_network = fname_simulated.replace(".tsv", ".json");
     data_simulated.write_delimited(&fname_simulated, "\t")?;
+    network_simulated.save_network(&fname_simulated_network)?;
     println!(
-        "Please find simulated data: `{}`",
-        fname_simulated
+        "Please find simulated data: `{}` and simulated network: `{}`",
+        fname_simulated, fname_simulated_network,
     );
     Ok(())
 }
@@ -777,7 +783,7 @@ fn train_with_hyperparameter_optimisation(
         Some(x) => x.to_owned(),
         None => {
             let mut rng = rand::rng();
-            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.sample(rand::distr::Alphanumeric) as char,)
+            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.random::<u32>(),)
         },
     };
     network_hyper_optimised.save_network(&fname_network_output)?;
@@ -828,7 +834,7 @@ fn train_with_fixed_hyperparameters(
         Some(x) => x.to_owned(),
         None => {
             let mut rng = rand::rng();
-            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.sample(rand::distr::Alphanumeric) as char,)
+            format!("output_network-T{}-R{}.json", Utc::now().format("%Y%m%d%H%M%S"), rng.random::<u32>(),)
         },
     };
     network.save_network(&fname_network_output)?;
@@ -902,6 +908,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             if path.extension().map_or(false, |ext| ext != "json") {
                 return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Output model file needs to have '.json' extension: {}", x))))
             }
+            if path.exists() {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Output model file already exists: {}", x))))
+            }
         },
         None => (),
     };
@@ -910,6 +919,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             let path = std::path::Path::new(x);
             if path.extension().map_or(false, |ext| ext != "json") {
                 return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Input model file needs to have '.json' extension: {}", x))))
+            }
+        },
+        None => (),
+    };
+    match &args.simulation_fname_output {
+        Some(x) => {
+            let path = std::path::Path::new(x);
+            if path.exists() {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Simulated data file already exists: {}", x))))
             }
         },
         None => (),

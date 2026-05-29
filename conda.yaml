@@ -1,8 +1,27 @@
 name: snakemake
+# channels:
+#   - conda-forge
+#   - defaults
+# dependencies:
+#   - python=3.10
+#   - numpy
+#   - pandas
+#   - scikit-learn
+#   - shap
+#   - xgboost
 channels:
-  - conda-forge
-  - defaults
+- conda-forge
+- defaults
 dependencies:
-  - python=3.10
-  - numpy
-  - pandas
+- rust >=1.92.0,<1.93
+- cuda-nvrtc ==12.8.93
+- nvtop >=3.3.1,<4
+- r-lme4 >=1.1_38,<2
+- r-devtools >=2.5.2,<3
+- r-flexplot >=0.7.4,<0.8
+- r-bglr >=1.1.4,<2
+- bfg >=1.15.0,<2
+- r-r.utils >=2.13.0,<3
+- r-doparallel >=1.0.17,<2
+- py-xgboost >=3.2.0,<4
+- shap >=0.51.0,<0.52

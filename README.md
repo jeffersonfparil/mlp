@@ -8,119 +8,218 @@ Simple multilayer perceptron (MLP) from scratch
 
 # Quickstart
 
-```shell
-Usage: mlp [OPTIONS]
+## Installation
 
-Options:
-  -f, --fname <FNAME>
-          Input file name
-  -d, --delim <DELIM>
-          Delimiter for the input data file [default: "\t"]
-  -t, --column-indices-of-targets <COLUMN_INDICES_OF_TARGETS>
-          Vector of column indexes corresponding to the target values in the input data file [default: 0]
-      --n-hidden-layers <N_HIDDEN_LAYERS>
-          Number of hidden layers [default: 1]
-      --n-hidden-nodes <N_HIDDEN_NODES>
-          Number of nodes per hidden layer [default: 128]
-      --dropout-rates <DROPOUT_RATES>
-          Dropout rates per hidden layer [default: 0.0]
-      --activation <ACTIVATION>
-          Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear") (Note: "LeakyReLU" under construction) [default: ReLU]
-      --cost <COST>
-          Cost function (Choose: "MSE", "MAE", "HL") [default: MSE]
-      --optimiser <OPTIMISER>
-          Optimiser (Choose: "Adam", "AdamMax", "GradientDescent") [default: Adam]
-      --n-epochs <N_EPOCHS>
-          Maximum number of training epochs [default: 10]
-      --n-burnin-epochs <N_BURNIN_EPOCHS>
-          Number of burnin epochs (initial training epochs to discard) [default: 0]
-      --f-patient-epochs <F_PATIENT_EPOCHS>
-          Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping [default: 0.25]
-      --f-validation <F_VALIDATION>
-          Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs) [default: 0]
-      --n-batches <N_BATCHES>
-          Number of training batches to split the input data into [default: 2]
-      --learning-rate <LEARNING_RATE>
-          Learning rate (η) [default: 0.001]
-      --first-moment-decay <FIRST_MOMENT_DECAY>
-          First moment decay (β₁) [default: 0.001]
-      --second-moment-decay <SECOND_MOMENT_DECAY>
-          Second moment decay (β₁) [default: 0.999]
-      --epsilon <EPSILON>
-          Small value used for numerical stability (ϵ; usually to avoid dividing by zero) [default: 0.00000001]
-      --seed <SEED>
-          Randomisation seed [default: 123]
-  -o, --fname-network-output <FNAME_NETWORK_OUTPUT>
-          Filename of the output model (Default: "output_network-{%Y%m%d%H%M%S}.json")
-  -v, --verbose
-          Verbose
-      --hyperparameter-optimisation
-          Hyperparameter optimisation
-      --range-hidden-layers <RANGE_HIDDEN_LAYERS>
-          Range of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1,2,1]
-      --range-hidden-layer-nodes <RANGE_HIDDEN_LAYER_NODES>
-          Range of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 100,100,100]
-      --range-dropout-rates <RANGE_DROPOUT_RATES>
-          Range of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0.0,0.0,0.01]
-      --range-learning-rates <RANGE_LEARNING_RATES>
-          Range of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1e-3,1e-3,1e-3]
-      --range-n-epochs <RANGE_N_EPOCHS>
-          Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 10,10,10]
-      --range-n-burnin-epochs <RANGE_N_BURNIN_EPOCHS>
-          Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0,1,1]
-      --range-f-patient-epochs <RANGE_F_PATIENT_EPOCHS>
-          Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 0.5,1.0,0.5]
-      --range-f-validation <RANGE_F_VALIDATION>
-          Range of proportions of the observations to be used in within training validation set [default: 0.0,0.25,0.01]
-      --range-n-batches <RANGE_N_BATCHES>
-          Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size) [default: 1,2,1]
-      --selection-activations <SELECTION_ACTIVATIONS>
-          Activation functions to test [default: ReLU]
-      --selection-costs <SELECTION_COSTS>
-          Cost functions to test [default: MSE]
-      --selection-optimisers <SELECTION_OPTIMISERS>
-          Optimisers to test [default: GradientDescent,Adam]
-      --predict-only
-          Predict using a fitted network (fitted MLP model)
-  -m, --model <MODEL>
-          File name of the MLP model in JSON format
-  -M, --marginals-only
-          Marginal effects estimation only
-      --skip-marginals
-          
-      --marginals-order <MARGINALS_ORDER>
-          Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on [default: 1]
-      --n-interpolate-min-max <N_INTERPOLATE_MIN_MAX>
-          Number of input values across the observed range per feature (or input node) to use in predictions i.e. number of values for interpolate between minimum and maximum values observed in each feature or input node [default: 10]
-  -D, --deep-shap
-          Use DeepSHAP instead of the perturbation method Note that the current implementation of DeepSHAP generates only main effects and no interaction effects. Do not enable this flag to use the default perturbation method if you require marginal interaction effects
-      --deep-shap-reps <DEEP_SHAP_REPS>
-          Number of replications for DeepSHAP main effects estimation Each replication samples feature values from their normally distributed values [default: 10]
-  -s, --simulate-data-only
-          Simulate data only
-  -n, --simulation-n-observations <SIMULATION_N_OBSERVATIONS>
-          Number of observations to simulate [default: 100]
-  -p, --simulation-n-features-continuous <SIMULATION_N_FEATURES_CONTINUOUS>
-          Number of continuous features to simulate [default: 10]
-  -q, --simulation-n-features-categorical <SIMULATION_N_FEATURES_CATEGORICAL>
-          Number of continuous features to simulate [default: 2,3,5]
-  -k, --simulation-n-output-columns <SIMULATION_N_OUTPUT_COLUMNS>
-          Number of simulated output column [default: 1]
-  -l, --simulation-n-hidden-layers <SIMULATION_N_HIDDEN_LAYERS>
-          Number of hidden layers to use to simulate the output data [default: 2]
-      --simulation-weights-distribution <SIMULATION_WEIGHTS_DISTRIBUTION>
-          Two-parameter distribution from which the simulated weights will be sample from Select from: "normal","lognormal","cauchy","weibull","gamma","beta" [default: normal]
-      --simulation-weights-distribution-param-1 <SIMULATION_WEIGHTS_DISTRIBUTION_PARAM_1>
-          First parameter of the distribution from which the weights will be sampled from [default: 0]
-      --simulation-weights-distribution-param-2 <SIMULATION_WEIGHTS_DISTRIBUTION_PARAM_2>
-          First parameter of the distribution from which the weights will be sampled from [default: 1]
-  -h, --help
-          Print help (see more with '--help')
-  -V, --version
-          Print version
+Download the binary compatible with your hardware:
+
+- [Linux x86 with NVIDIA H100 or NVIDIA V100](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp)
+
+This list is severely limited at the moment, but please feel free to build it from source. The [instructions are found below](#development-setup).
+
+## Quick demo
+
+Simulate data, fit, and extract marginal effects (`-v` for verbose):
+
+```shell
+./mlp -v
 ```
 
-# Development setup
+## Using default hyperparameters
+
+Using the default hyperparamereters should suffice for trial analyses where the main objective is the estimation of the ranks of the entries, treatments, sites, etc.
+
+1. Simulate a field trial dataset:
+
+```shell
+INPUT="input.tsv"
+time \
+./mlp \
+    --simulate-data-only \
+    --simulation-fname-output=$INPUT \
+    --simulation-n-observations $(echo "2*3*5*6*10" | bc) \
+    --simulation-n-features-continuous 0 \
+    --simulation-n-features-categorical 2,3,5,6,10 \
+    --simulation-n-output-columns 1 \
+    --verbose
+```
+
+2. Fit without extracting marginal effects:
+
+```shell
+INPUT="input.tsv"
+OUTPUT="output.json"
+./mlp -f $INPUT -o $OUTPUT --skip-marginals
+```
+
+3. Extract marginal effects:
+
+```shell
+INPUT="input.tsv"
+OUTPUT="output.json"
+./mlp --marginals-only --model $OUTPUT -f $INPUT
+cat ${OUTPUT%.json*}-marginal_effects.tsv
+```
+
+## Using fixed hyperparameters
+
+Here we demonstrate fitting a dataset with more predictors than observations using fixed hyperparameters where our objective is prediction rather than description, i.e. we do not intend to estimate marginal effects.
+
+1. Simulate a genomic prediction dataset:
+
+```shell
+INPUT="input_n1k.tsv"
+time \
+./mlp \
+    --simulate-data-only \
+    --simulation-fname-output=$INPUT \
+    --simulation-n-observations 1000 \
+    --simulation-n-features-continuous 23000 \
+    --simulation-n-features-categorical 0 \
+    --simulation-n-output-columns 1 \
+    --simulation-n-hidden-layers 2 \
+    --simulation-weights-distribution normal \
+    --simulation-weights-distribution-param-1 0.0 \
+    --simulation-weights-distribution-param-2 0.01 \
+    --verbose
+head  $INPUT | cut -f1-5
+head -n901 $INPUT > ${INPUT%.tsv*}-TRAINING.tsv
+head -n1 $INPUT > ${INPUT%.tsv*}-VALIDATION.tsv
+tail -n100 $INPUT >> ${INPUT%.tsv*}-VALIDATION.tsv
+```
+
+2. Fit the training set without extracting marginal effects:
+(**Note**: make sure to use the `--skip-marginals` flag because with large number of predictors, extracting marginal effects of each will take a long time)
+
+```shell
+INPUT="input_n1k-TRAINING.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    -f $INPUT \
+    -o $OUTPUT \
+    --n-batches=1 \
+    --n-hidden-layers=2 \
+    --n-hidden-nodes=1024,128 \
+    --n-epochs=1000 \
+    --n-burnin-epochs=10 \
+    --f-patient-epochs=0.1 \
+    --f-validation=0.1 \
+    --skip-marginals \
+    --verbose
+```
+
+3. Predict the validation set
+
+```shell
+INPUT_TO_PREDICT="input_n1k-VALIDATION.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    --predict-only \
+    -f $INPUT_TO_PREDICT \
+    --model $OUTPUT \
+    --verbose
+# Extract true and predicted values for assessment
+PREDICTIONS=${OUTPUT%.json*}-predictions.tsv
+cut -f1 $INPUT_TO_PREDICT > TRUE.tmp
+cut -f1 $PREDICTIONS > PREDICTED.tmp
+paste -d'\t' TRUE.tmp PREDICTED.tmp > TRUE_VS_PREDICTED.tsv
+rm TRUE.tmp PREDICTED.tmp
+```
+
+4. Assess prediction:
+
+```R
+df = read.delim("TRUE_VS_PREDICTED.tsv", header=TRUE)
+colnames(df) <- c("true", "predicted")
+cor(df$true, df$predicted)
+txtplot::txtplot(df$true, df$predicted)
+```
+
+## Using hyperparameter optimisation
+
+We also demonstrate fitting a dataset with more predictors than observations but now using hyperparameter optimisation.
+
+1. Simulate a genomic prediction dataset:
+
+```shell
+INPUT="input_n1k.tsv"
+time \
+./mlp \
+    --simulate-data-only \
+    --simulation-fname-output=$INPUT \
+    --simulation-n-observations 1000 \
+    --simulation-n-features-continuous 23000 \
+    --simulation-n-features-categorical 0 \
+    --simulation-n-output-columns 1 \
+    --simulation-n-hidden-layers 2 \
+    --simulation-weights-distribution normal \
+    --simulation-weights-distribution-param-1 0.0 \
+    --simulation-weights-distribution-param-2 0.01 \
+    --verbose
+head  $INPUT | cut -f1-5
+head -n901 $INPUT > ${INPUT%.tsv*}-TRAINING.tsv
+head -n1 $INPUT > ${INPUT%.tsv*}-VALIDATION.tsv
+tail -n100 $INPUT >> ${INPUT%.tsv*}-VALIDATION.tsv
+```
+
+2. Fit the training set without extracting marginal effects:
+(**Note**: again make sure to use the `--skip-marginals` flag because with large number of predictors, extracting marginal effects of each will take a long time)
+
+```shell
+INPUT="input_n1k-TRAINING.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    -f $INPUT \
+    -o $OUTPUT \
+    --hyperparameter-optimisation \
+    --range-hidden-layers=1,2,1 \
+    --range-hidden-layer-nodes=100,1000,900 \
+    --range-dropout-rates=0.0,0.0,0.01 \
+    --range-learning-rates=1e-3,1e-3,1e-3 \
+    --range-n-epochs=1000,1000,1000 \
+    --range-n-burnin-epochs=10,10,10 \
+    --range-f-patient-epochs=0.1,0.1,0.1 \
+    --range-f-validation=0.0,0.2,0.1 \
+    --range-n-batches=1,1,1 \
+    --selection-activations=ReLU \
+    --selection-costs=MSE \
+    --selection-optimisers=Adam \
+    --selection-weights-initialisations=He,Cauchy \
+    --skip-marginals \
+    --verbose
+```
+
+3. Predict the validation set
+
+```shell
+INPUT_TO_PREDICT="input_n1k-VALIDATION.tsv"
+OUTPUT="output_n1k.json"
+time \
+./mlp \
+    --predict-only \
+    -f $INPUT_TO_PREDICT \
+    --model $OUTPUT \
+    --verbose
+# Extract true and predicted values for assessment
+PREDICTIONS=${OUTPUT%.json*}-predictions.tsv
+cut -f1 $INPUT_TO_PREDICT > TRUE.tmp
+cut -f1 $PREDICTIONS > PREDICTED.tmp
+paste -d'\t' TRUE.tmp PREDICTED.tmp > TRUE_VS_PREDICTED.tsv
+rm TRUE.tmp PREDICTED.tmp
+```
+
+4. Assess prediction:
+
+```R
+df = read.delim("TRUE_VS_PREDICTED.tsv", header=TRUE)
+colnames(df) <- c("true", "predicted")
+cor(df$true, df$predicted)
+txtplot::txtplot(df$true, df$predicted)
+```
+
+# Build from source code
 
 1. Install [pixi](https://pixi.prefix.dev/):
 
@@ -147,111 +246,7 @@ which cargo
 ls -lhtr ${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib/libnvrtc*
 ```
 
-# Unit testing
-
-```shell
-cd mlp
-pixi shell
-# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
-time cargo test -- --show-output
-```
-
-# More testing
-
-```shell
-cd mlp
-pixi shell
-# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib
-time cargo run -- -h
-time cargo run -- -s -n1000 -p10 -v
-
-
-# TESTING CROSS-VALIDATION FOR N << P DATASETS
-time cargo run -- -s -n100 -p2000 -q0 -v
-# time cargo run -- -s -n500 -p12000 -q0 -v # 13 minutes on gpu001: Intel(R) Xeon(R) Gold 5418Y 24 cores with 1 NVIDIA H100 NVL (93.584Gi)
-INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-N=$(cat $INPUT | wc -l)
-V=$(printf %.0f $(echo  "scale=0; $N * 0.1" | bc))
-T=$(echo  "$N - $V" | bc)
-
-echo $N
-echo $V
-echo $T
-
-head -n$T $INPUT > training_data.tsv
-head -n1 $INPUT > validation_data.tsv
-tail -n$V $INPUT >> validation_data.tsv
-time cargo run -- -f training_data.tsv -o output.json -v --n-batches=1 --n-epochs=1000 --f-patient-epochs=0.5 --skip-marginals
-time cargo run -- -f validation_data.tsv -m output.json -v --predict-only
-PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
-echo $PREDICTED
-
-cut -f1 validation_data.tsv > true.tmp
-cut -f1 $PREDICTED > pred.tmp
-paste -d'\t' true.tmp pred.tmp > true_vs_pred.tsv
-head true_vs_pred.tsv
-
-# R --> ...
-# df = read.table("true_vs_pred.tsv", T)
-# cor(df)
-# plot(df[, 1], df[, 2])
-# dev.off()
-
-
-
-INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-head $INPUT | cut -f1-10
-head -n1 $INPUT | awk '{print NF}'
-time cargo run -- -f $INPUT -v --n-batches=1 --n-epochs=1000 --skip-marginals
-MODEL=$(ls -t1 | grep "output.*.json" | head -n1)
-head $MODEL | cut -f1-10
-tail $MODEL | cut -f1-10
-time cargo run -- -f $INPUT -v -m $MODEL --predict-only
-PREDICTED=$(ls -t1 | grep "output.*-predictions.tsv" | tail -n1)
-head $PREDICTED | cut -f1-10
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=1
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS marginal_main.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=2
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS marginal_2nd.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --marginals-order=3
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS marginal_3rd.tsv
-time cargo run -- -f $INPUT -v -m $MODEL --marginals-only --deep-shap --deep-shap-reps=100
-MARGINALS=$(ls -t1 | grep "output.*-marginal_effects.tsv" | head -n1)
-mv $MARGINALS deep_shap.tsv
-head marginal_main.tsv
-head marginal_2nd.tsv
-head marginal_3rd.tsv
-head deep_shap.tsv
-
-
-# time cargo run -- -s -n1000 -p10 -v
-# INPUT=$(ls -t1 | grep "input.*.tsv" | head -n1)
-# time cargo run -- \
-#    -f $INPUT \
-#    -o OUTPUT.tmp.json \
-#    -v \
-#    --hyperparameter-optimisation \
-#    --range-hidden-layers="1,1,1" \
-#    --range-hidden-layer-nodes="700,700,700" \
-#    --range-dropout-rates="0.0,0.0,0.01" \
-#    --range-learning-rates="1e-5,1e-5,1e-5" \
-#    --range-n-epochs="1000,1000,1000" \
-#    --range-n-burnin-epochs="100,100,100" \
-#    --range-f-patient-epochs="0.01,0.01,0.01" \
-#    --range-f-validation="0.1,0.1,0.1" \
-#    --range-n-batches="1,1,1" \
-#    --selection-costs="MSE" \
-#    --selection-optimisers="Adam,GradientDescent" \
-#    --selection-activations="ReLU,Linear" \
-#    --selection-weights-initialisations="He,Cauchy" \
-#    --skip-marginals
-
-```
-
-# Compile for release
+4. Build:
 
 ```shell
 cd mlp
@@ -259,43 +254,92 @@ cargo build --release
 ./target/release/mlp -h
 ```
 
-# Example Fits
+# Unit testing
 
-Using 2 hidden layers, 128 nodes per hidden layer, ReLU activation, Adam optimiser, 0.001 learning rate and, 25% patient epochs:
+```shell
+cd mlp
+pixi shell
+# export LD_LIBRARY_PATH=${PIXI_PROJECT_ROOT}/.pixi/envs/default/lib # in case the dynamic linker library is not in the path
+time cargo test -- --show-output
+```
 
-## 10 Epochs
+# Data formats
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E10-FPE0.25-B1-LR0.001-T20260408052818.svg)
+1. Input data:
+    - Default format is `TSV` (tab-delimited); other delimiters are supported via `-d` or `--delim`
+    - The first column is assumed to contain numeric response values, but you may use one or more target columns anywhere in the file
+    - Remaining columns are explanatory variables:
+      + numeric → continuous or binary
+      + non-numeric → categorical factor levels, converted to binary via one-hot encoding
+    - See example: [`./misc/input_simulated-T20260527230243-R43101535.tsv`](./misc/input_simulated-T20260527230243-R43101535.tsv)
 
-## 20 Epochs
+2. Model:
+    - `JSON`: network model exported from the `Network` struct
+    - `n_observations` (usize): number of observations
+    - `n_features` (usize): number of input features
+    - `n_targets` (usize): number of output dimensions
+    - `n_hidden_layers` (usize): number of hidden layers
+    - `n_hidden_nodes` (Vec<usize>): nodes per hidden layer
+    - `dropout_rates` (Vec<f32>): dropout rate for each hidden layer
+    - `targets` (Vec<f32>): observed values, standardised
+    - `targets_mean_sd` (f32,f32): mean and standard deviation of targets
+    - `predictions` (Vec<f32>): predicted values
+    - `weights_per_layer` (Vec<Vec<f32>>): weight matrices by layer
+    - `biases_per_layer` (Vec<Vec<f32>>): bias vectors by layer
+    - `weights_x_biases_per_layer` (Vec<Vec<f32>>): pre-activation sums by layer
+    - `activations_per_layer` (Vec<Vec<f32>>): layer outputs, including input layer
+    - `weights_gradients_per_layer` (Vec<Vec<f32>>): weight gradients by layer
+    - `biases_gradients_per_layer` (Vec<Vec<f32>>): bias gradients by layer
+    - `activation` (String): activation function
+    - `cost` (String): cost function
+    - `weights_initialisation` (String): weights initialisation method (He, Cauchy, Uniform, StandardNormal)
+    - `n_epochs` (usize): number of training epochs
+    - `seed` (usize): random seed used for dropouts
+    - `loss` (f32): mean loss (not part of the actual `Network` struct)
+    - See example: [`./misc/output_network-T20260527230245-R616739134.json`](./misc/output_network-T20260527230245-R616739134.json)
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E20-FPE0.25-B1-LR0.001-T20260408052908.svg)
+3. Predictions: same as the input format, but response columns hold predicted values
 
-## 50 Epochs
+4. Marginal effects:
+    - `TSV`: tab-delimited
+    - Estimates come from perturbation or SHAP methods
+    - See example: [`./misc/output_network-T20260527230245-R616739134-marginal_effects.tsv`](./misc/output_network-T20260527230245-R616739134-marginal_effects.tsv)
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E50-FPE0.25-B1-LR0.001-T20260408053111.svg)
+5. Figures/plots:
+    - `SVG`: loss curve and observed vs predicted scatterplot
+    - `PNG`: marginal effects barplot
+    - See examples: 
+      + [`./misc/Loss_curve-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R3399378659.svg`](./misc/Loss_curve-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R3399378659.svg)
+      + [`./misc/Observed_vs_predicted-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R13995183.svg`](./misc/Observed_vs_predicted-ReLU-MSE-He-Adam-HL1-HN[128]-E1000-BE0-FPE0.01-FV0-B2-LR0.001-T20260527230245-R13995183.svg)
+      + [`./misc/Marginal_effects-T20260527230245-R3240974675.png`](./misc/Marginal_effects-T20260527230245-R3240974675.png)
 
-## 100 Epochs
+6. Special characters
+    - Used in progress bars: `█`
+    - Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
+    - Used as delimiters in marginals' combinations: `▓`
 
-![](./misc/Observed_vs_predicted-HL2-ReLU-Adam-E100-FPE0.25-B1-LR0.001-T20260408053517.svg)
+# Benchmarking
 
-# Special characters
+Install Snakemake:
 
-- Used in progress bars: `█`
-- Used as delimiters between non-numeric or categorical variable names and their levels: `➵`
-- Used as delimiters in marginals' combinations: `▓`
+```shell
+pixi global install snakemake conda -c conda-forge -c bioconda
+```
 
-# Systematic testing workflow using Snakemake
+Run the workflow:
+
+*Note*: comment-out the modelling part in `rule all` to use more compute cores and speed-up simulations and empirical data preparations, 
+after which uncomment them and run with less cores to avoid running out of GPU memory.
 
 ```shell
 cd mlp/
-pixi shell
-snakemake --lint
-snakemake -n # or --dry-run
 N_CORES=24
 # N_CORES=3
-time snakemake --cores $N_CORES
-# time pixi run snakemake --cores $N_CORES
+time pixi run snakemake --cores $N_CORES --use-conda
+# ### Debugging and development
+# pixi shell
+# snakemake --lint
+# snakemake -n # or --dry-run
 ```
 
 # TODO: Remote-sensing modelling

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="640" height="480" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="clip1"><rect x="96.00" y="57.60" width="467.20" height="350.40"/></clipPath>
+  </defs>
+  <rect x="0.00" y="0.00" width="640.00" height="480.00" fill="rgb(255,255,255)"/>
+  <line x1="122.65" y1="57.60" x2="122.65" y2="408.00" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <line x1="236.37" y1="57.60" x2="236.37" y2="408.00" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <line x1="350.09" y1="57.60" x2="350.09" y2="408.00" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <line x1="463.81" y1="57.60" x2="463.81" y2="408.00" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <line x1="96.00" y1="332.00" x2="563.20" y2="332.00" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <line x1="96.00" y1="224.93" x2="563.20" y2="224.93" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <line x1="96.00" y1="117.85" x2="563.20" y2="117.85" stroke="rgba(204,204,204,0.298)" stroke-width="0.50"  stroke-linecap="round"/>
+  <rect x="96.00" y="57.60" width="467.20" height="350.40" fill="none" stroke="rgb(0,0,0)" stroke-width="1"/>
+  <line x1="96.00" y1="408.00" x2="563.20" y2="408.00" stroke="rgb(0,0,0)" stroke-width="1.50"  stroke-linecap="round"/>
+  <line x1="96.00" y1="57.60" x2="96.00" y2="408.00" stroke="rgb(0,0,0)" stroke-width="1.50"  stroke-linecap="round"/>
+  <line x1="122.65" y1="408.00" x2="122.65" y2="414.00" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <line x1="236.37" y1="408.00" x2="236.37" y2="414.00" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <line x1="350.09" y1="408.00" x2="350.09" y2="414.00" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <line x1="463.81" y1="408.00" x2="463.81" y2="414.00" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <line x1="96.00" y1="332.00" x2="90.00" y2="332.00" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <line x1="96.00" y1="224.93" x2="90.00" y2="224.93" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <line x1="96.00" y1="117.85" x2="90.00" y2="117.85" stroke="rgb(0,0,0)" stroke-width="1.00"  stroke-linecap="round"/>
+  <text x="122.65" y="423.00" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central">-2</text>
+  <text x="236.37" y="423.00" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central">-1</text>
+  <text x="350.09" y="423.00" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central">0</text>
+  <text x="463.81" y="423.00" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central">1</text>
+  <text x="88.00" y="332.00" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="end" dominant-baseline="central">-1</text>
+  <text x="88.00" y="224.93" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="end" dominant-baseline="central">0</text>
+  <text x="88.00" y="117.85" font-family="sans-serif" font-size="10.0" fill="rgb(0,0,0)" text-anchor="end" dominant-baseline="central">1</text>
+  <g clip-path="url(#clip1)">
+  <circle cx="249.35" cy="328.39" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="248.57" cy="312.77" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="386.09" cy="200.42" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="285.90" cy="279.06" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="386.81" cy="207.91" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="203.37" cy="301.13" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="446.95" cy="117.77" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="401.32" cy="206.81" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="176.88" cy="305.88" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="511.74" cy="98.33" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="439.64" cy="158.14" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="563.20" cy="83.12" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="260.88" cy="295.39" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="202.94" cy="332.86" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="155.43" cy="367.30" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="319.80" cy="245.63" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="371.73" cy="223.87" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="311.85" cy="249.69" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="402.93" cy="212.58" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="505.50" cy="130.78" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="215.58" cy="317.17" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="468.12" cy="125.80" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="430.07" cy="112.59" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="408.58" cy="165.66" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="411.51" cy="194.61" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="396.36" cy="176.71" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="323.52" cy="259.04" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="484.03" cy="75.59" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="447.81" cy="145.19" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="416.91" cy="88.77" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="182.95" cy="383.47" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="128.38" cy="374.21" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="266.02" cy="288.89" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="236.68" cy="301.06" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="366.63" cy="229.02" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="382.62" cy="190.89" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="454.08" cy="160.59" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="422.92" cy="146.98" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="345.64" cy="201.60" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="459.96" cy="93.66" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="382.38" cy="169.72" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="489.32" cy="76.31" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="302.06" cy="284.38" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="251.27" cy="278.43" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="269.85" cy="293.51" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="346.26" cy="216.75" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="96.00" cy="387.33" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="200.72" cy="330.87" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="267.49" cy="293.46" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="461.65" cy="177.25" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="476.59" cy="179.81" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="251.13" cy="293.69" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="449.14" cy="141.82" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="488.00" cy="138.62" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="380.54" cy="228.50" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="484.60" cy="79.28" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="440.01" cy="131.60" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="456.87" cy="114.80" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="354.31" cy="236.80" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="482.70" cy="151.55" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="223.07" cy="337.08" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="169.30" cy="370.00" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="124.14" cy="374.93" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="281.43" cy="261.82" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="165.40" cy="347.22" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="279.10" cy="280.10" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="431.86" cy="184.47" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="331.87" cy="233.61" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="442.31" cy="164.69" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="504.36" cy="69.23" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="435.80" cy="117.70" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="510.88" cy="119.25" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="339.34" cy="262.88" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="143.74" cy="355.87" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="352.62" cy="251.34" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="404.42" cy="165.81" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="397.18" cy="187.11" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="233.83" cy="313.64" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="261.51" cy="314.72" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="287.30" cy="249.28" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="474.37" cy="172.88" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="396.30" cy="173.27" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="406.28" cy="180.09" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="242.52" cy="288.97" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="401.08" cy="162.41" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="460.17" cy="136.32" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="461.11" cy="155.39" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="390.08" cy="150.89" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="382.81" cy="234.79" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="534.56" cy="109.78" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="181.09" cy="370.82" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="176.22" cy="331.68" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="242.76" cy="286.01" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="207.22" cy="329.37" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="380.09" cy="231.32" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="206.39" cy="280.44" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="492.61" cy="129.55" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="287.87" cy="276.64" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="413.63" cy="168.62" r="3.00" fill="rgb(31,119,180)"/>
+  <circle cx="541.99" cy="57.60" r="3.00" fill="rgb(31,119,180)"/>
+  <polyline points="96.00,408.00 100.72,404.52 105.44,401.05 110.16,397.57 114.88,394.09 119.60,390.62 124.32,387.14 129.03,383.66 133.75,380.19 138.47,376.71 143.19,373.23 147.91,369.76 152.63,366.28 157.35,362.80 162.07,359.33 166.79,355.85 171.51,352.37 176.23,348.90 180.95,345.42 185.66,341.94 190.38,338.47 195.10,334.99 199.82,331.51 204.54,328.04 209.26,324.56 213.98,321.08 218.70,317.61 223.42,314.13 228.14,310.65 232.86,307.18 237.58,303.70 242.29,300.22 247.01,296.75 251.73,293.27 256.45,289.79 261.17,286.32 265.89,282.84 270.61,279.36 275.33,275.89 280.05,272.41 284.77,268.94 289.49,265.46 294.21,261.98 298.93,258.51 303.64,255.03 308.36,251.55 313.08,248.08 317.80,244.60 322.52,241.12 327.24,237.65 331.96,234.17 336.68,230.69 341.40,227.22 346.12,223.74 350.84,220.26 355.56,216.79 360.27,213.31 364.99,209.83 369.71,206.36 374.43,202.88 379.15,199.40 383.87,195.93 388.59,192.45 393.31,188.97 398.03,185.50 402.75,182.02 407.47,178.54 412.19,175.07 416.91,171.59 421.62,168.11 426.34,164.64 431.06,161.16 435.78,157.68 440.50,154.21 445.22,150.73 449.94,147.25 454.66,143.78 459.38,140.30 464.10,136.82 468.82,133.35 473.54,129.87 478.25,126.39 482.97,122.92 487.69,119.44 492.41,115.96 497.13,112.49 501.85,109.01 506.57,105.53 511.29,102.06 516.01,98.58 520.73,95.10 525.45,91.63 530.17,88.15 534.88,84.67 539.60,81.20 544.32,77.72 549.04,74.24 553.76,70.77 558.48,67.29 563.20,63.81" fill="none" stroke="rgb(255,127,14)" stroke-width="1.50" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="320.00" y="28.80" font-family="sans-serif" font-size="14.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central">Observed vs Predicted Values
+(n=100; MSE=0.10; R2=0.90; cor=0.96)</text>
+  <text x="329.60" y="470.00" font-family="sans-serif" font-size="11.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central">Observed</text>
+  <text x="15.00" y="232.80" font-family="sans-serif" font-size="11.0" fill="rgb(0,0,0)" text-anchor="middle" dominant-baseline="central" transform="rotate(-90.0,15.00,232.80)">Predicted</text>
+</svg>
