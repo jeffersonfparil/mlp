@@ -56,9 +56,6 @@ get_params <- function(args) {
   if (!dir.exists(dirname_output)) {
     stop(paste0("ERROR: The output directory '", dirname_output, "' does not exist."))
   }
-  if (!file.exists(args[4])) {
-    stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
-  }
   params <- list(
     analysis_type = analysis_type,
     fname_input = fname_input,
@@ -87,6 +84,9 @@ get_params <- function(args) {
       params$trials$exclude_sommer <- if (args[6] == "TRUE") TRUE else FALSE
       params$trials$verbose <- if (args[7] == "TRUE") TRUE else FALSE
     } else if (analysis_type == "gp") {
+      if (!file.exists(args[4])) {
+        stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
+      }
       params$gp$fname_randomisation <- args[4]
       params$gp$n_reps <- if (!is.na(args[5]) && !is.na(as.numeric(args[5]))) as.numeric(args[5]) else 3
       params$gp$n_folds <- if (!is.na(args[6]) && !is.na(as.numeric(args[6]))) as.numeric(args[6]) else 10

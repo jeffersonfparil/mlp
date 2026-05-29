@@ -56,8 +56,8 @@ for REP in $(seq 1 $N_REPS); do
                 IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
             fi
         done
-        # echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-        # echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
+        echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
+        echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
         echo "${IDX_TRAINING[@]}" | sed -z 's/ /\n/g' | sort -n | sed -z 's/\n/,/g' | sed -z 's/^,//g' | sed -z 's/,$/\n/g' >> $OUTPUT_CSV
         echo "${IDX_VALIDATION[@]}" | sed -z 's/ /\n/g' | sort -n | sed -z 's/\n/,/g' | sed -z 's/^,//g' | sed -z 's/,$/\n/g' >> $OUTPUT_CSV
     done

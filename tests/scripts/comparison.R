@@ -1,16 +1,3 @@
-args <- commandArgs(trailingOnly = TRUE)
-if (args[1] == "-h" || args[1] == "--help") {
-  cat("Usage: Rscript comparison.R ANALYSIS_TYPE FNAME_LINEAR FNAME_MLP DIRNAME_OUTDIR\n")
-  cat("Arguments:\n")
-  cat("\t1. ANALYSIS_TYPE:\n")
-  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
-  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
-  cat("\t2. FNAME_LINEAR: The file name for the linear model results.\n")
-  cat("\t3. FNAME_MLP: The file name for the MLP model results.\n")
-  cat("\t4. DIRNAME_OUTDIR: The output directory name.\n")
-  quit(status = 0)
-}
-
 get_params <- function(args) {
   if (length(args) != 4) {
     stop("Error: Incorrect number of arguments. Use -h or --help for usage information.")
@@ -170,6 +157,18 @@ compare_gp_analyses <- function(params) {
 ###########################################################
 # Execute
 ###########################################################
+args <- commandArgs(trailingOnly = TRUE)
+if (args[1] == "-h" || args[1] == "--help") {
+  cat("Usage: Rscript comparison.R ANALYSIS_TYPE FNAME_LINEAR FNAME_MLP DIRNAME_OUTDIR\n")
+  cat("Arguments:\n")
+  cat("\t1. ANALYSIS_TYPE:\n")
+  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
+  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
+  cat("\t2. FNAME_LINEAR: The file name for the linear model results.\n")
+  cat("\t3. FNAME_MLP: The file name for the MLP model results.\n")
+  cat("\t4. DIRNAME_OUTDIR: The output directory name.\n")
+  quit(status = 0)
+}
 # Testing: source("tests/scripts/comparison.R")
 # args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-MLP.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials")
 # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-HT-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-HT-MLP.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp")

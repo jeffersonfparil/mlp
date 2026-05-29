@@ -25,8 +25,8 @@ EXCLUDE_LM = "FALSE"
 EXCLUDE_SOMMER = "TRUE"
 N_FOLDS = 5
 N_REPS = 3
-N_ITERATIONS_LINEAR = 6000
-N_BURNIN_ITERATIONS_LINEAR = 1000
+N_ITERATIONS_LINEAR = 100
+N_BURNIN_ITERATIONS_LINEAR = 10
 # N_EPOCHS_MLP = 1000
 # N_BURNIN_EPOCHS_MLP = 100
 MODELS = "BRR,BayesA"
@@ -112,6 +112,36 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-LINEAR.tsv")
     return final_files
 
+def XGBOOST_ANALYSIS_OUTPUT(wildcards):
+    final_files = []
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/trials/output-simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}-XGBOOST.tsv",
+        year=N_YEARS, site=N_SITES, treatment=N_TREATMENTS, entry=N_ENTRIES, replication=N_REPLICATIONS, hidden_layer=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
+    simulated_targets = expand(
+        f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-XGBOOST.tsv",
+        data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+    )
+    final_files.extend(simulated_targets)
+    for fname in TRIALS_AGRIDAT_FNAMES:
+        manifest_path = checkpoints.empiricalprep_trials.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{dataset_base}-XGBOOST.tsv")
+    for fname in GP_AZODI2019_FNAMES:
+        manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
+        with open(manifest_path, "r") as f:
+            for line in f:
+                filename = line.strip()
+                if filename.endswith(".tsv"):
+                    dataset_base = filename.replace(".tsv", "")
+                    final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-XGBOOST.tsv")
+    return final_files
+
 def MLP_ANALYSIS_OUTPUT(wildcards):
     final_files = []
     simulated_targets = expand(
@@ -158,7 +188,8 @@ rule all:
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
         RANDOMISATION_GP_OUTPUT,
-        # LINEAR_ANALYSIS_OUTPUT,
+        LINEAR_ANALYSIS_OUTPUT,
+        # XGBOOST_ANALYSIS_OUTPUT,
         # MLP_ANALYSIS_OUTPUT,
         # COMPARISONS_OUTPUT
 
@@ -302,6 +333,7 @@ rule linear_analysis:
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         exclude_lm = EXCLUDE_LM,
         exclude_sommer = EXCLUDE_SOMMER,
+        randomisation=f"{ROOT_OUTDIR}/gp/output-{{fname}}-RANDOMISATION.tsv",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
         n_iterations = N_ITERATIONS_LINEAR,
@@ -336,6 +368,7 @@ rule linear_analysis:
                 gp \
                 {input} \
                 {params.outdir} \
+                {params.randomisation} \
                 {params.n_reps} \
                 {params.n_folds} \
                 {params.n_iterations} \
@@ -343,6 +376,44 @@ rule linear_analysis:
                 {params.models} \
                 {params.base_seed} \
                 {params.verbose} > {log}
+        fi;
+        """
+
+rule xgboost_analysis:
+    input:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv"
+    output:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-XGBOOST.tsv",
+    params:
+        scripts_dir=SCRIPTS_DIR,
+        outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
+        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
+        n_reps = N_REPS,
+        n_folds = N_FOLDS,
+    log:
+        f"{ROOT_OUTDIR}/{{analysis_type}}/xgboost_analysis-{{fname}}.log"
+    conda:
+        "conda.yaml"
+    shell:
+        """
+        if [[ {wildcards.analysis_type} == "trials" ]]; then
+            time \
+            python {params.scripts_dir}/xgboost.py \
+                trials \
+                {input} \
+                {params.outdir} \
+                "." \
+                {params.n_reps} \
+                {params.n_folds} > {log}
+        else
+            time \
+            python {params.scripts_dir}/xgboost.py \
+                gp \
+                {input} \
+                {params.outdir} \
+                {params.randomisation} \
+                {params.n_reps} \
+                {params.n_folds} > {log}
         fi;
         """
 
@@ -355,6 +426,7 @@ rule mlp_analysis:
         mlp=MLP,
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
+        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
         base_seed = BASE_SEED
@@ -378,6 +450,7 @@ rule mlp_analysis:
                 gp \
                 {input} \
                 {params.outdir} \
+                {params.randomisation} \
                 {params.n_reps} \
                 {params.n_folds} \
                 {params.base_seed} > {log}
@@ -402,7 +475,7 @@ rule comparisons:
         time \
         Rscript {params.scripts_dir}/comparison.R \
             {wildcards.analysis_type} \
-            {input.linear} \
-            {input.mlp} \
+            {inputlinear} \
+            {inputmlp} \
             {params.outdir} > {log}
         """
