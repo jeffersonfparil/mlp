@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
-import xgboost as xgb
 from sklearn.preprocessing import OneHotEncoder
+import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.datasets import make_regression
 from sklearn.metrics import root_mean_squared_error, r2_score
@@ -42,12 +42,6 @@ def get_params(args):
         raise FileNotFoundError(f"Input file {args.input_file} does not exist.")
     if not args.output_dir.exists():
         raise FileNotFoundError(f"Output directory {args.output_dir} does not exist.")
-    if not args.randomisation_input_file.exists():
-        raise FileNotFoundError(f"Randomisation input file {args.randomisation_input_file} does not exist.")
-    if (args.analysis_type == "gp") and (args.n_replicates <= 0):
-        raise ValueError("Number of replicates must be a positive integer.")
-    if (args.analysis_type == "gp") and (args.n_folds <= 1):
-        raise ValueError("Number of folds must be greater than 1.")
     if args.analysis_type == "trials":
         return {
             "analysis_type": args.analysis_type,
@@ -61,6 +55,12 @@ def get_params(args):
             # "early_stopping_rounds": 10,
         }
     else:
+        if not args.randomisation_input_file.exists():
+            raise FileNotFoundError(f"Randomisation input file {args.randomisation_input_file} does not exist.")
+        if (args.analysis_type == "gp") and (args.n_replicates <= 0):
+            raise ValueError("Number of replicates must be a positive integer.")
+        if (args.analysis_type == "gp") and (args.n_folds <= 1):
+            raise ValueError("Number of folds must be greater than 1.")
         return {
             "analysis_type": args.analysis_type,
             "input_file": args.input_file,
@@ -136,6 +136,7 @@ def extract_entries_effects(args):
     # Save as TSV
     fname_output = define_fname_output(args)
     global_effects.to_csv(fname_output, sep="\t", index=False)
+    print(f"Global effects saved to {fname_output}")
     return None
 
 def gp_repeated_kfold_cv(args):
@@ -187,4 +188,12 @@ def gp_repeated_kfold_cv(args):
             ], ignore_index=True)
     fname_output = define_fname_output(args)
     df_out.to_csv(fname_output, sep="\t", index=False)
+    print(f"GP results saved to {fname_output}")
     return None
+
+if __name__ == "__main__":
+    params = get_params(args)
+    if params["analysis_type"] == "trials":
+        extract_entries_effects(args)
+    else:
+        gp_repeated_kfold_cv(args)

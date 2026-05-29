@@ -189,7 +189,7 @@ rule all:
         GP_EMPIRICAL_INPUT,
         RANDOMISATION_GP_OUTPUT,
         LINEAR_ANALYSIS_OUTPUT,
-        # XGBOOST_ANALYSIS_OUTPUT,
+        XGBOOST_ANALYSIS_OUTPUT,
         # MLP_ANALYSIS_OUTPUT,
         # COMPARISONS_OUTPUT
 
@@ -398,7 +398,7 @@ rule xgboost_analysis:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
-            python {params.scripts_dir}/xgboost.py \
+            python {params.scripts_dir}/xgboost_script.py \
                 trials \
                 {input} \
                 {params.outdir} \
@@ -407,7 +407,7 @@ rule xgboost_analysis:
                 {params.n_folds} > {log}
         else
             time \
-            python {params.scripts_dir}/xgboost.py \
+            python {params.scripts_dir}/xgboost_script.py \
                 gp \
                 {input} \
                 {params.outdir} \
