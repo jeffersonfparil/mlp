@@ -1,45 +1,3 @@
-args <- commandArgs(trailingOnly = TRUE)
-if (args[1] == "-h" || args[1] == "--help") {
-  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
-  cat("Arguments:\n")
-  cat("\t1. ANALYSIS_TYPE:\n")
-  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
-  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
-  cat("\t2. FNAME_INPUT: The input file name which should not have any missing values, i.e. pre-filtered.\n")
-  cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
-  cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
-  cat("\t3. DIRNAME_OUTPUT: The output directory.\n")
-  cat("For trials analysis, additional arguments are:\n")
-  cat("\t\t4. is_simulated: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t5. exclude_lm: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t6. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t7. verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("For genomic prediction analysis, additional arguments are:\n")
-  cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
-  cat("\t\t5. n_reps: numeric (Default: 3)\n")
-  cat("\t\t6. n_folds: numeric (Default: 10)\n")
-  cat("\t\t7. n_iterations: numeric (Default: 1000)\n")
-  cat("\t\t8. n_burnin_iterations: numeric (Default: 100)\n")
-  cat("\t\t9. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
-  cat("\t\t10. verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("Examples:\n")
-  cat("DIR=${HOME}/Documents/mlp/tests\n")
-  cat("cd ${DIR}/scripts\n")
-  cat("mkdir tmp\n")
-  cat("###############\n")
-  cat("TRIALS ANALYSIS\n")
-  cat("###############\n")
-  cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
-  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE FALSE TRUE TRUE\n")
-  cat("###########################\n")
-  cat("GENOMIC PREDICTION ANALYSIS\n")
-  cat("###########################\n")
-  cat("MLP=${HOME}/Documents/mlp/target/release/mlp\n")
-  cat("sh simulate.sh $MLP gp tmp BINARY 100 50 2\n")
-  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDN_LAYERS_2-RANDOMISATION.tsv 3 5 100 10 'BRR,BayesA' TRUE\n")
-  quit(status = 0)
-}
-
 library("stringr")
 library("lme4")
 if (nzchar(system.file(package = "asreml"))) {
@@ -495,7 +453,7 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
     intercept <- effects[ids == "(Intercept)"]
     gen_effects <- c(intercept, intercept + effects[grepl("gen", ids)])
     gen_names <- c(
-      as.character(levels(df$gen)[1]),
+      paste0("gen", as.character(levels(df$gen)[1])),
       ids[grepl("gen", ids)]
     )
     gen_names <- gsub("^gen", "", gen_names)
@@ -509,7 +467,6 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
       effects = as.vector(coef(best_model)$random)
     )
     df_sub <- df_effects_temp[grepl("gen", df_effects_temp$ids) &
-
               !grepl(":", df_effects_temp$ids), ]
     df_sub$ids <- gsub("^gen_", "", df_sub$ids)
     df_sub
@@ -569,7 +526,7 @@ fit_extract_effects_for_simulated_data <- function(df, time_limit_seconds = 1, e
 
 #' Fit linear models and extract the genotype effects for empirical data by generating model strings based on features and calling fit_extract_effects.
 fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
-  # df = process_features(read.table(list.files(path = ".", pattern = ".tsv")[19], T))[[1]]; time_limit_seconds=1; exclude_lm=TRUE; exclude_sommer=TRUE; verbose=TRUE
+  # df = process_features(read.table(list.files(path = ".", pattern = ".tsv")[19], T))[[1]]; time_limit_seconds=1; exclude_lm=FALSE; exclude_sommer=TRUE; verbose=TRUE
   x_names <- colnames(df)[2:ncol(df)]
   x_names_except_gen_and_dummy_env <- x_names[(x_names != "gen") & (x_names != "dummy_env")]
   model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer)
@@ -717,7 +674,48 @@ misc_sim <- function() {
 ###########################################################
 # Execute
 ###########################################################
-# args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/ilri.sheep-birthwt.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials", "FALSE", "FALSE", "TRUE", "TRUE")
+args <- commandArgs(trailingOnly = TRUE)
+if (args[1] == "-h" || args[1] == "--help") {
+  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
+  cat("Arguments:\n")
+  cat("\t1. ANALYSIS_TYPE:\n")
+  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
+  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
+  cat("\t2. FNAME_INPUT: The input file name which should not have any missing values, i.e. pre-filtered.\n")
+  cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
+  cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
+  cat("\t3. DIRNAME_OUTPUT: The output directory.\n")
+  cat("For trials analysis, additional arguments are:\n")
+  cat("\t\t4. is_simulated: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t5. exclude_lm: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t6. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t7. verbose: TRUE/FALSE (Default: FALSE)\n")
+  cat("For genomic prediction analysis, additional arguments are:\n")
+  cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
+  cat("\t\t5. n_reps: numeric (Default: 3)\n")
+  cat("\t\t6. n_folds: numeric (Default: 10)\n")
+  cat("\t\t7. n_iterations: numeric (Default: 1000)\n")
+  cat("\t\t8. n_burnin_iterations: numeric (Default: 100)\n")
+  cat("\t\t9. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
+  cat("\t\t10. verbose: TRUE/FALSE (Default: FALSE)\n")
+  cat("Examples:\n")
+  cat("DIR=${HOME}/Documents/mlp/tests\n")
+  cat("cd ${DIR}/scripts\n")
+  cat("mkdir tmp\n")
+  cat("###############\n")
+  cat("TRIALS ANALYSIS\n")
+  cat("###############\n")
+  cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
+  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE FALSE TRUE TRUE\n")
+  cat("###########################\n")
+  cat("GENOMIC PREDICTION ANALYSIS\n")
+  cat("###########################\n")
+  cat("MLP=${HOME}/Documents/mlp/target/release/mlp\n")
+  cat("sh simulate.sh $MLP gp tmp BINARY 100 50 2\n")
+  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDN_LAYERS_2-RANDOMISATION.tsv 3 5 100 10 'BRR,BayesA' TRUE\n")
+  quit(status = 0)
+}
+# args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/ilri.sheep-birthwt.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials", ".", "FALSE", "FALSE", "TRUE", "TRUE")
 # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "TRUE")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
