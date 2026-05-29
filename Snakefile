@@ -441,14 +441,14 @@ rule mlp_analysis:
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
                 trials \
-                {input} \
+                {input.data} \
                 {params.outdir} > {log} 2>&1
         else
             time \
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
                 gp \
-                {input.data } \
+                {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
                 {params.n_reps} \
@@ -475,7 +475,7 @@ rule comparisons:
         time \
         Rscript {params.scripts_dir}/comparison.R \
             {wildcards.analysis_type} \
-            {inputlinear} \
-            {inputmlp} \
+            {input.linear} \
+            {input.mlp} \
             {params.outdir} > {log} 2>&1
         """
