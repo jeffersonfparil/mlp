@@ -299,17 +299,17 @@ checkpoint empiricalprep_gp:
 
 rule randomisation_gp:
     input:
-        f"{ROOT_OUTDIR}/gp/{{fname}}.tsv",
+        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
     output:
-        f"{ROOT_OUTDIR}/gp/output-{{fname}}-RANDOMISATION.tsv",
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
     params:
         scripts_dir=SCRIPTS_DIR,
-        outdir=f"{ROOT_OUTDIR}/gp",
+        outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
         base_seed = BASE_SEED
     log:
-        f"{ROOT_OUTDIR}/gp/randomisation-{{fname}}.log"
+        f"{ROOT_OUTDIR}/{{analysis_type}}/randomisation-{{fname}}.log"
     conda:
         "conda.yaml"
     shell:
@@ -325,7 +325,8 @@ rule randomisation_gp:
 
 rule linear_analysis:
     input:
-        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+        data=f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
     output:
         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR.tsv",
     params:
@@ -333,7 +334,6 @@ rule linear_analysis:
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         exclude_lm = EXCLUDE_LM,
         exclude_sommer = EXCLUDE_SOMMER,
-        randomisation=f"{ROOT_OUTDIR}/gp/output-{{fname}}-RANDOMISATION.tsv",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
         n_iterations = N_ITERATIONS_LINEAR,
@@ -356,7 +356,7 @@ rule linear_analysis:
             time \
             Rscript {params.scripts_dir}/linear.R \
                 trials \
-                {input} \
+                {input.data} \
                 {params.outdir} \
                 $IS_SIMULATED \
                 {params.exclude_lm} \
@@ -366,9 +366,9 @@ rule linear_analysis:
             time \
             Rscript {params.scripts_dir}/linear.R \
                 gp \
-                {input} \
+                {input.data} \
                 {params.outdir} \
-                {params.randomisation} \
+                {input.randomisation} \
                 {params.n_reps} \
                 {params.n_folds} \
                 {params.n_iterations} \
@@ -381,13 +381,13 @@ rule linear_analysis:
 
 rule xgboost_analysis:
     input:
-        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv"
+        data=f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
     output:
         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-XGBOOST.tsv",
     params:
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
-        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
         n_reps = N_REPS,
         n_folds = N_FOLDS,
     log:
@@ -396,45 +396,37 @@ rule xgboost_analysis:
         "conda.yaml"
     shell:
         """
-        echo {wildcards.analysis_type} > {log} 2>&1
-        echo {input} >> {log} 2>&1
-        echo {params.outdir} >> {log} 2>&1
         if [[ {wildcards.analysis_type} == "trials" ]]; then
-            echo "TRIALS" >> {log} 2>&1
-            # Rscript {params.scripts_dir}/linear.R -h >> {log} 2>&1
-            python {params.scripts_dir}/xgboost_script.py -h >> {log} 2>&1
             time \
             python {params.scripts_dir}/xgboost_script.py \
                 trials \
-                {input} \
+                {input.data} \
                 {params.outdir} \
                 "." \
                 {params.n_reps} \
-                {params.n_folds} >> {log} 2>&1
+                {params.n_folds} > {log} 2>&1
         else
-            echo "GP" >> {log} 2>&1
-            python {params.scripts_dir}/xgboost_script.py -h >> {log} 2>&1
             time \
             python {params.scripts_dir}/xgboost_script.py \
                 gp \
-                {input} \
+                {input.data} \
                 {params.outdir} \
-                {params.randomisation} \
+                {input.randomisation} \
                 {params.n_reps} \
-                {params.n_folds} >> {log} 2>&1
+                {params.n_folds} > {log} 2>&1
         fi;
         """
 
 rule mlp_analysis:
     input:
-        f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+        data=f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
+        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
     output:
         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-MLP.tsv",
     params:
         mlp=MLP,
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
-        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
         base_seed = BASE_SEED
@@ -456,9 +448,9 @@ rule mlp_analysis:
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
                 gp \
-                {input} \
+                {input.data } \
                 {params.outdir} \
-                {params.randomisation} \
+                {input.randomisation} \
                 {params.n_reps} \
                 {params.n_folds} \
                 {params.base_seed} > {log} 2>&1
