@@ -144,7 +144,7 @@ def gp_repeated_kfold_cv(args):
     params = get_params(args) 
     X, y = extract_X_y(args)
     idx_validation, idx_training = extract_randomisations(args)
-    df_out = pd.DataFrame(columns=["replicate", "fold", "best_n_estimators", "best_learning_rate", "best_max_depth", "best_subsample", "rmse", "r2", "cor"])
+    df_out = pd.DataFrame(columns=["replicate", "fold", "best_n_estimators", "best_learning_rate", "best_max_depth", "best_subsample", "rmse", "r2", "corr"])
     for r in range(params["n_replicates"]):
         for f in range(params["n_folds"]):
             # r = 0; f = 0;
@@ -183,7 +183,7 @@ def gp_repeated_kfold_cv(args):
                     "best_subsample": [rs.best_params_["subsample"]],
                     "rmse": [root_mean_squared_error(y_test, y_pred)],
                     "r2": [r2_score(y_test, y_pred)],
-                    "cor": [np.corrcoef(y_test, y_pred)[0, 1]]
+                    "corr": [np.corrcoef(y_test, y_pred)[0, 1]]
                 })
             ], ignore_index=True)
     fname_output = define_fname_output(args)
