@@ -106,8 +106,8 @@ def extract_randomisations(args):
     for r in range(params["n_replicates"]):
         for f in range(params["n_folds"]):
             # print(f"Replicate {r}, Fold {f}, i: {i}")
-            idx_training.append([int(x) for x in df_randomisation.iloc[i-1,0].split(",")])
-            idx_validation.append([int(x) for x in df_randomisation.iloc[i,0].split(",")])
+            idx_training.append([int(x)-1 for x in df_randomisation.iloc[i-1,0].split(",")])
+            idx_validation.append([int(x)-1 for x in df_randomisation.iloc[i,0].split(",")])
             i += 2
     return (idx_validation, idx_training)
 
@@ -194,6 +194,8 @@ def gp_repeated_kfold_cv(args):
 if __name__ == "__main__":
     params = get_params(args)
     if params["analysis_type"] == "trials":
+        print("Extracting entries effects...")
         extract_entries_effects(args)
     else:
+        print("Performing GP with repeated K-fold CV...")
         gp_repeated_kfold_cv(args)

@@ -217,7 +217,7 @@ rule simulate_trials:
             {wildcards.treatment} \
             {wildcards.entry} \
             {wildcards.replication} \
-            {wildcards.hidden_layer} > {log}
+            {wildcards.hidden_layer} > {log} 2>&1
         """
 
 rule simulate_gp:
@@ -242,7 +242,7 @@ rule simulate_gp:
             {wildcards.data_type} \
             {wildcards.n} \
             {wildcards.p} \
-            {wildcards.hidden_layers} > {log}
+            {wildcards.hidden_layers} > {log} 2>&1
         """
 
 checkpoint empiricalprep_trials:
@@ -265,7 +265,7 @@ checkpoint empiricalprep_trials:
         Rscript {params.scripts_dir}/empiricalprep.R \
             trials \
             {input} \
-            {params.tmpdir} > {log}
+            {params.tmpdir} > {log} 2>&1
         ls -1 {params.tmpdir} > {output.manifest}
         mv {params.tmpdir}/* {ROOT_OUTDIR}/trials/
         rm -rf {params.tmpdir}
@@ -291,7 +291,7 @@ checkpoint empiricalprep_gp:
         Rscript {params.scripts_dir}/empiricalprep.R \
             gp \
             {input} \
-            {params.tmpdir} > {log}
+            {params.tmpdir} > {log} 2>&1
         ls -1 {params.tmpdir} > {output.manifest}
         mv {params.tmpdir}/* {ROOT_OUTDIR}/gp/
         rm -rf {params.tmpdir}
@@ -320,7 +320,7 @@ rule randomisation_gp:
             {params.outdir} \
             {params.n_reps} \
             {params.n_folds} \
-            {params.base_seed} > {log}
+            {params.base_seed} > {log} 2>&1
         """
 
 rule linear_analysis:
@@ -361,7 +361,7 @@ rule linear_analysis:
                 $IS_SIMULATED \
                 {params.exclude_lm} \
                 {params.exclude_sommer} \
-                {params.verbose} > {log}
+                {params.verbose} > {log} 2>&1
         else
             time \
             Rscript {params.scripts_dir}/linear.R \
@@ -375,7 +375,7 @@ rule linear_analysis:
                 {params.n_burnin_iterations} \
                 {params.models} \
                 {params.base_seed} \
-                {params.verbose} > {log}
+                {params.verbose} > {log} 2>&1
         fi;
         """
 
@@ -396,7 +396,13 @@ rule xgboost_analysis:
         "conda.yaml"
     shell:
         """
+        echo {wildcards.analysis_type} > {log} 2>&1
+        echo {input} >> {log} 2>&1
+        echo {params.outdir} >> {log} 2>&1
         if [[ {wildcards.analysis_type} == "trials" ]]; then
+            echo "TRIALS" >> {log} 2>&1
+            # Rscript {params.scripts_dir}/linear.R -h >> {log} 2>&1
+            python {params.scripts_dir}/xgboost_script.py -h >> {log} 2>&1
             time \
             python {params.scripts_dir}/xgboost_script.py \
                 trials \
@@ -404,8 +410,10 @@ rule xgboost_analysis:
                 {params.outdir} \
                 "." \
                 {params.n_reps} \
-                {params.n_folds} > {log}
+                {params.n_folds} >> {log} 2>&1
         else
+            echo "GP" >> {log} 2>&1
+            python {params.scripts_dir}/xgboost_script.py -h >> {log} 2>&1
             time \
             python {params.scripts_dir}/xgboost_script.py \
                 gp \
@@ -413,7 +421,7 @@ rule xgboost_analysis:
                 {params.outdir} \
                 {params.randomisation} \
                 {params.n_reps} \
-                {params.n_folds} > {log}
+                {params.n_folds} >> {log} 2>&1
         fi;
         """
 
@@ -442,7 +450,7 @@ rule mlp_analysis:
                 {params.mlp} \
                 trials \
                 {input} \
-                {params.outdir} > {log}
+                {params.outdir} > {log} 2>&1
         else
             time \
             bash {params.scripts_dir}/mlp.sh \
@@ -453,7 +461,7 @@ rule mlp_analysis:
                 {params.randomisation} \
                 {params.n_reps} \
                 {params.n_folds} \
-                {params.base_seed} > {log}
+                {params.base_seed} > {log} 2>&1
         fi;
         """
 
@@ -477,5 +485,5 @@ rule comparisons:
             {wildcards.analysis_type} \
             {inputlinear} \
             {inputmlp} \
-            {params.outdir} > {log}
+            {params.outdir} > {log} 2>&1
         """

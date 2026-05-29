@@ -335,7 +335,7 @@ after which uncomment them and run with less cores to avoid running out of GPU m
 cd mlp/
 N_CORES=24
 # N_CORES=3
-time pixi run snakemake --cores $N_CORES
+time pixi run snakemake --cores $N_CORES --use-conda
 # ### Debugging and development
 # pixi shell
 # snakemake --lint
