@@ -188,7 +188,7 @@ rule all:
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
         RANDOMISATION_GP_OUTPUT,
-        LINEAR_ANALYSIS_OUTPUT,
+        # LINEAR_ANALYSIS_OUTPUT,
         TREES_ANALYSIS_OUTPUT,
         # MLP_ANALYSIS_OUTPUT,
         # COMPARISONS_OUTPUT
@@ -396,6 +396,10 @@ rule trees_analysis:
         "conda.yaml"
     shell:
         """
+        # pip install --no-binary lightgbm lightgbm --config-settings=cmake.define.USE_CUDA=ON > {log} 2>&1
+        pip install --no-binary lightgbm lightgbm \
+                --config-settings=cmake.define.USE_CUDA=ON \
+                --config-settings=cmake.define.CMAKE_CUDA_FLAGS="-allow-unsupported-compiler" > {log} 2>&1
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
             python {params.scripts_dir}/trees.py \
@@ -404,7 +408,7 @@ rule trees_analysis:
                 {params.outdir} \
                 "." \
                 {params.n_reps} \
-                {params.n_folds} > {log} 2>&1
+                {params.n_folds} >> {log} 2>&1
         else
             time \
             python {params.scripts_dir}/trees.py \
@@ -413,7 +417,7 @@ rule trees_analysis:
                 {params.outdir} \
                 {input.randomisation} \
                 {params.n_reps} \
-                {params.n_folds} > {log} 2>&1
+                {params.n_folds} >> {log} 2>&1
         fi;
         """
 
