@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import re
 from sklearn.preprocessing import OneHotEncoder
 import lightgbm as lgb
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
@@ -109,9 +110,8 @@ def extract_X_y(args):
             else:
                 X = pd.concat([X, X_1_hot], axis=1)
     
-    # LightGBM prefers clean feature names (no special JSON characters)
-    import re
-    X = X.rename(columns=lambda x: re.sub('[^A-Za-z0-9_]+', '', str(x)))
+    # # LightGBM prefers clean feature names (no special JSON characters)
+    # X = X.rename(columns=lambda x: re.sub('[^A-Za-z0-9_]+', '', str(x)))
     
     y = df[df.columns[0]]
     return X, y
@@ -130,7 +130,7 @@ def extract_randomisations(args):
     return (idx_validation, idx_training)
 
 def define_fname_output(args):
-    return args.output_dir / f"output-{args.input_file.stem}-LIGHTGBM.tsv"
+    return args.output_dir / f"output-{args.input_file.stem}-TREES.tsv"
     
 def extract_entries_effects(args):
     params = get_params(args)
