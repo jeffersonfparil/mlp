@@ -17,7 +17,7 @@ dependencies:
 # - cuda-nvrtc ==12.8.93
 # - nvtop >=3.3.1,<4
 - r-lme4 >=1.1_38,<2
-# - r-devtools >=2.5.2,<3
+- r-devtools >=2.5.2,<3
 - r-flexplot >=0.7.4,<0.8
 - r-bglr >=1.1.4,<2
 # - bfg >=1.15.0,<2
@@ -38,11 +38,12 @@ dependencies:
 - numpy
 - scikit-learn
 - shap
-- pip
-- cmake
-- ninja
-# - cuda-toolkit
-- gcc_linux-64=11    # Explicitly pull an older, perfectly compatible C compiler
-- gxx_linux-64=11    # Explicitly pull the compatible C++ compiler
-# - rasterio >=1.5.0,<2/
-- cuda-nvcc
+- lightgbm
+# - pip
+# - cmake
+# - ninja
+# # - cuda-toolkit
+# - gcc_linux-64=11    # Explicitly pull an older, perfectly compatible C compiler
+# - gxx_linux-64=11    # Explicitly pull the compatible C++ compiler
+# # - rasterio >=1.5.0,<2/
+# - cuda-nvcc

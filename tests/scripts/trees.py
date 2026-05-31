@@ -141,7 +141,7 @@ def extract_entries_effects(args):
         learning_rate=params["learning_rate"],
         max_depth=params["max_depth"],
         random_state=params["random_state"],
-        device="cuda",
+        # device="cuda",
         verbose=-1 # Suppress LightGBM warnings
     )
     model.fit(X, y)
@@ -175,7 +175,7 @@ def gp_repeated_kfold_cv(args):
             lgb_reg = lgb.LGBMRegressor(
                 objective=params["objective"],
                 random_state=params["random_state"],
-                device="cuda",
+                # device="cuda",
                 verbose=-1 # Suppress LightGBM warnings
             )
             lgb_params = {

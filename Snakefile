@@ -20,7 +20,8 @@ TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
 TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
 GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 # GP_AZODI2019_FNAMES = ["sorghum_geno.csv", "rice_geno.csv", "spruce_geno.csv"]
-GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
+# GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
+GP_AZODI2019_FNAMES = ["test_geno.csv"]
 EXCLUDE_LM = "FALSE"
 EXCLUDE_SOMMER = "TRUE"
 N_FOLDS = 5
@@ -188,9 +189,9 @@ rule all:
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
         RANDOMISATION_GP_OUTPUT,
-        # LINEAR_ANALYSIS_OUTPUT,
-        TREES_ANALYSIS_OUTPUT,
-        # MLP_ANALYSIS_OUTPUT,
+        LINEAR_ANALYSIS_OUTPUT,
+        # TREES_ANALYSIS_OUTPUT,
+        MLP_ANALYSIS_OUTPUT,
         # COMPARISONS_OUTPUT
 
 rule simulate_trials:
