@@ -1,11 +1,3 @@
-# band_paths = {
-#     'red': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/Images/Train/06-14-2021/33761/red.tiff"),
-#     'green': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/Images/Train/06-14-2021/33761/green.tiff"),
-#     'blue': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/Images/Train/06-14-2021/33761/blue.tiff"),
-#     'nir': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/Images/Train/06-14-2021/33761/nir.tiff"),
-#     'rededge': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/Images/Train/06-14-2021/33761/red_edge.tiff"),
-# }
-
 import os
 from pathlib import Path
 import pandas as pd
@@ -78,33 +70,29 @@ def build_dataset(traits_csv, image_root_dir, dates):
     """
     Matches the Plot_Number in the CSV to the corresponding plot image folders.
     """
+    # traits_csv = Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"); image_root_dir = Path.home() / Path("Documents/mlp/tests/datasets/farag_2024"); dates = ["06-14-2021", "07-14-2021", "08-03-2021", "09-03-2021"]
     df_traits = pd.read_csv(traits_csv)
     df_traits = df_traits.dropna(subset=['Yield']) # Drop rows with missing target
-    
     all_extracted_data = []
-
     print("Extracting features from plot images...")
     for index, row in df_traits.iterrows():
+        # index = 0; row = df_traits.iloc[index]
         plot_number = row['Plot_Number']
         plot_features = {'Plot_Number': plot_number}
-        
         # Loop through multitemporal dates/flights
         for t_idx, date in enumerate(dates):
+            # t_idx = 0; date = dates[t_idx]
             # ASSUMPTION: Folder structure is like: image_root_dir/date/plot_33761/
             # Adjust this path logic to match exactly how the dataset unzipped on your machine
-            plot_folder = os.path.join(image_root_dir, date, f"plot_{plot_number}")
-            
+            plot_folder = os.path.join(image_root_dir, date, f"{plot_number}")
             if os.path.exists(plot_folder):
                 stats = extract_features_for_plot(plot_folder)
                 if stats:
                     # Append time-step prefix (e.g., T0_NDVI_mean)
                     for key, val in stats.items():
                         plot_features[f"T{t_idx}_{key}"] = val
-                        
         all_extracted_data.append(plot_features)
-        
     df_features = pd.DataFrame(all_extracted_data)
-    
     # Merge spectral features with agronomic traits
     final_data = pd.merge(df_traits, df_features, on='Plot_Number', how='inner')
     return final_data

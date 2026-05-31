@@ -396,10 +396,16 @@ rule trees_analysis:
         "conda.yaml"
     shell:
         """
-        # pip install --no-binary lightgbm lightgbm --config-settings=cmake.define.USE_CUDA=ON > {log} 2>&1
-        pip install --no-binary lightgbm lightgbm \
-                --config-settings=cmake.define.USE_CUDA=ON \
-                --config-settings=cmake.define.CMAKE_CUDA_FLAGS="-allow-unsupported-compiler" > {log} 2>&1
+        if ! python -c "import lightgbm" &> /dev/null; then
+            echo "Compiling LightGBM inside sandboxed Conda environment..."
+            pip install --no-binary lightgbm lightgbm \
+                    --config-settings=cmake.define.USE_CUDA=ON \
+                    --config-settings=cmake.define.CMAKE_C_COMPILER=$CC \
+                    --config-settings=cmake.define.CMAKE_CXX_COMPILER=$CXX \
+                    --config-settings=cmake.define.CMAKE_CUDA_HOST_COMPILER=$CXX \
+                    --config-settings=cmake.define.CMAKE_CUDA_COMPILER=$CONDA_PREFIX/bin/nvcc \
+                    --config-settings=cmake.define.CMAKE_PREFIX_PATH=$CONDA_PREFIX > {log} 2>&1
+        fi;
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
             python {params.scripts_dir}/trees.py \

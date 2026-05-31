@@ -45,3 +45,4 @@ dependencies:
 - gcc_linux-64=11    # Explicitly pull an older, perfectly compatible C compiler
 - gxx_linux-64=11    # Explicitly pull the compatible C++ compiler
 # - rasterio >=1.5.0,<2/
+- cuda-nvcc
