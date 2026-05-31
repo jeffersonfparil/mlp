@@ -112,15 +112,15 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-LINEAR.tsv")
     return final_files
 
-def XGBOOST_ANALYSIS_OUTPUT(wildcards):
+def TREES_ANALYSIS_OUTPUT(wildcards):
     final_files = []
     simulated_targets = expand(
-        f"{ROOT_OUTDIR}/trials/output-simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}-XGBOOST.tsv",
+        f"{ROOT_OUTDIR}/trials/output-simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}-TREES.tsv",
         year=N_YEARS, site=N_SITES, treatment=N_TREATMENTS, entry=N_ENTRIES, replication=N_REPLICATIONS, hidden_layer=N_HIDDEN_LAYERS
     )
     final_files.extend(simulated_targets)
     simulated_targets = expand(
-        f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-XGBOOST.tsv",
+        f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-TREES.tsv",
         data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
     )
     final_files.extend(simulated_targets)
@@ -131,7 +131,7 @@ def XGBOOST_ANALYSIS_OUTPUT(wildcards):
                 filename = line.strip()
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
-                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{dataset_base}-XGBOOST.tsv")
+                    final_files.append(f"{ROOT_OUTDIR}/trials/output-{dataset_base}-TREES.tsv")
     for fname in GP_AZODI2019_FNAMES:
         manifest_path = checkpoints.empiricalprep_gp.get(fname=fname).output.manifest
         with open(manifest_path, "r") as f:
@@ -139,7 +139,7 @@ def XGBOOST_ANALYSIS_OUTPUT(wildcards):
                 filename = line.strip()
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
-                    final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-XGBOOST.tsv")
+                    final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-TREES.tsv")
     return final_files
 
 def MLP_ANALYSIS_OUTPUT(wildcards):
@@ -189,7 +189,7 @@ rule all:
         GP_EMPIRICAL_INPUT,
         RANDOMISATION_GP_OUTPUT,
         LINEAR_ANALYSIS_OUTPUT,
-        XGBOOST_ANALYSIS_OUTPUT,
+        TREES_ANALYSIS_OUTPUT,
         # MLP_ANALYSIS_OUTPUT,
         # COMPARISONS_OUTPUT
 
@@ -379,26 +379,26 @@ rule linear_analysis:
         fi;
         """
 
-rule xgboost_analysis:
+rule trees_analysis:
     input:
         data=f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
         randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
     output:
-        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-XGBOOST.tsv",
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-TREES.tsv",
     params:
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         n_reps = N_REPS,
         n_folds = N_FOLDS,
     log:
-        f"{ROOT_OUTDIR}/{{analysis_type}}/xgboost_analysis-{{fname}}.log"
+        f"{ROOT_OUTDIR}/{{analysis_type}}/trees_analysis-{{fname}}.log"
     conda:
         "conda.yaml"
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
-            python {params.scripts_dir}/xgboost_script.py \
+            python {params.scripts_dir}/trees.py \
                 trials \
                 {input.data} \
                 {params.outdir} \
@@ -407,7 +407,7 @@ rule xgboost_analysis:
                 {params.n_folds} > {log} 2>&1
         else
             time \
-            python {params.scripts_dir}/xgboost_script.py \
+            python {params.scripts_dir}/trees.py \
                 gp \
                 {input.data} \
                 {params.outdir} \

@@ -25,3 +25,9 @@ dependencies:
 - r-doparallel >=1.0.17,<2
 - py-xgboost >=3.2.0,<4
 - shap >=0.51.0,<0.52
+- r >=4.5,<4.6
+- pandas >=3.0.3,<4
+- numpy >=2.4.6,<3
+- scikit-learn >=1.8.0,<2
+- lightgbm >=4.6.0,<5
+- rasterio >=1.5.0,<2
