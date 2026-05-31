@@ -18,16 +18,16 @@ parser.add_argument("n_replicates", type=int, default=3, help="Number of replica
 parser.add_argument("n_folds", type=int, default=10, help="Number of folds for cross-validation (for gp analysis)")
 
 args = parser.parse_args()
-# class Args:
-#     def __init__(self, analysis_type, input_file, output_dir, randomisation_input_file, n_replicates, n_folds):
-#         self.analysis_type = analysis_type
-#         self.input_file = input_file
-#         self.output_dir = output_dir
-#         self.randomisation_input_file = randomisation_input_file
-#         self.n_replicates = n_replicates
-#         self.n_folds = n_folds
-# args = Args(analysis_type="trials", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/trials/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
-# args = Args(analysis_type="gp", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
+class Args:
+    def __init__(self, analysis_type, input_file, output_dir, randomisation_input_file, n_replicates, n_folds):
+        self.analysis_type = analysis_type
+        self.input_file = input_file
+        self.output_dir = output_dir
+        self.randomisation_input_file = randomisation_input_file
+        self.n_replicates = n_replicates
+        self.n_folds = n_folds
+# args = Args(analysis_type="trials", input_file=Path.home() / Path("Documents/mlp/tests/tmp/trials/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
+# args = Args(analysis_type="gp", input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
 print(f"Analysis Type: {args.analysis_type}")
 print(f"Input File: {args.input_file}")
 print(f"Output Directory: {args.output_dir}")
@@ -48,7 +48,8 @@ def get_params(args):
             "input_file": args.input_file,
             "output_dir": args.output_dir,
             "objective": 'reg:squarederror',
-            "n_estimators": 1_000,
+            # "n_estimators": 1_000,
+            "n_estimators": 10,
             "learning_rate": 0.1,
             "max_depth": 5,
             "random_state": 42,
@@ -82,18 +83,26 @@ def extract_X_y(args):
     params = get_params(args) 
     df = pd.read_csv(params["input_file"], sep="\t")
     X_tmp = df.drop(df.columns[0], axis=1)
-    X = None
-    encoder = OneHotEncoder(sparse_output=False)
+    at_least_one_str = False
     for col in X_tmp.columns:
         if X_tmp[col].dtype == "str":
-            X_1_hot = pd.DataFrame(encoder.fit_transform(X_tmp[col].values.reshape(-1, 1)))
-            X_1_hot.columns = encoder.categories_[0]
-        else:
-            X_1_hot = X_tmp[col]
-        if X is None:
-            X = X_1_hot
-        else:
-            X = pd.concat([X, X_1_hot], axis=1)
+            at_least_one_str = True
+            break
+    if not at_least_one_str:
+        X = X_tmp
+    else:
+        X = None
+        encoder = OneHotEncoder(sparse_output=False)
+        for col in X_tmp.columns:
+            if X_tmp[col].dtype == "str":
+                X_1_hot = pd.DataFrame(encoder.fit_transform(X_tmp[col].values.reshape(-1, 1)))
+                X_1_hot.columns = encoder.categories_[0]
+            else:
+                X_1_hot = X_tmp[col]
+            if X is None:
+                X = X_1_hot
+            else:
+                X = pd.concat([X, X_1_hot], axis=1)
     y = df[df.columns[0]]
     return X, y
 
@@ -115,7 +124,7 @@ def define_fname_output(args):
     return args.output_dir / f"output-{args.input_file.stem}-XGBOOST.tsv"
     
 def extract_entries_effects(args):
-    # args = Args(analysis_type="trials", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/trials/australia.soybean-yield.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
+    # args = Args(analysis_type="trials", input_file=Path.home() / Path("Documents/mlp/tests/tmp/trials/australia.soybean-yield.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
     params = get_params(args)
     X, y = extract_X_y(args)
     model = xgb.XGBRegressor(
@@ -140,7 +149,8 @@ def extract_entries_effects(args):
     return None
 
 def gp_repeated_kfold_cv(args):
-    # args = Args(analysis_type="gp", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
+    # args = Args(analysis_type="gp", input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
+    # args = Args(analysis_type="gp", input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
     params = get_params(args) 
     X, y = extract_X_y(args)
     idx_validation, idx_training = extract_randomisations(args)
@@ -166,7 +176,7 @@ def gp_repeated_kfold_cv(args):
                 'subsample': params["subsample"]
             }
             rs = RandomizedSearchCV(xgb_reg, xgb_params, n_iter=5, cv=3, scoring='neg_mean_squared_error', n_jobs=-1)
-            rs.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+            rs.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=True)
             print(f"Best Params: {rs.best_params_}")
             best_model = rs.best_estimator_
             y_pred = best_model.predict(X_test)

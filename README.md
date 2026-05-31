@@ -347,7 +347,7 @@ time pixi run snakemake --cores $N_CORES --use-conda
 - Empirical data test only (as simulating data will not be that different from the continuous simulated data in GP)
 - Download dataset from [Fared et al (2024)](https://datadryad.org/dataset/doi:10.5061/dryad.v41ns1s4z).
 - Fit using canonical methods --> python stuff??
-
+- `tar -cf - farag_2024 | xz -T 0 -6v > archive.tar.xz`
 
 # Miscellaneous
 
