@@ -14,8 +14,10 @@ get_params <- function(args) {
   if (!dir.exists(args[4])) {
     stop(paste("Error: DIRNAME_OUTDIR does not exist:", args[4]))
   }
-  id_1 <- gsub("-LINEAR.tsv", "", gsub("-MLP.tsv", "", gsub("-XGBOOST.tsv", "", basename(args[2]))))
-  id_2 <- gsub("-LINEAR.tsv", "", gsub("-MLP.tsv", "", gsub("-XGBOOST.tsv", "", basename(args[3]))))
+  id_1 <- gsub("-LINEAR.tsv", "", gsub("-MLP.tsv", "", gsub("-TREES.tsv", "", basename(args[2]))))
+  id_2 <- gsub("-LINEAR.tsv", "", gsub("-MLP.tsv", "", gsub("-TREES.tsv", "", basename(args[3]))))
+  algo_1 <- gsub(".tsv$", "", gsub(paste0("^", id_1, "-"), "", basename(args[2])))
+  algo_2 <- gsub(".tsv$", "", gsub(paste0("^", id_2, "-"), "", basename(args[3])))
   if (id_1 != id_2) {
     stop("Error: FNAME_1 and FNAME_2 do not correspond to the same dataset. Use -h or --help for usage information.")
   }
@@ -40,14 +42,16 @@ get_params <- function(args) {
   } else if (args[1] == "gp") {
     linear_formula = NA
   }
-  fname_png <- file.path(args[4], paste0(id, "-COMPARISON.png"))
-  fname_tsv <- file.path(args[4], paste0(id, "-COMPARISON.tsv"))
+  fname_png <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.png"))
+  fname_tsv <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.tsv"))
   list(
     analysis_type = args[1],
     fname_1 = args[2],
     fname_2 = args[3],
     dirname_outdir = args[4],
     id = id,
+    algo_1 = algo_1,
+    algo_2 = algo_2,
     linear_formula = linear_formula,
     fname_png = fname_png,
     fname_tsv = fname_tsv
@@ -55,29 +59,36 @@ get_params <- function(args) {
 }
 
 compare_trial_analyses <- function(params) {
-  # args <- c("trials", "tests/tmp/trials/output-australia.soybean-height-LINEAR.tsv", "tests/tmp/trials/output-australia.soybean-height-MLP.tsv", "tests/tmp/trials"); params <- get_params(args)
+  # args <- c("trials", "tests/tmp/trials/output-australia.soybean-height-MLP.tsv", "tests/tmp/trials/output-australia.soybean-height-LINEAR.tsv", "tests/tmp/trials"); params <- get_params(args)
   # Load the effects from the best linear model
-  df_1 <- read.delim(params$fname_1, TRUE)
-  if (length(grep("➵", df_1$ids)) > 0) {
-    df_1 <- df_1[grep("^gen", df_1$ids), ]
-    df_1$ids <- gsub("gen➵", "", df_1$ids)
+  df_1 <- {
+    df <- read.delim(params$fname_1, TRUE)
+    if (length(grep("➵", df$ids)) > 0) {
+      df <- df[grep("^gen", df$ids), ]
+      df$ids <- gsub("gen➵", "", df$ids)
+    }
+    df <- data.frame(ids = df$ids, effects = df$effects)
+    colnames(df)[2] <- params$algo_1
+    df
   }
-  name_1 = gsub(".tsv$", "", gsub(paste0("^", params$id, "-"), "", basename(params$fname_1)))
-  colnames(df_1)[2] <- name_1
-  # Load the marginal effects from mlp
-  df_2 <- read.delim(params$fname_2, TRUE)
-  df_2 <- df_2[grep("^gen", df_2$ids), 1:2]
-  df_2$ids <- gsub("gen➵", "", df_2$ids)
-  name_2 = gsub(".tsv$", "", gsub(paste0("^", params$id, "-"), "", basename(params$fname_2)))
-  colnames(df_2)[2] <- name_2
+  df_2 <- {
+    df <- read.delim(params$fname_2, TRUE)
+    if (length(grep("➵", df$ids)) > 0) {
+      df <- df[grep("^gen", df$ids), ]
+      df$ids <- gsub("gen➵", "", df$ids)
+    }
+    df <- data.frame(ids = df$ids, effects = df$effects)
+    colnames(df)[2] <- params$algo_2
+    df
+  }
   if ((nrow(df_1) == 0) || (nrow(df_2) == 0)) {
-    next
+    return(1)
   }
   # Merge
   df <- cbind(datasets = gsub("output-", "", params$id), merge(df_1, df_2, by = "ids"))
   # Calculate correlation and R²
   cor_test <- tryCatch(
-    cor.test(df[[name_1]], df[[name_2]]),
+    cor.test(df[[params$algo_1]], df[[params$algo_2]]),
     error = function(x) {
       list(estimate = NA, p.value = 1.00)
     }
@@ -93,41 +104,42 @@ compare_trial_analyses <- function(params) {
     "ns"
   }
   r_squared <- mean(c(
-    1 - (sum((df[[name_1]] - df[[name_2]])^2) /
-                  sum((df[[name_1]] - mean(df[[name_1]]))^2)),
-    1 - (sum((df[[name_1]] - df[[name_2]])^2) /
-                  sum((df[[name_2]] - mean(df[[name_2]]))^2))
+    1 - (sum((df[[params$algo_1]] - df[[params$algo_2]])^2) /
+
+     sum((df[[params$algo_1]] - mean(df[[params$algo_1]]))^2)),
+    1 - (sum((df[[params$algo_1]] - df[[params$algo_2]])^2) /
+                  sum((df[[params$algo_2]] - mean(df[[params$algo_2]]))^2))
   ))
   # Plot
-  png(params$fname_png, type="cairo")
-  par(mar=c(5, 6, 3, 1), mgp=c(4, 1, 0))
-  xlab <- if (name_1 == "LINEAR") {
+  png(params$fname_png, type = "cairo")
+  par(mar = c(5, 6, 3, 1), mgp = c(4, 1, 0))
+  xlab <- if (params$algo_1 == "LINEAR") {
     paste0(
       "Linear Model Estimated Effects\n",
       params$linear_formula
     )
-  } else if (name_1 == "XGBOOST") {
+  } else if (params$algo_1 == "TREES") {
     "XGBoost Marginal Effects (SHAP method)"
   } else {
     "MLP Marginal Effects (Perturbation method)"
   }
-  ylab <- if (name_2 == "LINEAR") {
+  ylab <- if (params$algo_2 == "LINEAR") {
     paste0(
       "Linear Model Estimated Effects\n",
       params$linear_formula
     )
-  } else if (name_2 == "XGBOOST") {
+  } else if (params$algo_2 == "TREES") {
     "XGBoost Marginal Effects (SHAP method)"
   } else {
     "MLP Marginal Effects (Perturbation method)"
   }
-  plot(df[[name_1]], df[[name_2]],
+  plot(df[[params$algo_1]], df[[params$algo_2]],
     xlab = xlab,
     ylab = ylab,
     main = params$id
   )
   grid()
-  text(min(df[[name_1]]), max(df[[name_2]]),
+  text(min(df[[params$algo_1]]), max(df[[params$algo_2]]),
     label = paste0(
       "\n\n\ncor=", round(100 * cor_test$estimate, 2), "%",
       annot, "\nR²=", round(r_squared, 2),
@@ -144,37 +156,36 @@ compare_trial_analyses <- function(params) {
 
 compare_gp_analyses <- function(params) {
   # args <- c("gp", "tests/tmp/gp/output-sorghum-YLD-LINEAR.tsv", "tests/tmp/gp/output-sorghum-YLD-MLP.tsv", "tests/tmp/gp"); params <- get_params(args)
-  df_1 <- read.delim(params$fname_1, sep = "\t", header = TRUE)
-  df_2 <- read.delim(params$fname_2, sep = "\t", header = TRUE)
+  # args <- c("gp", "tests/tmp/gp/output-test-YLD-TREES.tsv", "tests/tmp/gp/output-test-YLD-MLP.tsv", "tests/tmp/gp"); params <- get_params(args)
+  df_1 <- {
+    df <- read.delim(params$fname_1, sep = "\t", header = TRUE)
+    data.frame(
+      datasets = gsub(".tsv", "", df$datasets),
+      reps = df$reps,
+      folds = df$folds,
+      nt = df$nt,
+      nv = df$nv,
+      models = df$models,
+      corr = df$corr
+    )
+  }
   df_2 <- {
-    df_2 <- read.delim(params$fname_2, sep = "\t", header = TRUE)
-    activation <- paste(sort(unique(df_2$activation)), collapse = "_")
-    weights_initialisation <- paste(sort(unique(df_2$weights_initialisation)), collapse = "_")
-    optimiser <- paste(sort(unique(df_2$optimiser)), collapse = "_")
-    n_hidden_layers <- mean(df_2$n_hidden_layers)
-    n_hidden_nodes <- mean(df_2$n_hidden_nodes)
-    n_epochs <- mean(df_2$n_epochs)
-    n_validation <- mean(df_2$n_validation)
-    df_2[, colnames(df_2) == "models"] <- paste(c("mlp", activation, weights_initialisation, optimiser, paste(c("H", "N", "E", "V"), c(n_hidden_layers, n_hidden_nodes, n_epochs, n_validation), sep = "_")), collapse = "-")
-    idx_cols_mlp <- c()
-    for (col in colnames(df_1)) {
-      idx <- grep(col, colnames(df_2))
-      if (length(idx) == 0) {
-        stop(paste("Error: Column", col, "in linear results not found in MLP results."))
-      }
-      idx_cols_mlp <- c(idx_cols_mlp, idx[1])
-    }
-    df_2[, idx_cols_mlp]
+    df <- read.delim(params$fname_2, sep = "\t", header = TRUE)
+    data.frame(
+      datasets = gsub(".tsv", "", df$datasets),
+      reps = df$reps,
+      folds = df$folds,
+      nt = df$nt,
+      nv = df$nv,
+      models = df$models,
+      corr = df$corr
+    )
   }
   df <- rbind(df_1, df_2)
   if ((gsub("output-", "", params$id) != gsub(".tsv", "", unique(df_1$datasets))) || (gsub("output-", "", params$id) != gsub(".tsv", "", unique(df_2$datasets)))) {
     stop("Error: Dataset ID in linear and/or MLP results does not match the expected dataset ID.")
   }
-  df$datasets <- gsub("output-", "", params$id)
-  df$models <- as.factor(df$models)
-  # aggregate(corr ~ models, FUN = mean, data = df)
-  # aggregate(corr ~ models, FUN = sd, data = df)
-  png(params$fname_png, width = nlevels(df$models) * 300)
+  png(params$fname_png, width = length(unique(df$models)) * 300)
   boxplot(corr ~ models, data = df, xlab = "", ylab = "Pearson's Correlation")
   grid()
   dev.off()
@@ -202,14 +213,13 @@ if (args[1] == "-h" || args[1] == "--help") {
 # Testing: source("tests/scripts/comparison.R")
 # args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-LINEAR.tsv", "~/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-MLP.tsv", "~/Documents/mlp/tests/tmp/trials")
 # args <- c("gp", "~/Documents/mlp/tests/tmp/gp/output-sorghum-HT-LINEAR.tsv", "~/Documents/mlp/tests/tmp/gp/output-sorghum-HT-MLP.tsv", "~/Documents/mlp/tests/tmp/gp")
-# args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-LINEAR.tsv", "~/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-XGBOOST.tsv", "~/Documents/mlp/tests/tmp/trials")
-# args <- c("gp", "~/Documents/mlp/tests/tmp/gp/output-sorghum-HT-LINEAR.tsv", "~/Documents/mlp/tests/tmp/gp/output-sorghum-HT-XGBOOST.tsv", "~/Documents/mlp/tests/tmp/gp")
-
-# args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-LINEAR.tsv", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-XGBOOST.tsv", "~/Documents/mlp/tests/tmp/trials")
-# args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-MLP.tsv", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-XGBOOST.tsv", "~/Documents/mlp/tests/tmp/trials")
-
-# args <- c("gp", "~/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-LINEAR.tsv", "~/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-XGBOOST.tsv", "~/Documents/mlp/tests/tmp/gp")
-
+# args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-LINEAR.tsv", "~/Documents/mlp/tests/tmp/trials/output-ilri.sheep-birthwt-TREES.tsv", "~/Documents/mlp/tests/tmp/trials")
+# args <- c("gp", "~/Documents/mlp/tests/tmp/gp/output-sorghum-HT-LINEAR.tsv", "~/Documents/mlp/tests/tmp/gp/output-sorghum-HT-TREES.tsv", "~/Documents/mlp/tests/tmp/gp")
+# args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-LINEAR.tsv", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-TREES.tsv", "~/Documents/mlp/tests/tmp/trials")
+# args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-MLP.tsv", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-TREES.tsv", "~/Documents/mlp/tests/tmp/trials")
+# args <- c("gp", "~/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-LINEAR.tsv", "~/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-TREES.tsv", "~/Documents/mlp/tests/tmp/gp")
+# args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-MLP.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp")
+# args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-TREES.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
   compare_trial_analyses(params)

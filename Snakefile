@@ -177,9 +177,12 @@ def COMPARISONS_OUTPUT(wildcards):
     fnames_tmp = LINEAR_ANALYSIS_OUTPUT(wildcards) + MLP_ANALYSIS_OUTPUT(wildcards)
     final_files = []
     for fname in fnames_tmp:
-        fname = fname.replace("-LINEAR.tsv", "-COMPARISON.tsv")
-        fname = fname.replace("-MLP.tsv", "-COMPARISON.tsv")
-        final_files.append(fname)
+        fname_0 = fname.replace("-LINEAR.tsv", "-LINEAR_vs_TREES-COMPARISON.tsv")
+        fname_1 = fname.replace("-LINEAR.tsv", "-LINEAR_vs_MLP-COMPARISON.tsv")
+        fname_2 = fname.replace("-LINEAR.tsv", "-TREES_vs_MLP-COMPARISON.tsv")
+        final_files.append(fname_0)
+        final_files.append(fname_1)
+        final_files.append(fname_2)
     return final_files
 
 rule all:
@@ -190,9 +193,9 @@ rule all:
         GP_EMPIRICAL_INPUT,
         RANDOMISATION_GP_OUTPUT,
         LINEAR_ANALYSIS_OUTPUT,
-        # TREES_ANALYSIS_OUTPUT,
+        TREES_ANALYSIS_OUTPUT,
         MLP_ANALYSIS_OUTPUT,
-        # COMPARISONS_OUTPUT
+        COMPARISONS_OUTPUT,
 
 rule simulate_trials:
     output:
@@ -204,7 +207,7 @@ rule simulate_trials:
     log:
         f"{ROOT_OUTDIR}/trials/simulate_trials-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         cd {params.root_outdir}
@@ -231,7 +234,7 @@ rule simulate_gp:
     log:
         f"{ROOT_OUTDIR}/gp/simulate_gp-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         cd {params.root_outdir}
@@ -258,7 +261,7 @@ checkpoint empiricalprep_trials:
     log:
         f"{ROOT_OUTDIR}/trials/{{fname}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         mkdir -p {params.tmpdir}
@@ -284,7 +287,7 @@ checkpoint empiricalprep_gp:
     log:
         f"{ROOT_OUTDIR}/gp/{{fname}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         mkdir -p {params.tmpdir}
@@ -312,7 +315,7 @@ rule randomisation_gp:
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/randomisation-{{fname}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         time \
@@ -345,7 +348,7 @@ rule linear_analysis:
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/linear_analysis-{{fname}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
@@ -383,7 +386,7 @@ rule linear_analysis:
 rule trees_analysis:
     input:
         data=f"{ROOT_OUTDIR}/{{analysis_type}}/{{fname}}.tsv",
-        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv",
+        randomisation=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-RANDOMISATION.tsv", # not needed for trials and only here for gp to ensure that the gp randomisation step is run before this step, as it is needed for the linear analysis and we want to ensure that the linear and trees analyses are run in the same order for gp
     output:
         f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-TREES.tsv",
     params:
@@ -394,19 +397,9 @@ rule trees_analysis:
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/trees_analysis-{{fname}}.log"
     conda:
-        "conda.yaml"
+        "trees.yaml"
     shell:
         """
-        if ! python -c "import lightgbm" &> /dev/null; then
-            echo "Compiling LightGBM inside sandboxed Conda environment..."
-            pip install --no-binary lightgbm lightgbm \
-                    --config-settings=cmake.define.USE_CUDA=ON \
-                    --config-settings=cmake.define.CMAKE_C_COMPILER=$CC \
-                    --config-settings=cmake.define.CMAKE_CXX_COMPILER=$CXX \
-                    --config-settings=cmake.define.CMAKE_CUDA_HOST_COMPILER=$CXX \
-                    --config-settings=cmake.define.CMAKE_CUDA_COMPILER=$CONDA_PREFIX/bin/nvcc \
-                    --config-settings=cmake.define.CMAKE_PREFIX_PATH=$CONDA_PREFIX > {log} 2>&1
-        fi;
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
             python {params.scripts_dir}/trees.py \
@@ -444,7 +437,7 @@ rule mlp_analysis:
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
@@ -471,22 +464,40 @@ rule mlp_analysis:
 rule comparisons:
     input:
         linear=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR.tsv",
+        trees=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-TREES.tsv",
         mlp=f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-MLP.tsv"
     output:
-        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-COMPARISON.tsv"
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR_vs_TREES-COMPARISON.tsv",
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-LINEAR_vs_MLP-COMPARISON.tsv",
+        f"{ROOT_OUTDIR}/{{analysis_type}}/output-{{fname}}-TREES_vs_MLP-COMPARISON.tsv",
     params:
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}"
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/comparison-{{fname}}.log"
     conda:
-        "conda.yaml"
+        "general.yaml"
     shell:
         """
+        echo "LINEAR vs TREES comparison:" > {log} 2>&1
+        time \
+        Rscript {params.scripts_dir}/comparison.R \
+            {wildcards.analysis_type} \
+            {input.linear} \
+            {input.trees} \
+            {params.outdir} >> {log} 2>&1
+        echo "LINEAR vs MLP comparison:" >> {log} 2>&1
         time \
         Rscript {params.scripts_dir}/comparison.R \
             {wildcards.analysis_type} \
             {input.linear} \
             {input.mlp} \
-            {params.outdir} > {log} 2>&1
+            {params.outdir} >> {log} 2>&1
+        echo "TREES vs MLP comparison:" >> {log} 2>&1
+        time \
+        Rscript {params.scripts_dir}/comparison.R \
+            {wildcards.analysis_type} \
+            {input.trees} \
+            {input.mlp} \
+            {params.outdir} >> {log} 2>&1
         """

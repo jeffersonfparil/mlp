@@ -1,8 +1,7 @@
 import argparse
 from pathlib import Path
-import re
 from sklearn.preprocessing import OneHotEncoder
-import lightgbm as lgb
+import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.datasets import make_regression
 from sklearn.metrics import root_mean_squared_error, r2_score
@@ -10,7 +9,7 @@ import numpy as np
 import pandas as pd
 import shap
 
-parser = argparse.ArgumentParser(description="LightGBM for trial analysis and genomic prediction")
+parser = argparse.ArgumentParser(description="XGBoost for trial analysis and genomic prediction")
 parser.add_argument("analysis_type", help="The type of analysis to perform (trials or gp)")
 parser.add_argument("input_file", type=Path, help="Path to the input TSV file")
 parser.add_argument("output_dir", type=Path, help="Directory to save the output")
@@ -19,7 +18,6 @@ parser.add_argument("n_replicates", type=int, default=3, help="Number of replica
 parser.add_argument("n_folds", type=int, default=10, help="Number of folds for cross-validation (for gp analysis)")
 
 args = parser.parse_args()
-
 # class Args:
 #     def __init__(self, analysis_type, input_file, output_dir, randomisation_input_file, n_replicates, n_folds):
 #         self.analysis_type = analysis_type
@@ -28,7 +26,8 @@ args = parser.parse_args()
 #         self.randomisation_input_file = randomisation_input_file
 #         self.n_replicates = n_replicates
 #         self.n_folds = n_folds
-
+# args = Args(analysis_type="trials", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/trials/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
+# args = Args(analysis_type="gp", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
 print(f"Analysis Type: {args.analysis_type}")
 print(f"Input File: {args.input_file}")
 print(f"Output Directory: {args.output_dir}")
@@ -48,11 +47,12 @@ def get_params(args):
             "analysis_type": args.analysis_type,
             "input_file": args.input_file,
             "output_dir": args.output_dir,
-            "objective": 'regression',
-            "n_estimators": 10,
+            "objective": 'reg:squarederror',
+            "n_estimators": 1_000,
             "learning_rate": 0.1,
             "max_depth": 5,
             "random_state": 42,
+            # "early_stopping_rounds": 10,
         }
     else:
         if not args.randomisation_input_file.exists():
@@ -68,19 +68,13 @@ def get_params(args):
             "randomisation_input_file": args.randomisation_input_file,
             "n_replicates": args.n_replicates,
             "n_folds": args.n_folds,
-            "objective": 'regression',
-            # GP-Specific Hyperparameter Grid
-            "n_estimators": [1_000, 5_000],          # High estimators, rely on early stopping
-            "learning_rate": [0.01, 0.05],           # Lower is generally better for GP
-            "num_leaves": [15, 31, 63],              # Constrain leaf growth
-            "max_depth": [3, 5, 7],                  # Keep trees relatively shallow
-            "colsample_bytree": [0.1, 0.3, 0.5],     # Force exploration of minor SNPs
-            "subsample": [0.7, 0.85, 1.0],           # Row subsampling
-            "reg_alpha": [0.0, 0.1, 1.0],            # L1 Regularization (Sparsity)
-            "reg_lambda": [0.0, 1.0, 5.0],           # L2 Regularization (Shrinkage)
-            "min_child_samples": [20, 30],           # Prevent fitting to tiny groups of samples
+            "objective": 'reg:squarederror',
+            "n_estimators": [1_000, 10_000],
+            "learning_rate": [0.01, 0.1],
+            "max_depth": [3, 5, 10],
+            "subsample": [0.5, 0.75, 1.0],
             "random_state": 42,
-            "early_stopping_rounds": 50,             # Increased slightly due to lower learning rate
+            "early_stopping_rounds": 10,
             "within_fold_cv_frac": 10,
         }
 
@@ -88,31 +82,18 @@ def extract_X_y(args):
     params = get_params(args) 
     df = pd.read_csv(params["input_file"], sep="\t")
     X_tmp = df.drop(df.columns[0], axis=1)
-    at_least_one_str = False
+    X = None
+    encoder = OneHotEncoder(sparse_output=False)
     for col in X_tmp.columns:
         if X_tmp[col].dtype == "str":
-            at_least_one_str = True
-            break
-    
-    if not at_least_one_str:
-        X = X_tmp
-    else:
-        X = None
-        encoder = OneHotEncoder(sparse_output=False)
-        for col in X_tmp.columns:
-            if X_tmp[col].dtype == "str":
-                X_1_hot = pd.DataFrame(encoder.fit_transform(X_tmp[col].values.reshape(-1, 1)))
-                X_1_hot.columns = encoder.categories_[0]
-            else:
-                X_1_hot = X_tmp[col]
-            if X is None:
-                X = X_1_hot
-            else:
-                X = pd.concat([X, X_1_hot], axis=1)
-    
-    # # LightGBM prefers clean feature names (no special JSON characters)
-    # X = X.rename(columns=lambda x: re.sub('[^A-Za-z0-9_]+', '', str(x)))
-    
+            X_1_hot = pd.DataFrame(encoder.fit_transform(X_tmp[col].values.reshape(-1, 1)))
+            X_1_hot.columns = encoder.categories_[0]
+        else:
+            X_1_hot = X_tmp[col]
+        if X is None:
+            X = X_1_hot
+        else:
+            X = pd.concat([X, X_1_hot], axis=1)
     y = df[df.columns[0]]
     return X, y
 
@@ -124,6 +105,7 @@ def extract_randomisations(args):
     i = 1
     for r in range(params["n_replicates"]):
         for f in range(params["n_folds"]):
+            # print(f"Replicate {r}, Fold {f}, i: {i}")
             idx_training.append([int(x)-1 for x in df_randomisation.iloc[i-1,0].split(",")])
             idx_validation.append([int(x)-1 for x in df_randomisation.iloc[i,0].split(",")])
             i += 2
@@ -133,36 +115,37 @@ def define_fname_output(args):
     return args.output_dir / f"output-{args.input_file.stem}-TREES.tsv"
     
 def extract_entries_effects(args):
+    # args = Args(analysis_type="trials", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/trials/australia.soybean-yield.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
     params = get_params(args)
     X, y = extract_X_y(args)
-    model = lgb.LGBMRegressor(
-        objective=params["objective"],
+    model = xgb.XGBRegressor(
+        objective='reg:squarederror',
         n_estimators=params["n_estimators"],
         learning_rate=params["learning_rate"],
         max_depth=params["max_depth"],
         random_state=params["random_state"],
-        # device="cuda",
-        verbose=-1 # Suppress LightGBM warnings
+        device = "cuda",
+        # early_stopping_rounds=params["early_stopping_rounds"],
     )
     model.fit(X, y)
-    
+    # y_pred = model.predict(X)
+    # print(f"RMSE: {root_mean_squared_error(y, y_pred):.4f}")
+    # print(f"R^2: {r2_score(y, y_pred):.4f}")
     explainer = shap.TreeExplainer(model)
     shap_values = explainer(X)
     global_effects = pd.DataFrame({'ids': X.columns, 'effects': abs(shap_values.values).mean(axis=0)})
-    
+    # Save as TSV
     fname_output = define_fname_output(args)
     global_effects.to_csv(fname_output, sep="\t", index=False)
     print(f"Global effects saved to {fname_output}")
     return None
 
 def gp_repeated_kfold_cv(args):
-    # args = Args(analysis_type="gp", input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
-    # args = Args(analysis_type="gp", input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv"), output_dir=Path.home() / Path("Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path.home() / Path("Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
+    # args = Args(analysis_type="gp", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
     params = get_params(args) 
     X, y = extract_X_y(args)
     idx_validation, idx_training = extract_randomisations(args)
-    df_out = pd.DataFrame(columns=["replicate", "fold", "best_n_estimators", "best_learning_rate", "best_max_depth", "best_subsample", "rmse", "r2", "corr"])
-    
+    df_out = pd.DataFrame(columns=["datasets", "reps", "folds", "nt", "nv", "models", "best_n_estimators", "best_learning_rate", "best_max_depth", "best_subsample", "rmse", "r2", "corr"])
     for r in range(params["n_replicates"]):
         for f in range(params["n_folds"]):
             # r = 0; f = 0;
@@ -172,52 +155,35 @@ def gp_repeated_kfold_cv(args):
             X_test = X.iloc[idx_validation[idx]]
             y_train = y.iloc[idx_training[idx]]
             y_test = y.iloc[idx_validation[idx]]
-            lgb_reg = lgb.LGBMRegressor(
-                objective=params["objective"],
+            xgb_reg = xgb.XGBRegressor(
+                objective="reg:squarederror",
+                early_stopping_rounds=params["early_stopping_rounds"],
                 random_state=params["random_state"],
-                # device="cuda",
-                verbose=-1 # Suppress LightGBM warnings
+                device="cuda",
             )
-            lgb_params = {
+            xgb_params = {
                 'n_estimators': params["n_estimators"],
                 'learning_rate': params["learning_rate"],
-                'num_leaves': params["num_leaves"],
                 'max_depth': params["max_depth"],
-                'colsample_bytree': params["colsample_bytree"],
-                'subsample': params["subsample"],
-                'reg_alpha': params["reg_alpha"],
-                'reg_lambda': params["reg_lambda"],
-                'min_child_samples': params["min_child_samples"]
+                'subsample': params["subsample"]
             }
-            # Note: Increased n_iter from 5 to 20 to better explore the larger GP space
-            rs = RandomizedSearchCV(
-                lgb_reg, 
-                lgb_params, 
-                n_iter=20, 
-                cv=3, 
-                scoring='neg_mean_squared_error', 
-                n_jobs=-1,
-                random_state=params["random_state"]
-            )
-            callbacks = [lgb.early_stopping(stopping_rounds=params["early_stopping_rounds"], verbose=True)]
-            rs.fit(
-                X_train, y_train, 
-                eval_set=[(X_test, y_test)], 
-                callbacks=callbacks
-            )
-            
+            rs = RandomizedSearchCV(xgb_reg, xgb_params, n_iter=5, cv=3, scoring='neg_mean_squared_error', n_jobs=-1)
+            rs.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
             print(f"Best Params: {rs.best_params_}")
             best_model = rs.best_estimator_
+            best_model.set_params(device="cuda")
             y_pred = best_model.predict(X_test)
-            
             print(f"RMSE: {root_mean_squared_error(y_test, y_pred):.4f}")
             print(f"R^2: {r2_score(y_test, y_pred):.4f}")
-            
             df_out = pd.concat([
                 df_out, 
                 pd.DataFrame({
-                    "replicate": [r+1],
-                    "fold": [f+1],
+                    "datasets": [args.input_file.stem],
+                    "reps": [r+1],
+                    "folds": [f+1],
+                    "nt": [len(X_train)],
+                    "nv": [len(X_test)],
+                    "models": ["XGBoost"],
                     "best_n_estimators": [rs.best_params_["n_estimators"]],
                     "best_learning_rate": [rs.best_params_["learning_rate"]],
                     "best_max_depth": [rs.best_params_["max_depth"]],
