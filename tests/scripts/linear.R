@@ -1,3 +1,47 @@
+args <- commandArgs(trailingOnly = TRUE)
+if (args[1] == "-h" || args[1] == "--help") {
+  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
+  cat("Arguments:\n")
+  cat("\t1. ANALYSIS_TYPE:\n")
+  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
+  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
+  cat("\t2. FNAME_INPUT: The input file name which should not have any missing values, i.e. pre-filtered.\n")
+  cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
+  cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
+  cat("\t3. DIRNAME_OUTPUT: The output directory.\n")
+  cat("For trials analysis, additional arguments are:\n")
+  cat("\t\t4. is_simulated: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t5. exclude_lm: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t6. exclude_lmer: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t7. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t8. exclude_asreml: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t9. verbose: TRUE/FALSE (Default: FALSE)\n")
+  cat("For genomic prediction analysis, additional arguments are:\n")
+  cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
+  cat("\t\t5. n_reps: numeric (Default: 3)\n")
+  cat("\t\t6. n_folds: numeric (Default: 10)\n")
+  cat("\t\t7. n_iterations: numeric (Default: 1000)\n")
+  cat("\t\t8. n_burnin_iterations: numeric (Default: 100)\n")
+  cat("\t\t9. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
+  cat("\t\t10. verbose: TRUE/FALSE (Default: FALSE)\n")
+  cat("Examples:\n")
+  cat("DIR=${HOME}/Documents/mlp/tests\n")
+  cat("cd ${DIR}/scripts\n")
+  cat("mkdir tmp\n")
+  cat("###############\n")
+  cat("TRIALS ANALYSIS\n")
+  cat("###############\n")
+  cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
+  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE FALSE TRUE TRUE TRUE TRUE\n")
+  cat("###########################\n")
+  cat("GENOMIC PREDICTION ANALYSIS\n")
+  cat("###########################\n")
+  cat("MLP=${HOME}/Documents/mlp/target/release/mlp\n")
+  cat("sh simulate.sh $MLP gp tmp BINARY 100 50 2\n")
+  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDN_LAYERS_2-RANDOMISATION.tsv 3 5 100 10 'BRR,BayesA' TRUE\n")
+  quit(status = 0)
+}
+
 library("stringr")
 library("lme4")
 if (nzchar(system.file(package = "asreml"))) {
@@ -22,8 +66,10 @@ get_params <- function(args) {
       "\t3. output directory",
       "\t4. is_simulated (TRUE/FALSE)",
       "\t5. exclude_lm (TRUE/FALSE)",
-      "\t6. exclude_sommer (TRUE/FALSE)",
-      "\t7. verbose (TRUE/FALSE)"
+      "\t6. exclude_lmer (TRUE/FALSE)",
+      "\t7. exclude_sommer (TRUE/FALSE)",
+      "\t8. exclude_asreml (TRUE/FALSE)",
+      "\t9. verbose (TRUE/FALSE)"
     ))
   }
   if (analysis_type == "gp" && length(args) < 10) {
@@ -63,7 +109,9 @@ get_params <- function(args) {
     trials = list(
       is_simulated = NA,
       exclude_lm = NA,
+      exclude_lmer = NA,
       exclude_sommer = NA,
+      exclude_asreml = NA,
       verbose = NA
     ),
     gp = list(
@@ -81,8 +129,10 @@ get_params <- function(args) {
     if (analysis_type == "trials") {
       params$trials$is_simulated <- if (args[4] == "TRUE") TRUE else FALSE
       params$trials$exclude_lm <- if (args[5] == "TRUE") TRUE else FALSE
-      params$trials$exclude_sommer <- if (args[6] == "TRUE") TRUE else FALSE
-      params$trials$verbose <- if (args[7] == "TRUE") TRUE else FALSE
+      params$trials$exclude_lmer <- if (args[6] == "TRUE") TRUE else FALSE
+      params$trials$exclude_sommer <- if (args[7] == "TRUE") TRUE else FALSE
+      params$trials$exclude_asreml <- if (args[8] == "TRUE") TRUE else FALSE
+      params$trials$verbose <- if (args[9] == "TRUE") TRUE else FALSE
     } else if (analysis_type == "gp") {
       if (!file.exists(args[4])) {
         stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
@@ -171,7 +221,7 @@ loglik_lm_lmer_asreml <- function(mod) {
 
 #' Generate model strings for simulated data using lm, lme4, asreml, and sommer packages.
 #' The models are based on the structure of the simulated data, which includes factors like year, location, treatment, genotype, and block.
-generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclude_sommer = FALSE) {
+generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclude_lmer = FALSE, exclude_sommer = FALSE, exclude_asreml = FALSE) {
   if (exclude_lm) {
     lm_model_strings <- c()
   } else {
@@ -181,27 +231,35 @@ generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclud
       "lm(y ~ env + gen + blk, data=df)"
     )
   }
-  lmer_model_strings <- c(
-    "lmer(y ~ year + loc + trt + blk + (1|gen), df)",
-    "lmer(y ~ year * loc + trt + blk + (1|gen), df)",
-    "lmer(y ~ year + loc + trt + blk + (1|gen) + (1|gen:year) + (1|gen:loc), df)",
-    "lmer(y ~ env + blk + (1|gen), df)",
-    "lmer(y ~ env + blk + (1|gen) + (1|gen:env), df)"
-  )
-  asreml_model_strings <- c(
-    "asreml(y ~ year + loc + trt + blk, random = ~ gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc * trt + blk, random = ~ gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(year):gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen + diag(year):gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(loc):gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(year):gen, data = df, trace = FALSE)",
-    "asreml(y ~ year * loc * trt + blk, random = ~ gen + fa(year:loc):gen, data = df, trace = FALSE)",
-    "asreml(y ~ year + loc + trt + blk, random = ~ gen + gen:year + gen:loc, data = df, trace = FALSE)",
-    "asreml(y ~ env + blk, random = ~ gen, data = df, trace = FALSE)",
-    "asreml(y ~ env + blk, random = ~ gen + fa(env):gen, data = df, trace = FALSE)"
-  )
+  if (exclude_lmer) {
+    lmer_model_strings <- c()
+  } else {
+    lmer_model_strings <- c(
+      "lmer(y ~ year + loc + trt + blk + (1|gen), df)",
+      "lmer(y ~ year * loc + trt + blk + (1|gen), df)",
+      "lmer(y ~ year + loc + trt + blk + (1|gen) + (1|gen:year) + (1|gen:loc), df)",
+      "lmer(y ~ env + blk + (1|gen), df)",
+      "lmer(y ~ env + blk + (1|gen) + (1|gen:env), df)"
+    )
+  }
+  if (exclude_asreml) {
+    asreml_model_strings <- c()
+  } else {
+    asreml_model_strings <- c(
+      "asreml(y ~ year + loc + trt + blk, random = ~ gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc + trt + blk, random = ~ gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc * trt + blk, random = ~ gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(year):gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc + trt + blk, random = ~ gen + diag(loc):gen + diag(year):gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(loc):gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc + trt + blk, random = ~ gen + fa(year):gen, data = df, trace = FALSE)",
+      "asreml(y ~ year * loc * trt + blk, random = ~ gen + fa(year:loc):gen, data = df, trace = FALSE)",
+      "asreml(y ~ year + loc + trt + blk, random = ~ gen + gen:year + gen:loc, data = df, trace = FALSE)",
+      "asreml(y ~ env + blk, random = ~ gen, data = df, trace = FALSE)",
+      "asreml(y ~ env + blk, random = ~ gen + fa(env):gen, data = df, trace = FALSE)"
+    )
+  }
   if (exclude_sommer) {
     sommer_model_strings <- c()
   } else {
@@ -232,7 +290,7 @@ generate_model_strings_for_simulated_data <- function(exclude_lm = FALSE, exclud
 
 #' Generate model strings for empirical data using lm, lme4, asreml, and sommer packages based on feature names.
 #' On the other hand, these models are more data-driven and agnostic to the underlying data generating process, and are based on the feature names in the empirical data.
-generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dummy_env, exclude_lm = FALSE, exclude_sommer = FALSE) {
+generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dummy_env, exclude_lm = FALSE, exclude_lmer = FALSE, exclude_sommer = FALSE, exclude_asreml = FALSE) {
   m <- length(x_names_except_gen_and_dummy_env)
   if (exclude_lm) {
     lm_model_strings <- c()
@@ -259,7 +317,7 @@ generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dum
     #   }
     # }
   }
-  if (exclude_sommer) {
+  if (exclude_lmer) {
     lmer_model_strings <- c()
   } else {
     lmer_model_strings <- c(
@@ -286,35 +344,6 @@ generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dum
           lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x2, "), data=df)"))
           lmer_model_strings <- c(lmer_model_strings, paste0("lmer(y ~ ", x1, " + ", x2, " + (1|gen) + (1|gen:", x1, ") + (1|gen:", x2, "), data=df)"))
         }
-      }
-    }
-  }
-  asreml_model_strings <- c(
-    "asreml(y ~ 1, random = ~ gen, data=df, trace=FALSE, maxit=10)",
-    "asreml(y ~ dummy_env, random = ~ gen, data=df, trace=FALSE)",
-    "asreml(y ~ dummy_env, random = ~ gen:dummy_env, data=df, trace=FALSE)",
-    "asreml(y ~ 1, random = ~ gen:dummy_env, data=df, trace=FALSE)",
-    "asreml(y ~ 1, random = ~ dummy_env + gen:dummy_env, data=df, trace=FALSE)",
-    paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), ", random = ~ gen, data=df, trace=FALSE)"),
-    paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), ", random = ~ gen + fa(dummy_env):gen, data=df, trace=FALSE)"),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("asreml(y ~ ", x, ", random = ~ gen, data=df, trace=FALSE)")})),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("asreml(y ~ ", x, ", random = ~ gen + ", x, ":gen, data=df, trace=FALSE)")})),
-    unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("asreml(y ~ ", x, ", random = ~ gen + fa(", x, "):gen, data=df, trace=FALSE)")}))
-  )
-  if (m > 1) {
-    for (i in 1:(m - 1)) {
-      x1 <- x_names_except_gen_and_dummy_env[i]
-      for (j in (i + 1):m) {
-        x2 <- x_names_except_gen_and_dummy_env[j]
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x2, ":gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen + ", x2, ":gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x1, "):gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x2, "):gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x1, "):gen + ", x2, ":gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen + fa(", x2, "):gen, data=df, trace=FALSE)"))
-        asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x1, "):gen + fa(", x2, "):gen, data=df, trace=FALSE)"))
       }
     }
   }
@@ -347,6 +376,39 @@ generate_model_strings_for_empirical_data <- function(x_names_except_gen_and_dum
           sommer_model_strings <- c(sommer_model_strings, paste0("mmes(y ~ ", x1, " + ", x2, ", random = ~ gen + vsm(dsm(", x1, "), ism(gen)) + ", x2, ":gen, data=df, verbose=FALSE)"))
           sommer_model_strings <- c(sommer_model_strings, paste0("mmes(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen + vsm(dsm(", x2, "), ism(gen)), data=df, verbose=FALSE)"))
           sommer_model_strings <- c(sommer_model_strings, paste0("mmes(y ~ ", x1, " + ", x2, ", random = ~ gen + vsm(dsm(", x1, "), ism(gen)) + vsm(dsm(", x2, "), ism(gen)), data=df, verbose=FALSE)"))
+        }
+      }
+    }
+  }
+  if (exclude_asreml) {
+    asreml_model_strings <- c()
+  } else {
+    asreml_model_strings <- c(
+      "asreml(y ~ 1, random = ~ gen, data=df, trace=FALSE, maxit=10)",
+      "asreml(y ~ dummy_env, random = ~ gen, data=df, trace=FALSE)",
+      "asreml(y ~ dummy_env, random = ~ gen:dummy_env, data=df, trace=FALSE)",
+      "asreml(y ~ 1, random = ~ gen:dummy_env, data=df, trace=FALSE)",
+      "asreml(y ~ 1, random = ~ dummy_env + gen:dummy_env, data=df, trace=FALSE)",
+      paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), ", random = ~ gen, data=df, trace=FALSE)"),
+      paste0("asreml(y ~ ", paste(x_names_except_gen_and_dummy_env, collapse = ' + ' ), ", random = ~ gen + fa(dummy_env):gen, data=df, trace=FALSE)"),
+      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("asreml(y ~ ", x, ", random = ~ gen, data=df, trace=FALSE)")})),
+      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("asreml(y ~ ", x, ", random = ~ gen + ", x, ":gen, data=df, trace=FALSE)")})),
+      unlist(lapply(x_names_except_gen_and_dummy_env, FUN = function(x) {paste0("asreml(y ~ ", x, ", random = ~ gen + fa(", x, "):gen, data=df, trace=FALSE)")}))
+    )
+    if (m > 1) {
+      for (i in 1:(m - 1)) {
+        x1 <- x_names_except_gen_and_dummy_env[i]
+        for (j in (i + 1):m) {
+          x2 <- x_names_except_gen_and_dummy_env[j]
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x2, ":gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen + ", x2, ":gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x1, "):gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x2, "):gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x1, "):gen + ", x2, ":gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + ", x1, ":gen + fa(", x2, "):gen, data=df, trace=FALSE)"))
+          asreml_model_strings <- c(asreml_model_strings, paste0("asreml(y ~ ", x1, " + ", x2, ", random = ~ gen + fa(", x1, "):gen + fa(", x2, "):gen, data=df, trace=FALSE)"))
         }
       }
     }
@@ -518,18 +580,18 @@ fit_extract_effects <- function(df, model_strings, time_limit_seconds = 1, verbo
 }
 
 #' Fit linear models and extract the genotype effects for simulated data by generating model strings and calling fit_extract_effects.
-fit_extract_effects_for_simulated_data <- function(df, time_limit_seconds = 1, exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
-  # df = process_features(read.table(list.files(path = ".", pattern = ".tsv")[1], T))[[1]]; time_limit_seconds=1; exclude_lm=TRUE; exclude_sommer=TRUE; verbose=TRUE
-  model_strings <- generate_model_strings_for_simulated_data(exclude_lm = exclude_lm, exclude_sommer = exclude_sommer)
+fit_extract_effects_for_simulated_data <- function(df, time_limit_seconds = 1, exclude_lm = FALSE, exclude_lmer = FALSE, exclude_sommer = FALSE, exclude_asreml = FALSE, verbose = TRUE) {
+  # df = process_features(read.table(list.files(path = ".", pattern = ".tsv")[1], T))[[1]]; time_limit_seconds=1; exclude_lm=TRUE; exclude_asreml=TRUE; exclude_sommer=TRUE; verbose=TRUE
+  model_strings <- generate_model_strings_for_simulated_data(exclude_lm = exclude_lm, exclude_lmer = exclude_lmer, exclude_sommer = exclude_sommer, exclude_asreml = exclude_asreml)
   fit_extract_effects(df, model_strings, time_limit_seconds = time_limit_seconds, verbose = verbose)
 }
 
 #' Fit linear models and extract the genotype effects for empirical data by generating model strings based on features and calling fit_extract_effects.
-fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, exclude_lm = FALSE, exclude_sommer = FALSE, verbose = TRUE) {
+fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, exclude_lm = FALSE, exclude_lmer = FALSE, exclude_sommer = FALSE, exclude_asreml = FALSE, verbose = TRUE) {
   # df = process_features(read.table(list.files(path = ".", pattern = ".tsv")[19], T))[[1]]; time_limit_seconds=1; exclude_lm=FALSE; exclude_sommer=TRUE; verbose=TRUE
   x_names <- colnames(df)[2:ncol(df)]
   x_names_except_gen_and_dummy_env <- x_names[(x_names != "gen") & (x_names != "dummy_env")]
-  model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = exclude_lm, exclude_sommer = exclude_sommer)
+  model_strings <- generate_model_strings_for_empirical_data(x_names_except_gen_and_dummy_env, exclude_lm = exclude_lm, exclude_lmer = exclude_lmer, exclude_sommer = exclude_sommer, exclude_asreml = exclude_asreml)
   fit_extract_effects(df, model_strings, time_limit_seconds = time_limit_seconds, verbose = verbose)
 }
 
@@ -575,14 +637,18 @@ extract_entries_effects <- function(params) {
     fit_extract_effects_for_simulated_data(
       df,
       exclude_lm = params$trials$exclude_lm,
+      exclude_lmer = params$trials$exclude_lmer,
       exclude_sommer = params$trials$exclude_sommer,
+      exclude_asreml = params$trials$exclude_asreml,
       verbose = params$trials$verbose
     )
   } else {
     fit_extract_effects_for_empirical_data(
       df,
       exclude_lm = params$trials$exclude_lm,
+      exclude_lmer = params$trials$exclude_lmer,
       exclude_sommer = params$trials$exclude_sommer,
+      exclude_asreml = params$trials$exclude_asreml,
       verbose = params$trials$verbose
     )
   }
@@ -680,47 +746,6 @@ misc_sim <- function() {
 ###########################################################
 # Execute
 ###########################################################
-args <- commandArgs(trailingOnly = TRUE)
-if (args[1] == "-h" || args[1] == "--help") {
-  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
-  cat("Arguments:\n")
-  cat("\t1. ANALYSIS_TYPE:\n")
-  cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
-  cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
-  cat("\t2. FNAME_INPUT: The input file name which should not have any missing values, i.e. pre-filtered.\n")
-  cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
-  cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
-  cat("\t3. DIRNAME_OUTPUT: The output directory.\n")
-  cat("For trials analysis, additional arguments are:\n")
-  cat("\t\t4. is_simulated: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t5. exclude_lm: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t6. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t7. verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("For genomic prediction analysis, additional arguments are:\n")
-  cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
-  cat("\t\t5. n_reps: numeric (Default: 3)\n")
-  cat("\t\t6. n_folds: numeric (Default: 10)\n")
-  cat("\t\t7. n_iterations: numeric (Default: 1000)\n")
-  cat("\t\t8. n_burnin_iterations: numeric (Default: 100)\n")
-  cat("\t\t9. models: comma-separated list of 'BRR', 'BayesA', 'BayesB', 'BayesC' (Default: 'BRR,BayesA,BayesB,BayesC')\n")
-  cat("\t\t10. verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("Examples:\n")
-  cat("DIR=${HOME}/Documents/mlp/tests\n")
-  cat("cd ${DIR}/scripts\n")
-  cat("mkdir tmp\n")
-  cat("###############\n")
-  cat("TRIALS ANALYSIS\n")
-  cat("###############\n")
-  cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
-  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE FALSE TRUE TRUE\n")
-  cat("###########################\n")
-  cat("GENOMIC PREDICTION ANALYSIS\n")
-  cat("###########################\n")
-  cat("MLP=${HOME}/Documents/mlp/target/release/mlp\n")
-  cat("sh simulate.sh $MLP gp tmp BINARY 100 50 2\n")
-  cat("Rscript linear.R gp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDEN_LAYERS_2.tsv tmp tmp/simulated-DATA_TYPE_BINARY-N_100-P_50-HIDDN_LAYERS_2-RANDOMISATION.tsv 3 5 100 10 'BRR,BayesA' TRUE\n")
-  quit(status = 0)
-}
 # args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/ilri.sheep-birthwt.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials", ".", "FALSE", "FALSE", "TRUE", "TRUE")
 # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "TRUE")
 params <- get_params(args)

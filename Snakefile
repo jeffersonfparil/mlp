@@ -24,6 +24,7 @@ GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 # GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
 GP_AZODI2019_FNAMES = ["test_geno.csv"]
 EXCLUDE_LM = "FALSE"
+EXCLUDE_LMER = "TRUE"
 EXCLUDE_SOMMER = "TRUE"
 EXCLUDE_ASREML = "TRUE"
 N_FOLDS = 2
@@ -376,6 +377,7 @@ rule linear_analysis:
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         exclude_lm = EXCLUDE_LM,
+        exclude_lmer = EXCLUDE_LMER,
         exclude_sommer = EXCLUDE_SOMMER,
         exclude_asreml = EXCLUDE_ASREML,
         n_folds = N_FOLDS,
@@ -414,7 +416,9 @@ rule linear_analysis:
                 {params.outdir} \
                 $IS_SIMULATED \
                 {params.exclude_lm} \
+                {params.exclude_lmer} \
                 {params.exclude_sommer} \
+                {params.exclude_asreml} \
                 {params.verbose} >> {log} 2>&1
         else
             time \
