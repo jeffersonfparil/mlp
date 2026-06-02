@@ -142,16 +142,16 @@ def train_model(data, target='Yield', group='Experiment_Name'):
 # EXECUTION
 # ==========================================
 if __name__ == "__main__":
-    TRAITS_CSV = "constant_agronomic_traits_2021.csv"
+    TRAITS_CSV = Path.home() / "Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"
     
     # You will need to define where the downloaded images are stored
-    IMAGE_ROOT_DIR = "path/to/extracted/imagery"
+    IMAGE_ROOT_DIR = Path.home() / "Documents/mlp/tests/datasets/farag_2024/"
     
     # List the dates/flights you want to include (to build the multitemporal profile)
-    FLIGHT_DATES = ["flight_1", "flight_2", "flight_3"] 
+    FLIGHT_DATES = ["06-14-2021", "07-14-2021", "08-03-2021", "09-03-2021"]
     
     # 1. Build Dataset
-    # final_dataset = build_dataset(TRAITS_CSV, IMAGE_ROOT_DIR, FLIGHT_DATES)
+    final_dataset = build_dataset(TRAITS_CSV, IMAGE_ROOT_DIR, FLIGHT_DATES)
     
     # 2. Train Model on Yield
     # train_model(final_dataset, target='Yield', group='Experiment_Name')

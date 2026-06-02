@@ -542,6 +542,12 @@ cv_metrics <- function(yHat, y) {
   mse <- mean((yHat - y)^2)
   rmse <- sqrt(mse)
   r2 <- 1.00 - (sum((yHat - y)^2) / sum((y - mean(y))^2))
+  if (is.na(pcor)) {
+    pcor = 0.0
+  }
+  if (is.na(r2)) {
+    r2 = 0.0
+  }
   list(
     pcor = pcor,
     mae = mae,

@@ -10,27 +10,29 @@ wildcard_constraints:
 N_YEARS = [2]
 N_SITES = [5]
 N_TREATMENTS = [3]
-N_ENTRIES = [10, 50]
+N_ENTRIES = [10]
 N_REPLICATIONS = [3]
-N_HIDDEN_LAYERS = [1, 2]
-DATA_TYPES = ["CONTINUOUS", "BINARY"]
+N_HIDDEN_LAYERS = [1]
+DATA_TYPES = ["CONTINUOUS"]
 N_OBSERVATIONS = [500]
 N_FEATURES = [1000]
 TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
-TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
+# TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt", "ilri.sheep.txt"]
+TRIALS_AGRIDAT_FNAMES = ["australia.soybean.txt"]
 GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 # GP_AZODI2019_FNAMES = ["sorghum_geno.csv", "rice_geno.csv", "spruce_geno.csv"]
 # GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
 GP_AZODI2019_FNAMES = ["test_geno.csv"]
 EXCLUDE_LM = "FALSE"
 EXCLUDE_SOMMER = "TRUE"
-N_FOLDS = 5
-N_REPS = 3
+EXCLUDE_ASREML = "TRUE"
+N_FOLDS = 2
+N_REPS = 2
 N_ITERATIONS_LINEAR = 100
-N_BURNIN_ITERATIONS_LINEAR = 10
-# N_EPOCHS_MLP = 1000
-# N_BURNIN_EPOCHS_MLP = 100
-MODELS = "BRR,BayesA"
+N_BURNIN_ITERATIONS_LINEAR = 100
+N_EPOCHS_MLP = 1000
+N_BURNIN_EPOCHS_MLP = 100
+MODELS = "BayesA"
 BASE_SEED = 42
 VERBOSE = "TRUE"
 
@@ -208,6 +210,14 @@ rule simulate_trials:
         f"{ROOT_OUTDIR}/trials/simulate_trials-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="gpu",
+        slurm_extra="'--gres=gpu:h100:1'",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         cd {params.root_outdir}
@@ -235,6 +245,14 @@ rule simulate_gp:
         f"{ROOT_OUTDIR}/gp/simulate_gp-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="gpu",
+        slurm_extra="'--gres=gpu:h100:1'",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         cd {params.root_outdir}
@@ -262,6 +280,13 @@ checkpoint empiricalprep_trials:
         f"{ROOT_OUTDIR}/trials/{{fname}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="cpu",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         mkdir -p {params.tmpdir}
@@ -288,6 +313,13 @@ checkpoint empiricalprep_gp:
         f"{ROOT_OUTDIR}/gp/{{fname}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="cpu",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         mkdir -p {params.tmpdir}
@@ -316,6 +348,13 @@ rule randomisation_gp:
         f"{ROOT_OUTDIR}/{{analysis_type}}/randomisation-{{fname}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="cpu",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         time \
@@ -338,6 +377,7 @@ rule linear_analysis:
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         exclude_lm = EXCLUDE_LM,
         exclude_sommer = EXCLUDE_SOMMER,
+        exclude_asreml = EXCLUDE_ASREML,
         n_folds = N_FOLDS,
         n_reps = N_REPS,
         n_iterations = N_ITERATIONS_LINEAR,
@@ -349,6 +389,13 @@ rule linear_analysis:
         f"{ROOT_OUTDIR}/{{analysis_type}}/linear_analysis-{{fname}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="cpu",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
@@ -356,6 +403,9 @@ rule linear_analysis:
                 IS_SIMULATED="TRUE"
             else 
                 IS_SIMULATED="FALSE"
+            fi;
+            if [[ {params.exclude_asreml} == "FALSE" ]]; then
+                module try-load ASReml-R > {log} 2>&1
             fi;
             time \
             Rscript {params.scripts_dir}/linear.R \
@@ -365,7 +415,7 @@ rule linear_analysis:
                 $IS_SIMULATED \
                 {params.exclude_lm} \
                 {params.exclude_sommer} \
-                {params.verbose} > {log} 2>&1
+                {params.verbose} >> {log} 2>&1
         else
             time \
             Rscript {params.scripts_dir}/linear.R \
@@ -398,6 +448,14 @@ rule trees_analysis:
         f"{ROOT_OUTDIR}/{{analysis_type}}/trees_analysis-{{fname}}.log"
     conda:
         "trees.yaml"
+    threads: 1
+    resources:
+        slurm_partition="gpu",
+        slurm_extra="'--gres=gpu:h100:1'",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
@@ -433,11 +491,20 @@ rule mlp_analysis:
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
         n_folds = N_FOLDS,
         n_reps = N_REPS,
-        base_seed = BASE_SEED
+        n_epochs = N_EPOCHS_MLP,
+        n_burnin_epochs = N_BURNIN_EPOCHS_MLP,
     log:
         f"{ROOT_OUTDIR}/{{analysis_type}}/mlp_analysis-{{fname}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="gpu",
+        slurm_extra="'--gres=gpu:h100:1'",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         if [[ {wildcards.analysis_type} == "trials" ]]; then
@@ -457,7 +524,8 @@ rule mlp_analysis:
                 {input.randomisation} \
                 {params.n_reps} \
                 {params.n_folds} \
-                {params.base_seed} > {log} 2>&1
+                {params.n_epochs} \
+                {params.n_burnin_epochs} > {log} 2>&1
         fi;
         """
 
@@ -477,6 +545,13 @@ rule comparisons:
         f"{ROOT_OUTDIR}/{{analysis_type}}/comparison-{{fname}}.log"
     conda:
         "general.yaml"
+    threads: 1
+    resources:
+        slurm_partition="cpu",
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
     shell:
         """
         echo "LINEAR vs TREES comparison:" > {log} 2>&1

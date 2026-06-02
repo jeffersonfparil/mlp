@@ -11,8 +11,8 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo -e "\t5. FNAME_RANDOMISATION: path to the file containing randomisation indices"
     echo -e "\t6. N_REPS: number of replications of k-fold cross-validation"
     echo -e "\t7. N_FOLDS: number of folds for k-fold cross-validation"
-    # echo -e "\t8. N_EPOCHS: number of epochs for training the multi-layer perceptron model"
-    # echo -e "\t9. N_BURNIN_EPOCHS: number of burn-in epochs for training the multi-layer perceptron model"
+    echo -e "\t8. N_EPOCHS: number of epochs for training the multi-layer perceptron model"
+    echo -e "\t9. N_BURNIN_EPOCHS: number of burn-in epochs for training the multi-layer perceptron model"
     echo "Examples:"
     echo "MLP=\${HOME}/Documents/mlp/target/release/mlp"
     echo "mkdir tmp"
@@ -21,7 +21,7 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "bash simulate.sh \$MLP gp tmp BINARY 100 50 2"
     echo "bash mlp.sh \$MLP trials tmp/australia.soybean-yield.tsv tmp"
     echo "bash mlp.sh \$MLP gp tmp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/ tmp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANOMISATION.tsv 3 5"
-    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp/ tmp/output-sorghum-YLD-RANDOMISATION.tsv 2 5"
+    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp/ tmp/output-sorghum-YLD-RANDOMISATION.tsv 2 5 100 10"
     exit 0
 fi
 MLP=$1
@@ -41,6 +41,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     echo "### Running multi-layer perceptron model for trials analysis ###"
     echo "################################################################"
     N_EPOCHS=500
+    N_BURNIN_EPOCHS=0
     F_PATIENT_EPOCHS=0.01
     N_BATCHES=1
     N_HIDDEN_LAYERS=1
@@ -63,6 +64,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
         -o ${FNAME_OUTPUT_JSON} \
         -v \
         --n-epochs=${N_EPOCHS} \
+        --n-burnin-epochs=${N_BURNIN_EPOCHS} \
         --f-patient-epochs=${F_PATIENT_EPOCHS} \
         --n-batches=${N_BATCHES} \
         --n-hidden-layers=${N_HIDDEN_LAYERS} \
@@ -82,6 +84,8 @@ else
     FNAME_RANDOMISATION=$5
     N_REPS=$6
     N_FOLDS=$7
+    N_EPOCHS=$8
+    N_BURNIN_EPOCHS=$9
     # MLP=${HOME}/Documents/mlp/target/release/mlp
     # ANALYSIS_TYPE=gp
     # FNAME_INPUT=${HOME}/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv
@@ -96,21 +100,9 @@ else
     N=$(echo $(cut -f1 $FNAME_INPUT | wc -l) - 1 | bc)
     M=$(echo "scale=0; $N / $N_FOLDS" | bc)
     P=$(head -n1 $FNAME_INPUT | cut -f2- | awk '{print NF}')
-    # while [[ $M -lt 10 ]]; do
-    #     N_FOLDS=$(echo "$N_FOLDS - 1" | bc)
-    #     M=$(echo "scale=0; $N / $N_FOLDS" | bc)
-    # done
-    # if [[ $N_FOLDS -lt 2 ]]; then
-    #     echo "Error: Not enough folds for k-fold cross-validation. Please reduce the number of folds or increase the number of observations."
-    #     exit 1
-    # else
-    #     echo "Using $N_FOLDS folds for k-fold cross-validation (M=$M observations per fold)."
-    # fi
-    N_EPOCHS=100
-    N_BURNIN_EPOCHS=10
-    # F_PATIENT_EPOCHS=0.01
+    # N_EPOCHS=1000
+    # N_BURNIN_EPOCHS=100
     F_PATIENT_EPOCHS=0.1
-    # F_VALIDATION=1e-42
     F_VALIDATION=0.1
     N_BATCHES=1
     N_HIDDEN_LAYERS=1
@@ -119,14 +111,8 @@ else
     LEARNING_RATE=1e-5
     COST="MSE"
     OPTIMISERS="Adam,GradientDescent"
-    # OPTIMISERS="GradientDescent"
-    # OPTIMISERS="Adam"
     ACTIVATIONS="ReLU,Linear"
-    # ACTIVATIONS="ReLU"
-    # ACTIVATIONS="Linear"
-    # WEIGHTS_INITIALISATIONS="He,Cauchy,Uniform"
     WEIGHTS_INITIALISATIONS="Cauchy,He"
-    # WEIGHTS_INITIALISATIONS="He"
     BNAME_INPUT=$(basename $FNAME_INPUT)
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.tsv/g")
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
@@ -148,33 +134,12 @@ else
     echo -ne "n_epochs\tn_burnin_epochs\tn_patient_epochs\tn_validation\t" >> ${FNAME_OUTPUT_CV}.tmp
     echo -ne "n_batches\tactivation\tcost\toptimiser\tweights_initialisation\t" >> ${FNAME_OUTPUT_CV}.tmp
     echo -e "corr\tr2" >> ${FNAME_OUTPUT_CV}.tmp
-    # head -n1 ${FNAME_OUTPUT_CV}.tmp
     IDX_RANDOMISATION=0
     for REP in $(seq 1 $N_REPS); do
         # REP=1
-        # SEED=$(echo "$BASE_SEED + $REP" | bc)
-        # IDX_SHUFFLED=($(shuf --random-source=<(yes $SEED) -e $(seq 2 $(echo $N + 1 | bc))))
-        # echo "IDX_SHUFFLED: ${IDX_SHUFFLED[@]}"
         for FOLD in $(seq 1 $N_FOLDS); do
             # FOLD=1
             IDX_RANDOMISATION=$(echo "$IDX_RANDOMISATION + 2" | bc)
-            # echo $IDX_RANDOMISATION
-            # IDX_INI=$(echo "(($FOLD - 1) * $M) + 1" | bc)
-            # IDX_FIN=$(echo "$FOLD * $M" | bc)
-            # IDX_TRAINING=()
-            # IDX_VALIDATION=()
-            # for i in $(seq 0 $N); do
-            #     if [[ ($i -ge $IDX_INI) && ($i -le $IDX_FIN) ]]; then
-            #         # echo "$i; ${IDX_SHUFFLED[i]}"
-            #         IDX_VALIDATION+=("${IDX_SHUFFLED[i]}")
-            #     else
-            #         IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
-            #     fi
-            # done
-            # # echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-            # # echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
-            # TRAINING_IDX=${IDX_TRAINING[@]}
-            # VALIDATION_IDX=${IDX_VALIDATION[@]}
             TRAINING_IDX=$(head -n$(echo "$IDX_RANDOMISATION - 1" | bc) $FNAME_RANDOMISATION | tail -n1)
             VALIDATION_IDX=$(head -n${IDX_RANDOMISATION} $FNAME_RANDOMISATION | tail -n1)
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/TRAINING_SET.tmp
@@ -236,19 +201,10 @@ else
             MSE=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk '{sum+=(($1 - $2)^2); count++} END {printf("%.21f\n", sum/(count - 1))}')
             CORR="$(echo "scale=12; $V_TRUE_PRED / (($S_TRUE * $S_PRED) + 0.00000000001)" | bc | sed 's/[.]/0./g')"
             R2="$(echo "scale=12; 1.00 - ($MSE / (($S_TRUE^2) + 0.00000000001))" | bc | sed 's/[.]/0./g')"
-            # echo "U_TRUE: $U_TRUE"
-            # echo "U_PRED: $U_PRED"
-            # echo "S_TRUE: $S_TRUE"
-            # echo "S_PRED: $S_PRED"
-            # echo "V_TRUE_PRED: $V_TRUE_PRED"
-            # echo "MSE: $MSE"
-            # echo "CORR: $CORR"
-            # echo "R2: $R2"
             rm ${TMP_OUTDIR}/VALIDATION_SET.tmp
             rm ${TMP_OUTDIR}/OUTPUT.tmp.json
             rm ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv
             # Update the output file
-            # echo -ne "$SELECTED_ACTIVATION\t$SELECTED_OPTIMISER\t$SELECTED_WEIGHTS_INITIALISATION\t$CORR\t$R2" >> ${FNAME_OUTPUT_CV}.tmp
             echo -ne "$(basename $FNAME_INPUT)\t$REP\t$FOLD\t$NT\t$NV\tmlp\t" >> ${FNAME_OUTPUT_CV}.tmp
             echo -ne "$SELECTED_N_HIDDEN_LAYERS\t$SELECTED_N_HIDDEN_NODES\t$SELECTED_DROPOUT_RATE\t$SELECTED_LEARNING_RATE\t" >> ${FNAME_OUTPUT_CV}.tmp
             echo -ne "$SELECTED_N_EPOCHS\t$SELECTED_N_BURNIN_EPOCHS\t$SELECTED_N_PATIENT_EPOCHS\t$SELECTED_N_VALIDATION\t" >> ${FNAME_OUTPUT_CV}.tmp
