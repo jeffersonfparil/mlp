@@ -12,7 +12,9 @@ Simple multilayer perceptron (MLP) from scratch
 
 Download the binary compatible with your hardware:
 
-- [Linux x86 with NVIDIA H100 or NVIDIA V100](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp)
+- [Linux x86 with NVIDIA H100](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp-h100)
+- [Linux x86 with NVIDIA NVIDIA Tesla V100](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp-v100)
+- [Linux x86 with NVIDIA GeForce 940MX](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp-940mx)
 
 This list is severely limited at the moment, but please feel free to build it from source. The [instructions are found below](#build-from-source-code).
 
