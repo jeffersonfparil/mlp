@@ -14,7 +14,7 @@ Download the binary compatible with your hardware:
 
 - [Linux x86 with NVIDIA H100 or NVIDIA V100](https://github.com/jeffersonfparil/mlp/releases/download/v0.2.0/mlp)
 
-This list is severely limited at the moment, but please feel free to build it from source. The [instructions are found below](#development-setup).
+This list is severely limited at the moment, but please feel free to build it from source. The [instructions are found below](#build-from-source-code).
 
 ## Quick demo
 
