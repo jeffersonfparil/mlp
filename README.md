@@ -320,21 +320,22 @@ time cargo test -- --show-output
 
 # Benchmarking
 
-Install Snakemake:
+## Install Snakemake:
 
 ```shell
 pixi global install snakemake conda -c conda-forge -c bioconda
 ```
 
-Run the workflow:
+## Run the workflow:
 
 *Note*: comment-out the modelling part in `rule all` to use more compute cores and speed-up simulations and empirical data preparations, 
 after which uncomment them and run with less cores to avoid running out of GPU memory.
 
+### On a single machine:
 ```shell
 cd mlp/
 N_CORES=24
-# N_CORES=3
+# N_CORES=2
 time pixi run snakemake --cores $N_CORES --use-conda
 # ### Debugging and development
 # pixi shell
@@ -342,12 +343,12 @@ time pixi run snakemake --cores $N_CORES --use-conda
 # snakemake -n # or --dry-run
 ```
 
-# TODO: Remote-sensing modelling
+### On an HPC system with Slurm
 
-- Empirical data test only (as simulating data will not be that different from the continuous simulated data in GP)
-- Download dataset from [Fared et al (2024)](https://datadryad.org/dataset/doi:10.5061/dryad.v41ns1s4z).
-- Fit using canonical methods --> python stuff??
-
+```shell
+cd mlp/
+time pixi run snakemake --slurm --default-resources slurm_account="dbiof2" slurm_partition="cpu"
+```
 
 # Miscellaneous
 
