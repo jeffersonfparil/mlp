@@ -11,6 +11,7 @@ dependencies:
 - r-doparallel >=1.0.17,<2
 - r >=4.5,<4.6
 - r-stringr >=1.5.0,<2
+- r-terra >=1.9_25,<2
 # - rust >=1.92.0,<1.93
 # - cuda-nvrtc ==12.8.93
 # - nvtop >=3.3.1,<4
