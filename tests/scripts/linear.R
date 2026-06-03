@@ -5,6 +5,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t1. ANALYSIS_TYPE:\n")
   cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
   cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
+  cat("\t\t+ 'remotesensing' for repeated k-fold cross-validation for remote sensing.\n")
   cat("\t2. FNAME_INPUT: The input file name which should not have any missing values, i.e. pre-filtered.\n")
   cat("\t\t+ For 'trials' analysis, this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable.\n")
   cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
@@ -16,7 +17,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t\t7. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
   cat("\t\t8. exclude_asreml: TRUE/FALSE (Default: FALSE)\n")
   cat("\t\t9. verbose: TRUE/FALSE (Default: FALSE)\n")
-  cat("For genomic prediction analysis, additional arguments are:\n")
+  cat("For genomic prediction and remote sensing analyses, additional arguments are:\n")
   cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
   cat("\t\t5. n_reps: numeric (Default: 3)\n")
   cat("\t\t6. n_folds: numeric (Default: 10)\n")
@@ -56,8 +57,8 @@ library(BGLR)
 get_params <- function(args) {
   # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "42", "TRUE")
   analysis_type <- args[1]
-  if (!(analysis_type %in% c("trials", "gp"))) {
-    stop("ERROR: Invalid analysis type. Must be either 'trials' or 'gp'.")
+  if (!(analysis_type %in% c("trials", "gp", "remotesensing"))) {
+    stop("ERROR: Invalid analysis type. Must be either 'trials', 'gp', or 'remotesensing'.")
   }
   if (analysis_type == "trials" && length(args) < 7) {
     stop(paste0("ERROR: For 'trials' analysis, 7 arguments are required:\n",
@@ -72,8 +73,8 @@ get_params <- function(args) {
       "\t9. verbose (TRUE/FALSE)"
     ))
   }
-  if (analysis_type == "gp" && length(args) < 10) {
-    stop(paste0("ERROR: For 'gp' analysis, 10 arguments are required:\n",
+  if (((analysis_type == "gp") || (analysis_type == "remotesensing")) && length(args) < 10) {
+    stop(paste0("ERROR: For 'gp' and 'remotesensing' analysis, 10 arguments are required:\n",
       "\t1. analysis_type",
       "\t2. input file name",
       "\t3. output directory",
@@ -133,7 +134,7 @@ get_params <- function(args) {
       params$trials$exclude_sommer <- if (args[7] == "TRUE") TRUE else FALSE
       params$trials$exclude_asreml <- if (args[8] == "TRUE") TRUE else FALSE
       params$trials$verbose <- if (args[9] == "TRUE") TRUE else FALSE
-    } else if (analysis_type == "gp") {
+    } else if ((analysis_type == "gp") || (analysis_type == "remotesensing")) {
       if (!file.exists(args[4])) {
         stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
       }
@@ -748,9 +749,11 @@ misc_sim <- function() {
 ###########################################################
 # args <- c("trials", "/home/jp3h/Documents/mlp/tests/tmp/trials/ilri.sheep-birthwt.tsv", "/home/jp3h/Documents/mlp/tests/tmp/trials", ".", "FALSE", "FALSE", "TRUE", "TRUE")
 # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "TRUE")
+# args = c("remotesensing", "/home/jp3h/Documents/mlp/tests/tmp/remotesensing/Yield_07142021.tsv", "/home/jp3h/Documents/mlp/tests/tmp/remotesensing", "/home/jp3h/Documents/mlp/tests/tmp/remotesensing/output-Yield_07142021-RANDOMISATION.tsv", "2", "2", "100", "100", "BayesA", "42", "TRUE")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
   extract_entries_effects(params)
 } else {
+  # "gp" or "remotesensing"
   gp_repeated_kfold_cv(params)
 }

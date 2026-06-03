@@ -2,11 +2,11 @@
 if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "Usage: sh mlp.sh MLP_PATH ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT [GP ARGS...]"
     echo "1. MLP: path to the mlp executable (https://github.com/jeffersonfparil/mlp)."
-    echo "2. ANALYSIS_TYPE: 'trials' or 'gp'."
+    echo "2. ANALYSIS_TYPE: 'trials' or 'gp' or 'remotesensing'."
     echo "3. FNAME_INPUT: path to the input file for the analysis:"
     echo "4. DIRNAME_OUTPUT: directory where output files will be saved."
     echo -e "\t- For trials analysis (i.e. to extract the marginal effects of each genotype), this should be a tab-separated file with a header row and columns for year, site, treatment, entry, replication, and response variable."
-    echo -e "\t- For genomic prediction analysis (i.e. repeated k-fold cross-validation), this should be a tab-separated file with a header row and columns for the response variable followed by the features."
+    echo -e "\t- For genomic prediction or remote sensing analyses (i.e. repeated k-fold cross-validation), this should be a tab-separated file with a header row and columns for the response variable followed by the features."
     echo "GP ARGS: additional arguments for genomic prediction analysis. These are: "
     echo -e "\t5. FNAME_RANDOMISATION: path to the file containing randomisation indices"
     echo -e "\t6. N_REPS: number of replications of k-fold cross-validation"
@@ -28,8 +28,8 @@ MLP=$1
 ANALYSIS_TYPE=$2
 FNAME_INPUT=$3
 DIRNAME_OUTPUT=$4
-if [[ -z $ANALYSIS_TYPE ]]; then echo "Error: Missing argument for analysis type (trials or gp)."; exit 1; fi
-if [[ $ANALYSIS_TYPE != "trials" && $ANALYSIS_TYPE != "gp" ]]; then echo "Error: Invalid analysis type. Expected 'trials' or 'gp', got '${ANALYSIS_TYPE}'."; exit 1; fi
+if [[ -z $ANALYSIS_TYPE ]]; then echo "Error: Missing argument for analysis type (trials or gp or remotesensing)."; exit 1; fi
+if [[ $ANALYSIS_TYPE != "trials" && $ANALYSIS_TYPE != "gp" && $ANALYSIS_TYPE != "remotesensing" ]]; then echo "Error: Invalid analysis type. Expected 'trials' or 'gp' or 'remotesensing', got '${ANALYSIS_TYPE}'."; exit 1; fi
 if [[ -z $MLP ]]; then echo "Error: Missing argument for MLP path."; exit 1; fi
 if [[ ! -f $MLP ]]; then echo "Error: MLP executable not found at the specified path: '${MLP}'."; exit 1; fi
 if [[ -z $FNAME_INPUT ]]; then echo "Error: Missing argument for input file name."; exit 1; fi
@@ -79,7 +79,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     mv $FNAME_OUTPUT_MARGINALS_TMP $FNAME_OUTPUT_MARGINALS
 else
     echo "#########################################################################################################"
-    echo "### Running multi-layer perceptron model for genomic prediction with repeated k-fold cross-validation ###"
+    echo "### Running multi-layer perceptron model for ${ANALYSIS_TYPE} with repeated k-fold cross-validation ###"
     echo "#########################################################################################################"
     FNAME_RANDOMISATION=$5
     N_REPS=$6

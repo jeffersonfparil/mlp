@@ -5,14 +5,13 @@ ROOT_OUTDIR = str(Path.home() / "Documents/mlp/tests/tmp")
 SCRIPTS_DIR = str(Path.home() / "Documents/mlp/tests/scripts")
 MLP = str(Path.home() / "Documents/mlp/target/release/mlp")
 ANALYSIS_TYPES = ["trials", "gp"]
-wildcard_constraints:
-    analysis_type="trials|gp"
 N_YEARS = [2]
 N_SITES = [5]
 N_TREATMENTS = [3]
 N_ENTRIES = [10]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1]
+# DATA_TYPES = ["CONTINUOUS", "BINARY"]
 DATA_TYPES = ["CONTINUOUS"]
 N_OBSERVATIONS = [500]
 N_FEATURES = [1000]
@@ -23,19 +22,34 @@ GP_AZODI2019_DIR = str(Path.home() / "Documents/mlp/tests/datasets/azodi_2019")
 # GP_AZODI2019_FNAMES = ["sorghum_geno.csv", "rice_geno.csv", "spruce_geno.csv"]
 # GP_AZODI2019_FNAMES = ["sorghum_geno.csv"]
 GP_AZODI2019_FNAMES = ["test_geno.csv"]
+REMOTESENSING_FARAG_2024_DIR = str(Path.home() / "Documents/mlp/tests/datasets/farag_2024")
+REMOTESENSING_FARAG_2024_FNAME_TRAIT_CSV = REMOTESENSING_FARAG_2024_DIR + "/constant_agronomic_traits_2021.csv"
+REMOTESENSING_FARAG_2024_TRAIT = "Yield"
+REMOTESENSING_FARAG_2024_DATES = ["06142021", "07142021", "08032021", "09032021"]
 EXCLUDE_LM = "FALSE"
 EXCLUDE_LMER = "TRUE"
 EXCLUDE_SOMMER = "TRUE"
 EXCLUDE_ASREML = "TRUE"
+# N_FOLDS = 5
 N_FOLDS = 2
+# N_REPS = 10
 N_REPS = 2
+# N_ITERATIONS_LINEAR = 10000
 N_ITERATIONS_LINEAR = 100
-N_BURNIN_ITERATIONS_LINEAR = 100
-N_EPOCHS_MLP = 1000
-N_BURNIN_EPOCHS_MLP = 100
-MODELS = "BayesA"
+# N_BURNIN_ITERATIONS_LINEAR = 1000
+N_BURNIN_ITERATIONS_LINEAR = 10
+# N_EPOCHS_MLP = 1000
+N_EPOCHS_MLP = 100
+# N_BURNIN_EPOCHS_MLP = 100
+N_BURNIN_EPOCHS_MLP = 10
+# MODELS = "BRR,BayesA,BayesB,BayesC"
+MODELS = "BRR"
 BASE_SEED = 42
 VERBOSE = "TRUE"
+wildcard_constraints:
+    analysis_type="trials|gp|remotesensing",
+    date="|".join(REMOTESENSING_FARAG_2024_DATES)
+
 
 TRIALS_SIMULATED_INPUT = expand(
     f"{ROOT_OUTDIR}/trials/simulated-YEARS_{{year}}-SITES_{{site}}-TREATMENTS_{{treatment}}-ENTRIES_{{entry}}-REPLICATIONS_{{replication}}-HIDDEN_LAYERS_{{hidden_layer}}.tsv",
@@ -45,6 +59,11 @@ TRIALS_SIMULATED_INPUT = expand(
 GP_SIMULATED_INPUT = expand(
     f"{ROOT_OUTDIR}/gp/simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}.tsv",
     data_type=DATA_TYPES, n=N_OBSERVATIONS, p=N_FEATURES, hidden_layers=N_HIDDEN_LAYERS
+)
+
+REMOTESENSING_EMPIRICAL_INPUT = expand(
+    f"{ROOT_OUTDIR}/remotesensing/{REMOTESENSING_FARAG_2024_TRAIT}_{{date}}.tsv",
+    date=REMOTESENSING_FARAG_2024_DATES
 )
 
 def TRIALS_EMPIRICAL_INPUT(wildcards):
@@ -69,7 +88,7 @@ def GP_EMPIRICAL_INPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/{filename}")
     return final_files
 
-def RANDOMISATION_GP_OUTPUT(wildcards):
+def RANDOMISATION_OUTPUT(wildcards):
     final_files = []
     simulated_targets = expand(
         f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-RANDOMISATION.tsv",
@@ -84,6 +103,8 @@ def RANDOMISATION_GP_OUTPUT(wildcards):
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-RANDOMISATION.tsv")
+    for date in REMOTESENSING_FARAG_2024_DATES:
+        final_files.append(f"{ROOT_OUTDIR}/remotesensing/output-{REMOTESENSING_FARAG_2024_TRAIT}_{date}-RANDOMISATION.tsv")
     return final_files
 
 def LINEAR_ANALYSIS_OUTPUT(wildcards):
@@ -114,6 +135,8 @@ def LINEAR_ANALYSIS_OUTPUT(wildcards):
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-LINEAR.tsv")
+    for date in REMOTESENSING_FARAG_2024_DATES:
+        final_files.append(f"{ROOT_OUTDIR}/remotesensing/output-{REMOTESENSING_FARAG_2024_TRAIT}_{date}-LINEAR.tsv")
     return final_files
 
 def TREES_ANALYSIS_OUTPUT(wildcards):
@@ -144,6 +167,8 @@ def TREES_ANALYSIS_OUTPUT(wildcards):
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-TREES.tsv")
+    for date in REMOTESENSING_FARAG_2024_DATES:
+        final_files.append(f"{ROOT_OUTDIR}/remotesensing/output-{REMOTESENSING_FARAG_2024_TRAIT}_{date}-TREES.tsv")
     return final_files
 
 def MLP_ANALYSIS_OUTPUT(wildcards):
@@ -174,6 +199,8 @@ def MLP_ANALYSIS_OUTPUT(wildcards):
                 if filename.endswith(".tsv"):
                     dataset_base = filename.replace(".tsv", "")
                     final_files.append(f"{ROOT_OUTDIR}/gp/output-{dataset_base}-MLP.tsv")
+    for date in REMOTESENSING_FARAG_2024_DATES:
+        final_files.append(f"{ROOT_OUTDIR}/remotesensing/output-{REMOTESENSING_FARAG_2024_TRAIT}_{date}-MLP.tsv")
     return final_files
 
 def COMPARISONS_OUTPUT(wildcards):
@@ -194,7 +221,8 @@ rule all:
         GP_SIMULATED_INPUT,
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
-        RANDOMISATION_GP_OUTPUT,
+        REMOTESENSING_EMPIRICAL_INPUT,
+        RANDOMISATION_OUTPUT,
         LINEAR_ANALYSIS_OUTPUT,
         TREES_ANALYSIS_OUTPUT,
         MLP_ANALYSIS_OUTPUT,
@@ -283,7 +311,6 @@ checkpoint empiricalprep_trials:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -316,7 +343,6 @@ checkpoint empiricalprep_gp:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -332,6 +358,41 @@ checkpoint empiricalprep_gp:
         ls -1 {params.tmpdir} > {output.manifest}
         mv {params.tmpdir}/* {ROOT_OUTDIR}/gp/
         rm -rf {params.tmpdir}
+        """
+
+rule empiricalprep_remotesensing:
+    input:
+        f"{REMOTESENSING_FARAG_2024_DIR}/{{date}}"
+    output:
+        f"{ROOT_OUTDIR}/remotesensing/{REMOTESENSING_FARAG_2024_TRAIT}_{{date}}.tsv"
+    params:
+        scripts_dir=SCRIPTS_DIR,
+        fname_trait=REMOTESENSING_FARAG_2024_FNAME_TRAIT_CSV,
+        fname_trait_delim=",",
+        target=REMOTESENSING_FARAG_2024_TRAIT,
+        image_root_dir=REMOTESENSING_FARAG_2024_DIR,
+        dirname_output=f"{ROOT_OUTDIR}/remotesensing/"
+    log:
+        f"{ROOT_OUTDIR}/remotesensing/{REMOTESENSING_FARAG_2024_TRAIT}_{{date}}.log"
+    conda:
+        "general.yaml"
+    threads: 1
+    resources:
+        tasks=1,
+        nodes=1,
+        mem_mb=1064,
+        runtime=1440,
+    shell:
+        """
+        time \
+        Rscript {params.scripts_dir}/empiricalprep.R \
+            remotesensing \
+            {params.fname_trait} \
+            {params.fname_trait_delim} \
+            {params.target} \
+            {params.image_root_dir} \
+            {wildcards.date} \
+            {params.dirname_output} > {log} 2>&1
         """
 
 rule randomisation_gp:
@@ -351,7 +412,6 @@ rule randomisation_gp:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -393,7 +453,6 @@ rule linear_analysis:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -411,7 +470,7 @@ rule linear_analysis:
             fi;
             time \
             Rscript {params.scripts_dir}/linear.R \
-                trials \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 $IS_SIMULATED \
@@ -423,7 +482,7 @@ rule linear_analysis:
         else
             time \
             Rscript {params.scripts_dir}/linear.R \
-                gp \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
@@ -465,7 +524,7 @@ rule trees_analysis:
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
             python {params.scripts_dir}/trees.py \
-                trials \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 "." \
@@ -474,7 +533,7 @@ rule trees_analysis:
         else
             time \
             python {params.scripts_dir}/trees.py \
-                gp \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
@@ -515,14 +574,14 @@ rule mlp_analysis:
             time \
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
-                trials \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} > {log} 2>&1
         else
             time \
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
-                gp \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
@@ -551,7 +610,6 @@ rule comparisons:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,

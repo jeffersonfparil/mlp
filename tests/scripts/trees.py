@@ -10,7 +10,7 @@ import pandas as pd
 import shap
 
 parser = argparse.ArgumentParser(description="XGBoost for trial analysis and genomic prediction")
-parser.add_argument("analysis_type", help="The type of analysis to perform (trials or gp)")
+parser.add_argument("analysis_type", help="The type of analysis to perform (trials or gp or remotesensing)")
 parser.add_argument("input_file", type=Path, help="Path to the input TSV file")
 parser.add_argument("output_dir", type=Path, help="Directory to save the output")
 parser.add_argument("randomisation_input_file", type=Path, default=Path("."), help="Path to the randomisation input TSV file (for gp analysis)")
@@ -36,8 +36,8 @@ print(f"Number of Replicates: {args.n_replicates}")
 print(f"Number of Folds: {args.n_folds}")
 
 def get_params(args):
-    if (args.analysis_type != "trials") and (args.analysis_type != "gp"):
-        raise ValueError("Invalid analysis type. Must be 'trials' or 'gp'.")
+    if (args.analysis_type != "trials") and (args.analysis_type != "gp") and (args.analysis_type != "remotesensing"):
+        raise ValueError("Invalid analysis type. Must be 'trials' or 'gp' or 'remotesensing'.")
     if not args.input_file.exists():
         raise FileNotFoundError(f"Input file {args.input_file} does not exist.")
     if not args.output_dir.exists():
@@ -55,11 +55,12 @@ def get_params(args):
             # "early_stopping_rounds": 10,
         }
     else:
+        # 'gp' or 'remotesensing'
         if not args.randomisation_input_file.exists():
             raise FileNotFoundError(f"Randomisation input file {args.randomisation_input_file} does not exist.")
-        if (args.analysis_type == "gp") and (args.n_replicates <= 0):
+        if ((args.analysis_type == "gp") or (args.analysis_type == "remotesensing")) and (args.n_replicates <= 0):
             raise ValueError("Number of replicates must be a positive integer.")
-        if (args.analysis_type == "gp") and (args.n_folds <= 1):
+        if ((args.analysis_type == "gp") or (args.analysis_type == "remotesensing")) and (args.n_folds <= 1):
             raise ValueError("Number of folds must be greater than 1.")
         return {
             "analysis_type": args.analysis_type,
@@ -204,5 +205,6 @@ if __name__ == "__main__":
         print("Extracting entries effects...")
         extract_entries_effects(args)
     else:
-        print("Performing GP with repeated K-fold CV...")
+        # "gp" or "remotesensing"
+        print(f"Performing {params['analysis_type']} with repeated K-fold CV...")
         gp_repeated_kfold_cv(args)

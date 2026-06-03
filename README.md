@@ -325,7 +325,9 @@ time cargo test -- --show-output
 ## Install Snakemake:
 
 ```shell
-pixi global install snakemake conda -c conda-forge -c bioconda
+pixi global install snakemake snakemake-executor-plugin-slurm conda -c conda-forge -c bioconda
+pixi add --pypi snakemake-executor-plugin-slurm
+# conda install conda
 ```
 
 ## Run the workflow:
@@ -349,7 +351,7 @@ time pixi run snakemake --cores $N_CORES --use-conda
 
 ```shell
 cd mlp/
-time pixi run snakemake --slurm --default-resources slurm_account="dbiof2" slurm_partition="cpu"
+time pixi run snakemake --profile slurm_profile # --> still getting errors... Getting empty files...
 ```
 
 # Miscellaneous

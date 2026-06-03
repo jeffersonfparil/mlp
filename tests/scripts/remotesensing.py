@@ -1,15 +1,49 @@
+import argparse
 import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
 import rasterio
-import lightgbm as lgb
-from sklearn.model_selection import GroupKFold
-from sklearn.metrics import mean_squared_error, r2_score
+import xgboost as xgb
+from sklearn.model_selection import GroupKFold, RandomizedSearchCV
+from sklearn.metrics import mean_squared_error, r2_score, root_mean_squared_error
 
-# ==========================================
-# 1. IMAGE PROCESSING (Per Plot)
-# ==========================================
+parser = argparse.ArgumentParser(description="Remote-sensing modelling using TIFF images per plot, i.e. no input shapefiles")
+parser.add_argument("fname_traits", help="Path to the CSV file containing trait data (e.g., constant_agronomic_traits_2021.csv)")
+parser.add_argument("image_root_dir", help="Root directory where the plot image folders are stored (e.g., the folder containing date subfolders)")
+parser.add_argument("date", help="Date of the flight to use for feature extraction (e.g., '06-14-2021'). You can run this script multiple times with different dates to build a multitemporal dataset.")
+parser.add_argument("target", help="Target variable for modelling (e.g., 'Yield').")
+
+
+def get_params(args):
+    """Parse command-line arguments."""
+    if not args.fname_traits.exists():
+        raise FileNotFoundError(f"Input file {args.fname_traits} does not exist.")
+    if not args.image_root_dir.exists():
+        raise FileNotFoundError(f"Image root directory {args.image_root_dir} does not exist.")
+    if not args.date:
+        raise ValueError("Date argument is required.")
+    if not (args.image_root_dir / args.date).exists():
+        raise FileNotFoundError(f"Date folder {args.date} does not exist in the image root directory.")
+    if not args.target:
+        raise ValueError("Target argument is required.")
+    return {
+        'traits_csv': args.fname_traits,
+        'image_root_dir': args.image_root_dir,
+        'date': args.date,
+        'target': args.target,
+        'n_repeats': 5,
+        'n_folds': 5,
+        "objective": 'reg:squarederror',
+        "n_estimators": [10, 20, 50, 100, 200],
+        "learning_rate": [0.01, 0.1],
+        "max_depth": [3, 5, 10],
+        "subsample": [0.5, 0.75, 1.0],
+        "random_state": 42,
+        "early_stopping_rounds": 10,
+        'random_state': 42
+    }
+
 def read_band(path):
     """Helper function to read a TIFF band and mask out zero/background values."""
     with rasterio.open(path) as src:
@@ -19,10 +53,6 @@ def read_band(path):
         return array
 
 def extract_features_for_plot(plot_folder):
-    """
-    Reads the 5 spectral bands for a single plot, calculates indices, 
-    and returns a dictionary of aggregate statistics.
-    """
     # plot_folder = Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/Images/Train/06-14-2021/33761")
     # Define paths (Adjust filenames if they differ in your downloaded folders)
     band_paths = {
@@ -63,95 +93,111 @@ def extract_features_for_plot(plot_folder):
     
     return features
 
-# ==========================================
-# 2. DATASET BUILDING
-# ==========================================
-def build_dataset(traits_csv, image_root_dir, dates):
-    """
-    Matches the Plot_Number in the CSV to the corresponding plot image folders.
-    """
-    # traits_csv = Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"); image_root_dir = Path.home() / Path("Documents/mlp/tests/datasets/farag_2024"); dates = ["06-14-2021", "07-14-2021", "08-03-2021", "09-03-2021"]
-    df_traits = pd.read_csv(traits_csv)
-    df_traits = df_traits.dropna(subset=['Yield']) # Drop rows with missing target
+def extract_X_y(params):
+    # params = {'traits_csv': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"), 'image_root_dir': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024"), 'date': "06-14-2021", 'target': 'Yield', 'n_repeats': 5, 'n_folds': 5, "objective": 'reg:squarederror', "n_estimators": [10, 20, 50, 100, 200], "learning_rate": [0.01, 0.1], "max_depth": [3, 5, 10], "subsample": [0.5, 0.75, 1.0], "random_state": 42, "early_stopping_rounds": 10, 'random_state': 42}
+    df_traits = pd.read_csv(params['traits_csv'])
+    df_traits = df_traits.dropna(subset=[params['target']]) # Drop rows with missing target
     all_extracted_data = []
     print("Extracting features from plot images...")
     for index, row in df_traits.iterrows():
         # index = 0; row = df_traits.iloc[index]
         plot_number = row['Plot_Number']
         plot_features = {'Plot_Number': plot_number}
-        # Loop through multitemporal dates/flights
-        for t_idx, date in enumerate(dates):
-            # t_idx = 0; date = dates[t_idx]
-            # ASSUMPTION: Folder structure is like: image_root_dir/date/plot_33761/
-            # Adjust this path logic to match exactly how the dataset unzipped on your machine
-            plot_folder = os.path.join(image_root_dir, date, f"{plot_number}")
-            if os.path.exists(plot_folder):
-                stats = extract_features_for_plot(plot_folder)
-                if stats:
-                    # Append time-step prefix (e.g., T0_NDVI_mean)
-                    for key, val in stats.items():
-                        plot_features[f"T{t_idx}_{key}"] = val
+        plot_folder = os.path.join(params['image_root_dir'], params['date'], f"{plot_number}")
+        if os.path.exists(plot_folder):
+            stats = extract_features_for_plot(plot_folder)
+            if stats:
+                # Append time-step prefix (e.g., T0_NDVI_mean)
+                for key, val in stats.items():
+                    plot_features[f"{key}"] = val
         all_extracted_data.append(plot_features)
     df_features = pd.DataFrame(all_extracted_data)
     # Merge spectral features with agronomic traits
-    final_data = pd.merge(df_traits, df_features, on='Plot_Number', how='inner')
-    return final_data
-
-# ==========================================
-# 3. MODEL TRAINING & VALIDATION
-# ==========================================
-def train_model(data, target='Yield', group='Experiment_Name'):
-    """
-    Trains the LightGBM model using GroupKFold to ensure it generalizes 
-    across different experiments/environments.
-    """
-    # Define columns to drop (metadata + other targets you aren't predicting right now)
+    data = pd.merge(df_traits, df_features, on='Plot_Number', how='inner')
     drop_cols = ['Plot_Number', 'Rice_Cultivar', 'Experiment_Name', 'Plot_Center', 
-                 'Yield', 'Emergence_Date_DOY', 'Heading_25', 'Heading_50', 'Heading_100', 'Final_Lodge']
-    
+                 'Yield', 'Emergence_Date_DOY', 'Heading_25', 'Heading_50', 'Heading_100', 'Final_Lodge',
+                 'Seeding_Rate', 'Nitrogen_Rare', 'Replicate']
     X = data.drop(columns=[col for col in drop_cols if col in data.columns])
-    y = data[target]
-    groups = data[group] 
-    
-    gkf = GroupKFold(n_splits=3)
-    oof_preds = np.zeros(len(y))
-    
-    print(f"\nTraining model to predict {target}...")
-    for fold, (train_idx, val_idx) in enumerate(gkf.split(X, y, groups=groups)):
-        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-        
-        model = lgb.LGBMRegressor(
-            n_estimators=300,
-            learning_rate=0.05,
-            max_depth=6,
-            random_state=42
-        )
-        
-        model.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=[lgb.early_stopping(30, verbose=False)])
-        oof_preds[val_idx] = model.predict(X_val)
-        
-    rmse = np.sqrt(mean_squared_error(y, oof_preds))
-    r2 = r2_score(y, oof_preds)
-    
-    print("\n--- Final Model Performance ---")
-    print(f"R2 Score: {r2:.3f}")
-    print(f"RMSE:     {rmse:.3f}")
+    if not data.columns.isin([params['target']]).any():
+        raise ValueError(f"Target column '{params['target']}' not found in data")
+    y = data[params['target']]
+    return X, y
+
+def train_model(params):
+    # params = {'traits_csv': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"), 'image_root_dir': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024"), 'date': "06-14-2021", 'target': 'Yield', 'n_repeats': 5, 'n_folds': 5, "objective": 'reg:squarederror', "n_estimators": [10, 20, 50, 100, 200], "learning_rate": [0.01, 0.1], "max_depth": [3, 5, 10], "subsample": [0.5, 0.75, 1.0], "random_state": 42, "early_stopping_rounds": 10, 'random_state': 42}
+    X, y = extract_X_y(params)
+    df_out = pd.DataFrame(columns=["datasets", "reps", "folds", "nt", "nv", "models", "best_n_estimators", "best_learning_rate", "best_max_depth", "best_subsample", "rmse", "r2", "corr"])
+    for r in range(params['n_repeats']):
+        gkf = GroupKFold(n_splits=params['n_folds'])
+        randomisations = list(gkf.split(X, y, groups=X.index))
+        for f in range(params['n_folds']):
+            # f = 0
+            idx_training, idx_validation = randomisations[f]
+            X_train = X.iloc[idx_training]
+            X_test = X.iloc[idx_validation]
+            y_train = y.iloc[idx_training]
+            y_test = y.iloc[idx_validation]
+            xgb_reg = xgb.XGBRegressor(
+                objective="reg:squarederror",
+                early_stopping_rounds=params["early_stopping_rounds"],
+                random_state=params["random_state"],
+                device="cuda",
+            )
+            xgb_params = {
+                'n_estimators': params["n_estimators"],
+                'learning_rate': params["learning_rate"],
+                'max_depth': params["max_depth"],
+                'subsample': params["subsample"]
+            }
+            rs = RandomizedSearchCV(xgb_reg, xgb_params, n_iter=5, cv=3, scoring='neg_mean_squared_error', n_jobs=-1)
+            rs.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+            print(f"Best Params: {rs.best_params_}")
+            best_model = rs.best_estimator_
+            best_model.set_params(device="cuda")
+            y_pred = best_model.predict(X_test)
+            print(f"RMSE: {root_mean_squared_error(y_test, y_pred):.4f}")
+            print(f"R^2: {r2_score(y_test, y_pred):.4f}")
+            print(f"Correlation: {np.corrcoef(y_test, y_pred)[0, 1]:.4f}")
+            df_out = pd.concat([
+                df_out, 
+                pd.DataFrame({
+                    "datasets": "farag_2024",
+                    "reps": [r+1],
+                    "folds": [f+1],
+                    "nt": [len(X_train)],
+                    "nv": [len(X_test)],
+                    "models": ["XGBoost"],
+                    "best_n_estimators": [rs.best_params_['n_estimators']],
+                    "best_learning_rate": [rs.best_params_['learning_rate']],
+                    "best_max_depth": [rs.best_params_['max_depth']],
+                    "best_subsample": [rs.best_params_['subsample']],
+                    "rmse": [root_mean_squared_error(y_test, y_pred)],
+                    "r2": [r2_score(y_test, y_pred)],
+                    "corr": [np.corrcoef(y_test, y_pred)[0, 1]]
+                })
+            ], ignore_index=True)
+    return df_out
+
 
 # ==========================================
 # EXECUTION
 # ==========================================
 if __name__ == "__main__":
-    TRAITS_CSV = Path.home() / "Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"
-    
-    # You will need to define where the downloaded images are stored
-    IMAGE_ROOT_DIR = Path.home() / "Documents/mlp/tests/datasets/farag_2024/"
-    
-    # List the dates/flights you want to include (to build the multitemporal profile)
-    FLIGHT_DATES = ["06-14-2021", "07-14-2021", "08-03-2021", "09-03-2021"]
-    
-    # 1. Build Dataset
-    final_dataset = build_dataset(TRAITS_CSV, IMAGE_ROOT_DIR, FLIGHT_DATES)
-    
-    # 2. Train Model on Yield
-    # train_model(final_dataset, target='Yield', group='Experiment_Name')
+    params = {
+        'traits_csv': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024/constant_agronomic_traits_2021.csv"), 
+        'image_root_dir': Path.home() / Path("Documents/mlp/tests/datasets/farag_2024"), 
+        'date': "06-14-2021", 
+        'target': 'Yield', 
+        'n_repeats': 5, 
+        'n_folds': 5,
+        "objective": 'reg:squarederror',
+        "n_estimators": [10, 20, 50, 100, 200],
+        "learning_rate": [0.01, 0.1],
+        "max_depth": [3, 5, 10],
+        "subsample": [0.5, 0.75, 1.0],
+        "random_state": 42,
+        "early_stopping_rounds": 10, 
+        'random_state': 42
+    }
+    df = train_model(params)
+    print(df)
