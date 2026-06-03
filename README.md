@@ -327,6 +327,7 @@ time cargo test -- --show-output
 ```shell
 pixi global install snakemake snakemake-executor-plugin-slurm conda -c conda-forge -c bioconda
 pixi add --pypi snakemake-executor-plugin-slurm
+# conda install conda
 ```
 
 ## Run the workflow:
