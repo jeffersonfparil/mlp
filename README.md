@@ -349,19 +349,8 @@ time pixi run snakemake --cores $N_CORES --use-conda
 ### On an HPC system with Slurm
 
 ```shell
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
-# cd mlp/
-# # mkdir $HOME/.config/snakemake
-# # cp profile.yaml $HOME/.config/snakemake
-# # ls -lh $HOME/.config/snakemake
-# # pixi run snakemake --profile $HOME/.config/snakemake/profile.yaml
-# mkdir -p slurm_profile
-# mv profile.yaml slurm_profile/config.yaml
-# pixi run snakemake --profile slurm_profile
-
-
+cd mlp/
+time pixi run snakemake --profile slurm_profile # --> still getting errors... Getting empty files...
 ```
 
 # Miscellaneous
