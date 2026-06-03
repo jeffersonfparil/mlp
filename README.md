@@ -325,7 +325,8 @@ time cargo test -- --show-output
 ## Install Snakemake:
 
 ```shell
-pixi global install snakemake conda -c conda-forge -c bioconda
+pixi global install snakemake snakemake-executor-plugin-slurm conda -c conda-forge -c bioconda
+pixi add --pypi snakemake-executor-plugin-slurm
 ```
 
 ## Run the workflow:
@@ -348,8 +349,19 @@ time pixi run snakemake --cores $N_CORES --use-conda
 ### On an HPC system with Slurm
 
 ```shell
-cd mlp/
-time pixi run snakemake --slurm --default-resources slurm_account="dbiof2" slurm_partition="cpu"
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+# cd mlp/
+# # mkdir $HOME/.config/snakemake
+# # cp profile.yaml $HOME/.config/snakemake
+# # ls -lh $HOME/.config/snakemake
+# # pixi run snakemake --profile $HOME/.config/snakemake/profile.yaml
+# mkdir -p slurm_profile
+# mv profile.yaml slurm_profile/config.yaml
+# pixi run snakemake --profile slurm_profile
+
+
 ```
 
 # Miscellaneous

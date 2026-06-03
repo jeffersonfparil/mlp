@@ -2,7 +2,7 @@ get_params <- function(args) {
   if (length(args) != 4) {
     stop("Error: Incorrect number of arguments. Use -h or --help for usage information.")
   }
-  if (!args[1] %in% c("trials", "gp")) {
+  if (!args[1] %in% c("trials", "gp", "remotesensing")) {
     stop("Error: ANALYSIS_TYPE must be either 'trials' or 'gp'. Use -h or --help for usage information.")
   }
   if (!file.exists(args[2])) {
@@ -39,7 +39,8 @@ get_params <- function(args) {
     } else {
       NA
     }
-  } else if (args[1] == "gp") {
+  } else {
+    # "gp" or "remotesensing"
     linear_formula = NA
   }
   fname_png <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.png"))
@@ -154,7 +155,7 @@ compare_trial_analyses <- function(params) {
   cat("\t- Data: ", params$fname_tsv, "\n")
 }
 
-compare_gp_analyses <- function(params) {
+compare_gp_or_remotesensing_analyses <- function(params) {
   # args <- c("gp", "tests/tmp/gp/output-sorghum-YLD-LINEAR.tsv", "tests/tmp/gp/output-sorghum-YLD-MLP.tsv", "tests/tmp/gp"); params <- get_params(args)
   # args <- c("gp", "tests/tmp/gp/output-test-YLD-TREES.tsv", "tests/tmp/gp/output-test-YLD-MLP.tsv", "tests/tmp/gp"); params <- get_params(args)
   df_1 <- {
@@ -166,7 +167,8 @@ compare_gp_analyses <- function(params) {
       nt = df$nt,
       nv = df$nv,
       models = df$models,
-      corr = df$corr
+      corr = df$corr,
+      r2 = df$r2
     )
   }
   df_2 <- {
@@ -178,7 +180,8 @@ compare_gp_analyses <- function(params) {
       nt = df$nt,
       nv = df$nv,
       models = df$models,
-      corr = df$corr
+      corr = df$corr,
+      r2 = df$r2
     )
   }
   df <- rbind(df_1, df_2)
@@ -186,7 +189,10 @@ compare_gp_analyses <- function(params) {
     stop("Error: Dataset ID in linear and/or MLP results does not match the expected dataset ID.")
   }
   png(params$fname_png, width = length(unique(df$models)) * 300)
+  par(mfrow=c(2, 1))
   boxplot(corr ~ models, data = df, xlab = "", ylab = "Pearson's Correlation")
+  grid()
+  boxplot(r2 ~ models, data = df, xlab = "", ylab = "Coefficient of Determination (R²)")
   grid()
   dev.off()
   write.table(df, params$fname_tsv, sep = "\t", row.names = FALSE, quote = FALSE)
@@ -205,6 +211,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t1. ANALYSIS_TYPE:\n")
   cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
   cat("\t\t+ 'gp' for repeated k-fold cross-validation for genomic prediction.\n")
+  cat("\t\t+ 'remotesensing' for repeated k-fold cross-validation for remote sensing.\n")
   cat("\t2. FNAME_1: The file name for one model's results (e.g. linear, xgboost or mlp).\n")
   cat("\t3. FNAME_2: The file name for another model's results (e.g. linear, xgboost or mlp).\n")
   cat("\t4. DIRNAME_OUTDIR: The output directory name.\n")
@@ -224,5 +231,6 @@ params <- get_params(args)
 if (params$analysis_type == "trials") {
   compare_trial_analyses(params)
 } else {
-  compare_gp_analyses(params)
+  # "gp" or "remotesensing"
+  compare_gp_or_remotesensing_analyses(params)
 }

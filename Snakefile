@@ -11,6 +11,7 @@ N_TREATMENTS = [3]
 N_ENTRIES = [10]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1]
+# DATA_TYPES = ["CONTINUOUS", "BINARY"]
 DATA_TYPES = ["CONTINUOUS"]
 N_OBSERVATIONS = [500]
 N_FEATURES = [1000]
@@ -29,13 +30,20 @@ EXCLUDE_LM = "FALSE"
 EXCLUDE_LMER = "TRUE"
 EXCLUDE_SOMMER = "TRUE"
 EXCLUDE_ASREML = "TRUE"
+# N_FOLDS = 5
 N_FOLDS = 2
+# N_REPS = 10
 N_REPS = 2
+# N_ITERATIONS_LINEAR = 10000
 N_ITERATIONS_LINEAR = 100
-N_BURNIN_ITERATIONS_LINEAR = 100
-N_EPOCHS_MLP = 1000
-N_BURNIN_EPOCHS_MLP = 100
-MODELS = "BayesA"
+# N_BURNIN_ITERATIONS_LINEAR = 1000
+N_BURNIN_ITERATIONS_LINEAR = 10
+# N_EPOCHS_MLP = 1000
+N_EPOCHS_MLP = 100
+# N_BURNIN_EPOCHS_MLP = 100
+N_BURNIN_EPOCHS_MLP = 10
+# MODELS = "BRR,BayesA,BayesB,BayesC"
+MODELS = "BRR"
 BASE_SEED = 42
 VERBOSE = "TRUE"
 wildcard_constraints:
@@ -80,7 +88,7 @@ def GP_EMPIRICAL_INPUT(wildcards):
                     final_files.append(f"{ROOT_OUTDIR}/gp/{filename}")
     return final_files
 
-def RANDOMISATION_GP_OUTPUT(wildcards):
+def RANDOMISATION_OUTPUT(wildcards):
     final_files = []
     simulated_targets = expand(
         f"{ROOT_OUTDIR}/gp/output-simulated-DATA_TYPE_{{data_type}}-N_{{n}}-P_{{p}}-HIDDEN_LAYERS_{{hidden_layers}}-RANDOMISATION.tsv",
@@ -214,11 +222,11 @@ rule all:
         TRIALS_EMPIRICAL_INPUT,
         GP_EMPIRICAL_INPUT,
         REMOTESENSING_EMPIRICAL_INPUT,
-        RANDOMISATION_GP_OUTPUT,
+        RANDOMISATION_OUTPUT,
         LINEAR_ANALYSIS_OUTPUT,
         TREES_ANALYSIS_OUTPUT,
-        # MLP_ANALYSIS_OUTPUT,
-        # COMPARISONS_OUTPUT,
+        MLP_ANALYSIS_OUTPUT,
+        COMPARISONS_OUTPUT,
 
 rule simulate_trials:
     output:
@@ -303,7 +311,6 @@ checkpoint empiricalprep_trials:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -336,7 +343,6 @@ checkpoint empiricalprep_gp:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -372,7 +378,6 @@ rule empiricalprep_remotesensing:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -407,7 +412,6 @@ rule randomisation_gp:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -449,7 +453,6 @@ rule linear_analysis:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
@@ -467,7 +470,7 @@ rule linear_analysis:
             fi;
             time \
             Rscript {params.scripts_dir}/linear.R \
-                trials \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 $IS_SIMULATED \
@@ -479,7 +482,7 @@ rule linear_analysis:
         else
             time \
             Rscript {params.scripts_dir}/linear.R \
-                gp \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
@@ -521,7 +524,7 @@ rule trees_analysis:
         if [[ {wildcards.analysis_type} == "trials" ]]; then
             time \
             python {params.scripts_dir}/trees.py \
-                trials \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 "." \
@@ -530,7 +533,7 @@ rule trees_analysis:
         else
             time \
             python {params.scripts_dir}/trees.py \
-                gp \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
@@ -571,14 +574,14 @@ rule mlp_analysis:
             time \
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
-                trials \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} > {log} 2>&1
         else
             time \
             bash {params.scripts_dir}/mlp.sh \
                 {params.mlp} \
-                gp \
+                {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
                 {input.randomisation} \
@@ -607,7 +610,6 @@ rule comparisons:
         "general.yaml"
     threads: 1
     resources:
-        slurm_partition="cpu",
         tasks=1,
         nodes=1,
         mem_mb=1064,
