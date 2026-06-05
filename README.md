@@ -517,7 +517,10 @@ sudo systemctl restart slurmd
 sudo systemctl restart slurmctld
 sudo scontrol update NodeName=localhost State=DOWN Reason="reset"
 sudo scontrol update NodeName=localhost State=RESUME
-pixi run snakemake --executor slurm --jobs 2 --use-conda --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0"
+conda config --set channel_priority strict
+pixi run snakemake --executor slurm --jobs 1 --use-conda --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0"
+# pixi run snakemake --executor slurm --jobs 2 --use-conda --profile slurm --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0"
+# pixi run snakemake --executor slurm --jobs 2 --use-conda --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0" slurm_partition=gpu
 module avail R
 module add R
 ```
