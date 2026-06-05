@@ -30,20 +30,27 @@ EXCLUDE_LM = "FALSE"
 EXCLUDE_LMER = "TRUE"
 EXCLUDE_SOMMER = "TRUE"
 EXCLUDE_ASREML = "TRUE"
+
 # N_FOLDS = 5
-N_FOLDS = 2
 # N_REPS = 10
-N_REPS = 2
 # N_ITERATIONS_LINEAR = 10000
-N_ITERATIONS_LINEAR = 100
 # N_BURNIN_ITERATIONS_LINEAR = 1000
-N_BURNIN_ITERATIONS_LINEAR = 10
+# N_ESTIMATORS_TREES = 1000
+# MAX_DEPTH_TREES = 3
 # N_EPOCHS_MLP = 1000
-N_EPOCHS_MLP = 100
 # N_BURNIN_EPOCHS_MLP = 100
-N_BURNIN_EPOCHS_MLP = 10
 # MODELS = "BRR,BayesA,BayesB,BayesC"
+
+N_FOLDS = 2
+N_REPS = 2
+N_ITERATIONS_LINEAR = 100
+N_BURNIN_ITERATIONS_LINEAR = 10
+N_ESTIMATORS_TREES = 100
+MAX_DEPTH_TREES = 2
+N_EPOCHS_MLP = 100
+N_BURNIN_EPOCHS_MLP = 10
 MODELS = "BRR"
+
 BASE_SEED = 42
 VERBOSE = "TRUE"
 wildcard_constraints:
@@ -218,15 +225,15 @@ def COMPARISONS_OUTPUT(wildcards):
 rule all:
     input:
         TRIALS_SIMULATED_INPUT,
-        GP_SIMULATED_INPUT,
-        TRIALS_EMPIRICAL_INPUT,
-        GP_EMPIRICAL_INPUT,
-        REMOTESENSING_EMPIRICAL_INPUT,
-        RANDOMISATION_OUTPUT,
-        LINEAR_ANALYSIS_OUTPUT,
-        TREES_ANALYSIS_OUTPUT,
-        MLP_ANALYSIS_OUTPUT,
-        COMPARISONS_OUTPUT,
+        # GP_SIMULATED_INPUT,
+        # TRIALS_EMPIRICAL_INPUT,
+        # GP_EMPIRICAL_INPUT,
+        # REMOTESENSING_EMPIRICAL_INPUT,
+        # RANDOMISATION_OUTPUT,
+        # LINEAR_ANALYSIS_OUTPUT,
+        # TREES_ANALYSIS_OUTPUT,
+        # MLP_ANALYSIS_OUTPUT,
+        # COMPARISONS_OUTPUT,
 
 rule simulate_trials:
     output:
@@ -505,6 +512,8 @@ rule trees_analysis:
     params:
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
+        n_estimators = N_ESTIMATORS_TREES,
+        max_depth = MAX_DEPTH_TREES,
         n_reps = N_REPS,
         n_folds = N_FOLDS,
     log:
@@ -527,18 +536,17 @@ rule trees_analysis:
                 {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
-                "." \
-                {params.n_reps} \
-                {params.n_folds} >> {log} 2>&1
+                --n-estimators={params.n_estimators} \
+                --max-depth={params.max_depth} >> {log} 2>&1
         else
             time \
             python {params.scripts_dir}/trees.py \
                 {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
-                {input.randomisation} \
-                {params.n_reps} \
-                {params.n_folds} >> {log} 2>&1
+                --randomisation-input-file={input.randomisation} \
+                --n-replicates={params.n_reps} \
+                --n-folds={params.n_folds} >> {log} 2>&1
         fi;
         """
 

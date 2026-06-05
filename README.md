@@ -327,7 +327,8 @@ time cargo test -- --show-output
 ```shell
 pixi global install snakemake snakemake-executor-plugin-slurm conda -c conda-forge -c bioconda
 pixi add --pypi snakemake-executor-plugin-slurm
-# conda install conda
+conda activate base
+pip install snakemake-executor-plugin-slurm
 ```
 
 ## Run the workflow:
@@ -338,8 +339,8 @@ after which uncomment them and run with less cores to avoid running out of GPU m
 ### On a single machine:
 ```shell
 cd mlp/
-N_CORES=24
-# N_CORES=2
+N_CORES=2
+# N_CORES=24
 time pixi run snakemake --cores $N_CORES --use-conda
 # ### Debugging and development
 # pixi shell
@@ -351,7 +352,28 @@ time pixi run snakemake --cores $N_CORES --use-conda
 
 ```shell
 cd mlp/
-time pixi run snakemake --profile slurm_profile # --> still getting errors... Getting empty files...
+# export PATH="/usr/local/eb/software/generic/Miniconda3/24.7.1-0/bin/conda:$PATH" && pixi run snakemake --use-conda --profile slurm_profile
+# snakemake --profile slurm_profile
+# snakemake --executor slurm --jobs 100
+# pixi run snakemake --executor slum --jobs 100 --use-conda --default-resources slurm_account=dbiof2 --conda-base-path /usr/local/eb/software/generic/Miniconda3/24.7.1-0/bin/conda
+# pixi run snakemake \
+#   --executor slurm \
+#   --jobs 100 \
+#   --use-conda \
+#   --default-resources slurm_account=dbiof2 \
+#   --conda-base-path /usr/local/eb/software/generic/Miniconda3/24.7.1-0
+module purge
+module load Miniconda3/24.7.1-0
+module load snakemake
+snakemake \
+  --executor slurm \
+  --jobs 100 \
+  --use-conda \
+  --default-resources slurm_account=dbiof2 \
+  --jobscript slurm/jobscript.sh \
+  --precommand "module purge; module load Miniconda3/24.7.1-0; module load snakemake"
+
+
 ```
 
 # Miscellaneous

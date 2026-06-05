@@ -13,27 +13,15 @@ parser = argparse.ArgumentParser(description="XGBoost for trial analysis and gen
 parser.add_argument("analysis_type", help="The type of analysis to perform (trials or gp or remotesensing)")
 parser.add_argument("input_file", type=Path, help="Path to the input TSV file")
 parser.add_argument("output_dir", type=Path, help="Directory to save the output")
-parser.add_argument("randomisation_input_file", type=Path, default=Path("."), help="Path to the randomisation input TSV file (for gp analysis)")
-parser.add_argument("n_replicates", type=int, default=3, help="Number of replicates for randomisation (for gp analysis)")
-parser.add_argument("n_folds", type=int, default=10, help="Number of folds for cross-validation (for gp analysis)")
+
+parser.add_argument("--n-estimators", type=int, default=1_000, help="Number of estimators for XGBoost (for trials analysis)")
+parser.add_argument("--max-depth", type=int, default=3, help="Maximum depth of the trees (for trials analysis)")
+
+parser.add_argument("--randomisation-input-file", type=Path, default=Path("."), help="Path to the randomisation input TSV file (for gp analysis)")
+parser.add_argument("--n-replicates", type=int, default=3, help="Number of replicates for randomisation (for gp analysis)")
+parser.add_argument("--n-folds", type=int, default=10, help="Number of folds for cross-validation (for gp analysis)")
 
 args = parser.parse_args()
-# class Args:
-#     def __init__(self, analysis_type, input_file, output_dir, randomisation_input_file, n_replicates, n_folds):
-#         self.analysis_type = analysis_type
-#         self.input_file = input_file
-#         self.output_dir = output_dir
-#         self.randomisation_input_file = randomisation_input_file
-#         self.n_replicates = n_replicates
-#         self.n_folds = n_folds
-# args = Args(analysis_type="trials", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/trials/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
-# args = Args(analysis_type="gp", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
-print(f"Analysis Type: {args.analysis_type}")
-print(f"Input File: {args.input_file}")
-print(f"Output Directory: {args.output_dir}")
-print(f"Randomisation Input File: {args.randomisation_input_file}")
-print(f"Number of Replicates: {args.n_replicates}")
-print(f"Number of Folds: {args.n_folds}")
 
 def get_params(args):
     if (args.analysis_type != "trials") and (args.analysis_type != "gp") and (args.analysis_type != "remotesensing"):
@@ -47,12 +35,11 @@ def get_params(args):
             "analysis_type": args.analysis_type,
             "input_file": args.input_file,
             "output_dir": args.output_dir,
+            "n_estimators": args.n_estimators,
+            "max_depth": args.max_depth,
             "objective": 'reg:squarederror',
-            "n_estimators": 1_000,
             "learning_rate": 0.1,
-            "max_depth": 5,
             "random_state": 42,
-            # "early_stopping_rounds": 10,
         }
     else:
         # 'gp' or 'remotesensing'
@@ -71,12 +58,11 @@ def get_params(args):
             "n_folds": args.n_folds,
             "objective": 'reg:squarederror',
             "n_estimators": [1_000, 10_000],
-            "learning_rate": [0.01, 0.1],
             "max_depth": [3, 5, 10],
+            "learning_rate": [0.01, 0.1],
             "subsample": [0.5, 0.75, 1.0],
-            "random_state": 42,
             "early_stopping_rounds": 10,
-            "within_fold_cv_frac": 10,
+            "random_state": 42,
         }
 
 def extract_X_y(args):
