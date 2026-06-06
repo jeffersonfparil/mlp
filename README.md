@@ -430,17 +430,18 @@ SelectType=select/cons_tres
 SelectTypeParameters=CR_Core
 #
 #AccountingStoragePort=
-AccountingStorageType=accounting_storage/none
+AccountingStorageType=accounting_storage/filetxt
 JobCompType=jobcomp/none
 JobAcctGatherFrequency=30
-JobAcctGatherType=jobacct_gather/none
+JobAcctGatherType=jobacct_gather/linux
 SlurmctldDebug=info
 SlurmctldLogFile=/var/log/slurm/slurmctld.log
 SlurmdDebug=info
 SlurmdLogFile=/var/log/slurm/slurmd.log
+AccountingStorageLoc=/var/log/slurm/accounting.txt
 #
 # COMPUTE NODES
-NodeName=localhost CPUs=4 RealMemory=15000 Gres=gpu:h100:1 State=UNKNOWN
+NodeName=localhost CPUs=4 Boards=1 SocketsPerBoard=1 CoresPerSocket=2 ThreadsPerCore=2 RealMemory=15868 Gres=gpu:h100:1 State=UNKNOWN
 PartitionName=gpu Nodes=ALL Default=YES MaxTime=INFINITE State=UP
 GresTypes=gpu
 EOF
@@ -487,6 +488,18 @@ EOF
 sudo chmod -R 755 /etc/lmod/modules/
 ```
 
+### sshare setup for snakemake-executor-plugin-slurm
+
+```shell
+cat << 'EOF' | sudo tee /usr/local/bin/sshare > /dev/null
+#!/bin/bash
+# Fake sshare data to satisfy Snakemake SLURM plugin
+echo "Account|User|RawShares|NormShares|RawUsage|NormUsage|FairShare"
+echo "localuser"
+EOF
+sudo chmod +x /usr/local/bin/sshare
+```
+
 ### GPU setup
 
 ```shell
@@ -496,31 +509,44 @@ cat << 'EOF' | sudo tee /etc/slurm/gres.conf > /dev/null
 NodeName=localhost Name=gpu Type=h100 Count=1 Flags=CountOnly
 EOF
 sudo chmod 644 /etc/slurm/gres.conf
-```
 
-### sshare setup for snakemake-executor-plugin-slurm
+sudo sed -i 's/localhost/paril-ThinkPad-T470/g' /etc/slurm/slurm.conf
+sudo sed -i 's/localhost/paril-ThinkPad-T470/g' /etc/slurm/gres.conf
 
-```shell
-cat << 'EOF' | sudo tee /usr/local/bin/sshare > /dev/null
-#!/bin/bash
-# Fake sshare data to satisfy Snakemake SLURM plugin
-echo "Account|User|RawShares|NormShares|RawUsage|NormUsage|FairShare"
-echo "localuser|$(whoami)|1|1.0|0|0.0|1.0"
+sudo systemctl restart slurmd
+sudo systemctl restart slurmctld
+sudo scontrol update NodeName=paril-ThinkPad-T470 State=DOWN Reason="name change reset"
+sudo scontrol update NodeName=paril-ThinkPad-T470 State=RESUME
+
+sudo tail -n 15 /var/log/slurm/slurmctld.log
+
+sudo mknod -m 666 /dev/fake_nvidia c 195 255
+
+cat << 'EOF' | sudo tee /etc/slurm/gres.conf > /dev/null
+NodeName=paril-ThinkPad-T470 Name=gpu Type=h100 File=/dev/fake_nvidia
 EOF
-sudo chmod +x /usr/local/bin/sshare
+
+sudo systemctl restart slurmd
+sudo systemctl restart slurmctld
+
+sudo scontrol update NodeName=paril-ThinkPad-T470 State=DOWN Reason="hardware fix"
+sudo scontrol update NodeName=paril-ThinkPad-T470 State=RESUME
+
+sudo touch /var/log/slurm/accounting.txt
+sudo chmod 777 /var/log/slurm/accounting.txt
+
+sinfo
 ```
+
+
 
 ### Test
 
 ```shell
-sudo systemctl restart slurmd
-sudo systemctl restart slurmctld
-sudo scontrol update NodeName=localhost State=DOWN Reason="reset"
-sudo scontrol update NodeName=localhost State=RESUME
 conda config --set channel_priority strict
-pixi run snakemake --executor slurm --jobs 1 --use-conda --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0"
-# pixi run snakemake --executor slurm --jobs 2 --use-conda --profile slurm --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0"
-# pixi run snakemake --executor slurm --jobs 2 --use-conda --default-resources slurm_account="localuser|$(whoami)|1|1.0|0|0.0|1.0" slurm_partition=gpu
+pixi run snakemake --executor slurm --jobs 1 --use-conda --default-resources slurm_account="localuser"
+
+
 module avail R
 module add R
 ```
