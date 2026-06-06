@@ -538,19 +538,14 @@ sudo chmod 777 /var/log/slurm/accounting.txt
 sinfo
 ```
 
-
-
 ### Test
 
 ```shell
 conda config --set channel_priority strict
 pixi run snakemake --executor slurm --jobs 1 --use-conda --default-resources slurm_account="localuser"
 
-
 module avail R
 module add R
 ```
-
-
 
 </details>
