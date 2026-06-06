@@ -322,6 +322,63 @@ time cargo test -- --show-output
 
 # Benchmarking
 
+
+```mermaid
+flowchart TD
+    classDef default fill:#f4f6f8,stroke:#4a5568,stroke-width:2px,color:#2d3748;
+    classDef target fill:#ecc94b,stroke:#b7791f,stroke-width:3px,color:#744210;
+    classDef checkpoint fill:#fed7d7,stroke:#c53030,stroke-width:2px,stroke-dasharray: 5 5,color:#742a2a;
+    classDef analysis fill:#c6f6d5,stroke:#2f855a,stroke-width:2px,color:#22543d;
+    classDef dataprep fill:#bee3f8,stroke:#2b6cb0,stroke-width:2px,color:#1a365d;
+
+    ALL(((all))):::target
+
+    subgraph Data_Preparation [1. Data Preparation]
+        direction TB
+        ST(simulate_trials):::dataprep
+        SG(simulate_gp):::dataprep
+        ET{{empiricalprep_trials}}:::checkpoint
+        EG{{empiricalprep_gp}}:::checkpoint
+        ER(empiricalprep_remotesensing):::dataprep
+    end
+
+    subgraph Pre_Processing [2. Pre-Processing]
+        RGP(randomisation_gp):::dataprep
+    end
+
+    subgraph Analysis_Models [3. Analysis Models]
+        LA(linear_analysis):::analysis
+        TA(trees_analysis):::analysis
+        MA(mlp_analysis):::analysis
+    end
+
+    subgraph Evaluation [4. Evaluation]
+        C(comparisons):::analysis
+    end
+
+    %% Data flow to Randomisation
+    ST & SG & ET & EG & ER -->|data| RGP
+
+    %% Data flow to Models (raw data input)
+    ST & SG & ET & EG & ER --->|data| LA & TA & MA
+
+    %% Randomisation to Models (randomisation input)
+    RGP -->|randomisation| LA & TA & MA
+
+    %% Models to Comparisons
+    LA -->|LINEAR.tsv| C
+    TA -->|TREES.tsv| C
+    MA -->|MLP.tsv| C
+
+    %% Implicit dependencies for the 'all' target
+    %% (Dotted lines used to keep the graph readable while showing final target dependencies)
+    Data_Preparation -.-> ALL
+    Pre_Processing -.-> ALL
+    Analysis_Models -.-> ALL
+    Evaluation -.-> ALL
+
+```
+
 ## Install Snakemake:
 
 ```shell
