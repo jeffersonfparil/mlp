@@ -11,8 +11,8 @@ N_TREATMENTS = [3]
 N_ENTRIES = [10]
 N_REPLICATIONS = [3]
 N_HIDDEN_LAYERS = [1]
-# DATA_TYPES = ["CONTINUOUS", "BINARY"]
-DATA_TYPES = ["CONTINUOUS"]
+DATA_TYPES = ["CONTINUOUS", "BINARY"]
+# DATA_TYPES = ["CONTINUOUS"]
 N_OBSERVATIONS = [500]
 N_FEATURES = [1000]
 TRIALS_AGRIDAT_DIR = str(Path.home() / "Documents/mlp/tests/datasets/agridat")
@@ -30,20 +30,27 @@ EXCLUDE_LM = "FALSE"
 EXCLUDE_LMER = "TRUE"
 EXCLUDE_SOMMER = "TRUE"
 EXCLUDE_ASREML = "TRUE"
+
 # N_FOLDS = 5
-N_FOLDS = 2
 # N_REPS = 10
-N_REPS = 2
 # N_ITERATIONS_LINEAR = 10000
-N_ITERATIONS_LINEAR = 100
 # N_BURNIN_ITERATIONS_LINEAR = 1000
-N_BURNIN_ITERATIONS_LINEAR = 10
+# N_ESTIMATORS_TREES = 1000
+# MAX_DEPTH_TREES = 3
 # N_EPOCHS_MLP = 1000
-N_EPOCHS_MLP = 100
 # N_BURNIN_EPOCHS_MLP = 100
-N_BURNIN_EPOCHS_MLP = 10
 # MODELS = "BRR,BayesA,BayesB,BayesC"
+
+N_FOLDS = 2
+N_REPS = 2
+N_ITERATIONS_LINEAR = 10
+N_BURNIN_ITERATIONS_LINEAR = 1
+N_ESTIMATORS_TREES = 10
+MAX_DEPTH_TREES = 1
+N_EPOCHS_MLP = 10
+N_BURNIN_EPOCHS_MLP = 1
 MODELS = "BRR"
+
 BASE_SEED = 42
 VERBOSE = "TRUE"
 wildcard_constraints:
@@ -505,6 +512,8 @@ rule trees_analysis:
     params:
         scripts_dir=SCRIPTS_DIR,
         outdir=f"{ROOT_OUTDIR}/{{analysis_type}}",
+        n_estimators = N_ESTIMATORS_TREES,
+        max_depth = MAX_DEPTH_TREES,
         n_reps = N_REPS,
         n_folds = N_FOLDS,
     log:
@@ -527,18 +536,17 @@ rule trees_analysis:
                 {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
-                "." \
-                {params.n_reps} \
-                {params.n_folds} >> {log} 2>&1
+                --n-estimators={params.n_estimators} \
+                --max-depth={params.max_depth} >> {log} 2>&1
         else
             time \
             python {params.scripts_dir}/trees.py \
                 {wildcards.analysis_type} \
                 {input.data} \
                 {params.outdir} \
-                {input.randomisation} \
-                {params.n_reps} \
-                {params.n_folds} >> {log} 2>&1
+                --randomisation-input-file={input.randomisation} \
+                --n-replicates={params.n_reps} \
+                --n-folds={params.n_folds} >> {log} 2>&1
         fi;
         """
 

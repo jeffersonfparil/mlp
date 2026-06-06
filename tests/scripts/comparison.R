@@ -94,6 +94,11 @@ compare_trial_analyses <- function(params) {
       list(estimate = NA, p.value = 1.00)
     }
   )
+  cor_test = if (is.na(cor_test$estimate)) {
+    list(estimate = NA, p.value = 1.00)
+  } else {
+    cor_test
+  }
   print(cor_test)
   annot <- if (cor_test$p.value < 0.0001) {
     "***"
