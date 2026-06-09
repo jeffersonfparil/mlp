@@ -33,6 +33,10 @@ if [[ ! -f $MLP ]]; then echo "Error: MLP executable not found at the specified 
 if [[ -z $ANALYSIS_TYPE ]]; then echo "Error: Missing argument for analysis type (trials or gp)."; exit 1; fi
 if [[ -z $DIR_OUTPUT ]]; then echo "Error: Missing argument for output directory."; exit 1; fi
 
+echo $MLP
+echo $ANALYSIS_TYPE
+echo $DIR_OUTPUT
+
 if [[ $ANALYSIS_TYPE == "trials" ]]; then
     echo "###########################################"
     echo "### Simulating data for trials analysis ###"
@@ -75,7 +79,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
         awk '{FS="\t"; OFS="\t"} {gsub(/level/,"blk➵level",$6); print }' > ${FNAME_OUTPUT}.tmp2
     rm ${FNAME_OUTPUT}.tmp
     mv ${FNAME_OUTPUT}.tmp2 ${FNAME_OUTPUT}
-    echo "OUTPUT: '${DIR_OUTPUT}/${FNAME_OUTPUT}'"
+    echo "OUTPUT: '${FNAME_OUTPUT}'"
 elif [[ $ANALYSIS_TYPE == "gp" ]]; then
     echo "#######################################################"
     echo "### Simulating data for genomic prediction analysis ###"
