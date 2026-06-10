@@ -22,7 +22,7 @@ get_params <- function(args) {
     stop("Error: FNAME_1 and FNAME_2 do not correspond to the same dataset. Use -h or --help for usage information.")
   }
   id <- id_1
-  if (args[1] == "trials") {
+  linear_formula <- if (args[1] == "trials") {
     fname_trials <- if (grepl("-LINEAR.tsv$", args[2])) {
       args[2]
     } else if (grepl("-LINEAR.tsv$", args[3])) {
@@ -30,17 +30,18 @@ get_params <- function(args) {
     } else {
       NULL
     }
-    if (!is.null(fname_trials)) {
+    linear_formula <- if (!is.null(fname_trials)) {
       con <- file(fname_trials, "r")
       tmp <- readLines(con, n = 1)
       close(con)
-      linear_formula <- gsub("\"", "", unlist(strsplit(tmp[grep("Best model selected: ", tmp)], ": "))[2])
+      gsub("\"", "", unlist(strsplit(tmp[grep("Best model selected: ", tmp)], ": "))[2])
     } else {
-      linear_formula <- NA
+      NA
     }
+    linear_formula
   } else {
     # "gp" or "remotesensing"
-    linear_formula <- NA
+    NA
   }
   fname_png <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.png"))
   fname_tsv <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.tsv"))
