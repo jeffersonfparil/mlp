@@ -655,7 +655,8 @@ extract_entries_effects <- function(params) {
     out = list(df_effects = data.frame(ids = character(), effects = numeric()), formula = NA)
   }
   fname_output <- define_fname_output(params$fname_input)
-  write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t")
+  cat(out$formula, file = fname_output, sep = "\n")
+  write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t", append = TRUE)
   fname_output
 }
 

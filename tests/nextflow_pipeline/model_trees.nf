@@ -1,5 +1,8 @@
 process trees_analysis {
-    publishDir "${params.root_outdir}/${analysis_type}", mode: 'copy'
+    // publishDir "${params.root_outdir}/${analysis_type}", mode: 'copy'
+    publishDir "${params.root_outdir}", 
+        mode: 'copy', 
+        saveAs: { filename -> "${analysis_type}/${filename}" }
     
     input:
         tuple val(analysis_type), path(data_file), path(randomisation_file)

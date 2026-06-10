@@ -1,14 +1,12 @@
 #!/usr/bin/env nextflow
 
-nextflow.enable.dsl = 2
-
 include { simulate_trials; simulate_gp } from './simulations.nf'
 include { empiricalprep_trials; empiricalprep_gp; empiricalprep_remotesensing } from './empiricalprep.nf'
 include { randomisation_gp_rs } from './randomisation.nf'
 include { linear_analysis } from './model_linear.nf'
 include { trees_analysis } from './model_trees.nf'
 include { mlp_analysis } from './model_mlp.nf'
-// include { comparisons } from './comparisons.nf'
+include { comparisons } from './comparisons.nf'
 
 // Helper function: generate parameter combinations
 def generate_trials_params() {
@@ -71,32 +69,44 @@ workflow {
         | map { file -> tuple('remotesensing', file) }
 
     combined = trials_simulated
-        .mix(trials_empirical)
-        .mix(gp_simulated)
-        .mix(gp_empirical)
-        .mix(remotesensing_empirical)
+        | mix(trials_empirical)
+        | mix(gp_simulated)
+        | mix(gp_empirical)
+        | mix(remotesensing_empirical)
 
     randomisations = randomisation_gp_rs(combined)
     
     linear_output = randomisations
         | linear_analysis
         // | view()
-    
+
     trees_output = randomisations
         | trees_analysis
         // | view()
     
     mlp_output = randomisations
         | mlp_analysis
-        | view()
+        // | view()
 
-    // TODO: prepare the input for comparisons --> tuple val(analysis_type), path(linear_file), path(trees_file), path(mlp_file)
-
-    // linear_output
-    //     .mix(trees_output)
-    //     .mix(mlp_output)
-    //     .map {tuple(analysis, file) -> }
-
+    all_outputs = linear_output
+        | mix(trees_output)
+        | mix(mlp_output)
+        | map {
+            analysis, file -> 
+            // def dir = file.parent
+            def id = file.baseName.split('-')[1..-2].join('-')
+            def linear = "${params.root_outdir}/${analysis}/output-${id}-LINEAR.tsv"
+            def trees = "${params.root_outdir}/${analysis}/output-${id}-TREES.tsv"
+            def mlp = "${params.root_outdir}/${analysis}/output-${id}-MLP.tsv"
+            return tuple(analysis, linear, trees, mlp)
+        }
+        | unique()
+        | toList()
+        | flatMap {it}
+        // | view()
     
-    // comparisons(comparison_input)
+
+    all_outputs
+        | comparisons
+        // | view()
 }
