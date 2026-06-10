@@ -79,7 +79,7 @@ struct Args {
     weights_initialisation: String,
 
     /// Maximum number of training epochs
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 500)]
     n_epochs: usize,
 
     /// Number of burnin epochs (initial training epochs to discard)
