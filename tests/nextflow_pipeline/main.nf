@@ -45,95 +45,53 @@ def get_analysis_type(filename) {
 
 workflow {
     
-    // trials_params = Channel.fromList(generate_trials_params())
-    // trials_simulated = simulate_trials(trials_params).flatten()
+    trials_simulated = Channel.fromList(generate_trials_params())
+        | simulate_trials
+        | flatten()
+        | map { file -> tuple('trials', file) }
     
+    trials_empirical = Channel.fromList(params.trials_agridat_fnames)
+        | empiricalprep_trials
+        | flatten()
+        | map { file -> tuple('trials', file) }
 
-    
-    // Trial simulations
-    trials_params = Channel.fromList(generate_trials_params())
-    trials_simulated = simulate_trials(trials_params).flatten()
-    
-    // GP simulations
-    gp_params = Channel.fromList(generate_gp_params())
-    gp_simulated = simulate_gp(gp_params).flatten()
-    
-    // Trial empirical data
-    trials_fnames = Channel.fromList(params.trials_agridat_fnames)
-    trials_empirical = empiricalprep_trials(trials_fnames).flatten()
-    // trials_empirical_prep = empiricalprep_trials(trials_fnames)
-    // trials_data = trials_empirical_prep.data.flatten()
-    
-    // GP empirical data
-    gp_fnames = Channel.fromList(params.gp_azodi2019_fnames)
-    gp_empirical = empiricalprep_gp(gp_fnames).flatten()
-    // gp_empirical_prep = empiricalprep_gp(gp_fnames)
-    // gp_data = gp_empirical_prep.data.flatten()
-    
-    // Remote sensing empirical data
-    remotesensing_dates = Channel.fromList(params.remotesensing_farag_2024_dates)
-    remotesensing_empirical = empiricalprep_remotesensing(remotesensing_dates).flatten()
-    
-    // Names
-    input_tuple_analysis_input = trials_simulated.mix(trials_empirical).map { file -> tuple('trials', file) }.
-        mix(gp_simulated.mix(gp_empirical).map { file -> tuple('gp', file) }).
-        mix(remotesensing_empirical.map { file -> tuple('remotesensing', file) })
-        
-    // println "Input for randomisation:"
-    // input_tuple_analysis_input.view()
+    gp_simulated = Channel.fromList(generate_gp_params())
+        | simulate_gp
+        | flatten()
+        | map { file -> tuple('gp', file) }
 
-    input_tuple_analysis_input_randomisation = randomisation_gp_rs(input_tuple_analysis_input)
+    gp_empirical = Channel.fromList(params.gp_azodi2019_fnames)
+        | empiricalprep_gp
+        | flatten()
+        | map { file -> tuple('gp', file) }
 
-    // println "Output from randomisation:"
-    // input_tuple_analysis_input_randomisation.view()
+    remotesensing_empirical = Channel.fromList(params.remotesensing_farag_2024_dates)
+        | empiricalprep_remotesensing
+        | flatten()
+        | map { file -> tuple('remotesensing', file) }
 
-    linear_results = linear_analysis(input_tuple_analysis_input_randomisation)
-    println "Linear analysis results:"
-    linear_results.view()
+    combined = trials_simulated
+        .mix(trials_empirical)
+        .mix(gp_simulated)
+        .mix(gp_empirical)
+        .mix(remotesensing_empirical)
 
+    randomisations = randomisation_gp_rs(combined)
+    
+    linear_output = randomisations
+        | linear_analysis
+        // | view()
+    
+    trees_output = randomisations
+        | trees_analysis
+        // | view()
+    
+    mlp_output = randomisations
+        | mlp_analysis
+        | view()
 
+    // TODO: prepare the input for comparisons --> tuple val(analysis_type), path(linear_file), path(trees_file), path(mlp_file)
 
-
-    
-
-
-    // // Randomisation for GP only (simulated + empirical)
-    // all_gp_data = gp_simulated.mix(gp_data)
-    //     .map { file -> tuple('gp', file) }
-    
-    // randomisation_results = randomisation_gp(all_gp_data)
-    
-    // // Create data files with their randomisation results
-    // rand_keyed = randomisation_results.map { file -> 
-    //     def base = file.baseName.replace('output-', '').replace('-RANDOMISATION', '')
-    //     tuple(base, file)
-    // }
-    
-    // gp_with_rand = all_gp_data
-    //     .map { analysis_type, data_file ->
-    //         tuple(data_file.baseName, analysis_type, data_file)
-    //     }
-    //     .join(rand_keyed)
-    //     .map { base, analysis_type, data_file, rand_file ->
-    //         tuple(analysis_type, data_file, rand_file)
-    //     }
-    
-    // // Trials data (use data file as placeholder for randomisation - not used)
-    // trials_with_rand = trials_simulated.mix(trials_data)
-    //     .map { file -> tuple('trials', file, file) }
-    
-    // // == ANALYSIS STAGE ==
-    
-    // // Combine all data for parallel analysis
-    // all_data = gp_with_rand.mix(trials_with_rand)
-    
-    // // Run all analyses in parallel
-    // linear_results = linear_analysis(all_data)
-    // trees_results = trees_analysis(all_data)
-    // mlp_results = mlp_analysis(all_data)
-    
-    // // == COMPARISON STAGE ==
-    
     // // Prepare channels for joins
     // linear_keyed = linear_results.map { file ->
     //     def base = file.baseName.replace('-LINEAR', '')

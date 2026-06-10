@@ -5,7 +5,7 @@ process mlp_analysis {
         tuple val(analysis_type), path(data_file), path(randomisation_file)
     
     output:
-        path "output-${data_file.baseName}-MLP.tsv"
+        tuple val(analysis_type), path("output-${data_file.baseName}-MLP.tsv")
     
     script:
     def is_trials = analysis_type == "trials"
@@ -27,9 +27,7 @@ process mlp_analysis {
             . \
             ${randomisation_file} \
             ${params.n_reps} \
-            ${params.n_folds} \
-            ${params.n_epochs_mlp} \
-            ${params.n_burnin_epochs_mlp}
+            ${params.n_folds}
         """
     }
 }

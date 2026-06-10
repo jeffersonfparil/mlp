@@ -322,13 +322,24 @@ time cargo test -- --show-output
 
 # Benchmarking
 
+## Install Nextflow (if not on an HPC or just wants to use pixi)
+
+```shell
+pixi global install -c conda-forge -c bioconda nextflow
+```
+
 ## Run the workflow:
 
-### On a single machine:
+### On a single machine or node:
 ```shell
-module load Nextflow/25.10.4
 cd mlp/tests
-nextflow run nextflow_pipeline/main.nf -c nextflow_pipeline/params.config --resume
+USE_SLURM=1
+if [[ $USE_SLURM -eq 1 ]]; then
+   module load Nextflow/25.10.4 && \
+   nextflow run nextflow_pipeline/main.nf -c nextflow_pipeline/params.config --resume
+else
+   pixi run nextflow run nextflow_pipeline/main.nf -c nextflow_pipeline/params.config --resume
+fi
 ```
 
 ### On an HPC system with Slurm

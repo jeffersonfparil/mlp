@@ -11,8 +11,6 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo -e "\t5. FNAME_RANDOMISATION: path to the file containing randomisation indices"
     echo -e "\t6. N_REPS: number of replications of k-fold cross-validation"
     echo -e "\t7. N_FOLDS: number of folds for k-fold cross-validation"
-    echo -e "\t8. N_EPOCHS: number of epochs for training the multi-layer perceptron model"
-    echo -e "\t9. N_BURNIN_EPOCHS: number of burn-in epochs for training the multi-layer perceptron model"
     echo "Examples:"
     echo "MLP=\${HOME}/Documents/mlp/target/release/mlp"
     echo "mkdir tmp"
@@ -21,7 +19,7 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "bash simulate.sh \$MLP gp tmp BINARY 100 50 2"
     echo "bash mlp.sh \$MLP trials tmp/australia.soybean-yield.tsv tmp"
     echo "bash mlp.sh \$MLP gp tmp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/ tmp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANOMISATION.tsv 3 5"
-    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp/ tmp/output-sorghum-YLD-RANDOMISATION.tsv 2 5 100 10"
+    echo "bash mlp.sh \$MLP gp tmp/sorghum-YLD.tsv tmp/ tmp/output-sorghum-YLD-RANDOMISATION.tsv 2 5"
     exit 0
 fi
 MLP=$1
@@ -40,13 +38,6 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     echo "################################################################"
     echo "### Running multi-layer perceptron model for trials analysis ###"
     echo "################################################################"
-    N_EPOCHS=500
-    N_BURNIN_EPOCHS=0
-    F_PATIENT_EPOCHS=0.01
-    N_BATCHES=1
-    N_HIDDEN_LAYERS=1
-    N_HIDDEN_NODES=64
-    MARGINALS_ORDER=1
     BNAME_INPUT=$(basename $FNAME_INPUT)
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.json/g")
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
@@ -62,14 +53,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     time ${MLP} \
         -f ${FNAME_INPUT} \
         -o ${FNAME_OUTPUT_JSON} \
-        -v \
-        --n-epochs=${N_EPOCHS} \
-        --n-burnin-epochs=${N_BURNIN_EPOCHS} \
-        --f-patient-epochs=${F_PATIENT_EPOCHS} \
-        --n-batches=${N_BATCHES} \
-        --n-hidden-layers=${N_HIDDEN_LAYERS} \
-        --n-hidden-nodes=${N_HIDDEN_NODES} \
-        --marginals-order=${MARGINALS_ORDER} > ${FNAME_OUTPUT_JSON}.log
+        -v > ${FNAME_OUTPUT_JSON}.log
     # Clean-up just a bit
     mkdir -p $TMP_OUTDIR
     for f in $(grep "Find the loss curve saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
@@ -84,8 +68,6 @@ else
     FNAME_RANDOMISATION=$5
     N_REPS=$6
     N_FOLDS=$7
-    N_EPOCHS=$8
-    N_BURNIN_EPOCHS=$9
     # MLP=${HOME}/Documents/mlp/target/release/mlp
     # ANALYSIS_TYPE=gp
     # FNAME_INPUT=${HOME}/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv
@@ -100,19 +82,6 @@ else
     N=$(echo $(cut -f1 $FNAME_INPUT | wc -l) - 1 | bc)
     M=$(echo "scale=0; $N / $N_FOLDS" | bc)
     P=$(head -n1 $FNAME_INPUT | cut -f2- | awk '{print NF}')
-    # N_EPOCHS=1000
-    # N_BURNIN_EPOCHS=100
-    F_PATIENT_EPOCHS=0.1
-    F_VALIDATION=0.1
-    N_BATCHES=1
-    N_HIDDEN_LAYERS=1
-    N_HIDDEN_NODES=256
-    DROPOUT_RATE=0.0
-    LEARNING_RATE=1e-4
-    COST="MSE"
-    OPTIMISERS="Adam,GradientDescent"
-    ACTIVATIONS="ReLU,Linear"
-    WEIGHTS_INITIALISATIONS="Cauchy,He"
     BNAME_INPUT=$(basename $FNAME_INPUT)
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.tsv/g")
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
@@ -152,19 +121,6 @@ else
                 -o ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
                 --hyperparameter-optimisation \
-                --range-hidden-layers="${N_HIDDEN_LAYERS},${N_HIDDEN_LAYERS},${N_HIDDEN_LAYERS}" \
-                --range-hidden-layer-nodes="${N_HIDDEN_NODES},${N_HIDDEN_NODES},${N_HIDDEN_NODES}" \
-                --range-dropout-rates="${DROPOUT_RATE},${DROPOUT_RATE},0.01" \
-                --range-learning-rates="${LEARNING_RATE},${LEARNING_RATE},${LEARNING_RATE}" \
-                --range-n-epochs="${N_EPOCHS},${N_EPOCHS},${N_EPOCHS}" \
-                --range-n-burnin-epochs="${N_BURNIN_EPOCHS},${N_BURNIN_EPOCHS},${N_BURNIN_EPOCHS}" \
-                --range-f-patient-epochs="${F_PATIENT_EPOCHS},${F_PATIENT_EPOCHS},${F_PATIENT_EPOCHS}" \
-                --range-f-validation="${F_VALIDATION},${F_VALIDATION},${F_VALIDATION}" \
-                --range-n-batches="${N_BATCHES},${N_BATCHES},${N_BATCHES}" \
-                --selection-costs="${COST}" \
-                --selection-optimisers="${OPTIMISERS}" \
-                --selection-activations="${ACTIVATIONS}" \
-                --selection-weights-initialisations="${WEIGHTS_INITIALISATIONS}" \
                 --skip-marginals > ${FNAME_OUTPUT_CV}.log
             SELECTED_N_HIDDEN_LAYERS=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Layers: " | awk -F': '  '{print $2}')
             SELECTED_N_HIDDEN_NODES=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Nodes: " | awk -F': '  '{print $2}')

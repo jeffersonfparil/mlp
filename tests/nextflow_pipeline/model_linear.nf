@@ -5,7 +5,7 @@ process linear_analysis {
         tuple val(analysis_type), path(data_file), path(randomisation_file)
     
     output:
-        path "output-${data_file.baseName}-LINEAR.tsv"
+        tuple val(analysis_type), path("output-${data_file.baseName}-LINEAR.tsv")
     
     script:
     def is_trials = analysis_type == "trials"
@@ -36,8 +36,8 @@ process linear_analysis {
             ${params.n_folds} \
             ${params.n_iterations_linear} \
             ${params.n_burnin_iterations_linear} \
-            ${params.models} \
-            ${params.base_seed} \
+            ${params.models_linear} \
+            ${params.seed} \
             ${params.verbose}
         """
     }

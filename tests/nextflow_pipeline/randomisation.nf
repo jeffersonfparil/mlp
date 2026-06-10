@@ -16,7 +16,7 @@ process randomisation_gp_rs {
         . \
         ${params.n_reps} \
         ${params.n_folds} \
-        ${params.base_seed}
+        ${params.seed}
     # mv output-*-RANDOMISATION.tsv output-${data_file.baseName}-RANDOMISATION.tsv
     """
 }

@@ -55,7 +55,7 @@ struct Args {
     n_hidden_layers: usize,
 
     /// Number of nodes per hidden layer
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "128")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "64")]
     n_hidden_nodes: Vec<usize>,
 
     /// Dropout rates per hidden layer
@@ -79,7 +79,7 @@ struct Args {
     weights_initialisation: String,
 
     /// Maximum number of training epochs
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 100)]
     n_epochs: usize,
 
     /// Number of burnin epochs (initial training epochs to discard)
@@ -95,7 +95,7 @@ struct Args {
     f_validation: f32,
 
     /// Number of training batches to split the input data into
-    #[arg(long, default_value_t = 2)]
+    #[arg(long, default_value_t = 1)]
     n_batches: usize,
 
     /// Learning rate (η)
@@ -132,7 +132,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Range of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2,1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,1,1")]
     range_hidden_layers: Vec<usize>,
 
     /// Range of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
@@ -140,7 +140,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "128,128,128"
+        default_value = "256,256,256"
     )]
     range_hidden_layer_nodes: Vec<usize>,
 
@@ -158,16 +158,16 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1e-5,1e-3,1e-4"
+        default_value = "1e-4,1e-4,1e-4"
     )]
     range_learning_rates: Vec<f32>,
 
     /// Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10,10,10")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "100,1000,1000")]
     range_n_epochs: Vec<usize>,
 
     /// Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "0,0,1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "10,10,10")]
     range_n_burnin_epochs: Vec<usize>,
 
     /// Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
@@ -175,7 +175,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "0.01,0.01,0.01"
+        default_value = "0.1,0.1,0.1"
     )]
     range_f_patient_epochs: Vec<f32>,
 
@@ -184,7 +184,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "0.0,0.0,0.01"
+        default_value = "0.1,0.1,0.1"
     )]
     range_f_validation: Vec<f32>,
 
@@ -193,7 +193,7 @@ struct Args {
     range_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,Linear")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test

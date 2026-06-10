@@ -5,7 +5,7 @@ process trees_analysis {
         tuple val(analysis_type), path(data_file), path(randomisation_file)
     
     output:
-        path "output-${data_file.baseName}-TREES.tsv"
+        tuple val(analysis_type), path("output-${data_file.baseName}-TREES.tsv")
     
     script:
     def is_trials = analysis_type == "trials"
@@ -17,7 +17,9 @@ process trees_analysis {
             ${data_file} \
             . \
             --n-estimators=${params.n_estimators_trees} \
-            --max-depth=${params.max_depth_trees}
+            --max-depth=${params.max_depth_trees} \
+            --learning-rate=${params.learning_rate_trees} \
+            --seed=${params.seed}
         """
     } else {
         """
@@ -27,7 +29,13 @@ process trees_analysis {
             . \
             --randomisation-input-file=${randomisation_file} \
             --n-replicates=${params.n_reps} \
-            --n-folds=${params.n_folds}
+            --n-folds=${params.n_folds} \
+            --early-stopping-rounds=${params.early_stopping_rounds_trees} \
+            --optim-n-estimators=${params.optim_n_estimators_trees} \
+            --optim-max-depth=${params.optim_max_depth_trees} \
+            --optim-learning-rate=${params.optim_learning_rate_trees} \
+            --optim-subsample=${params.optim_subsample_trees} \
+            --seed=${params.seed}
         """
     }
 }
