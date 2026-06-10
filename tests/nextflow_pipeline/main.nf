@@ -92,30 +92,11 @@ workflow {
 
     // TODO: prepare the input for comparisons --> tuple val(analysis_type), path(linear_file), path(trees_file), path(mlp_file)
 
-    // // Prepare channels for joins
-    // linear_keyed = linear_results.map { file ->
-    //     def base = file.baseName.replace('-LINEAR', '')
-    //     tuple(base, file)
-    // }
-    
-    // trees_keyed = trees_results.map { file ->
-    //     def base = file.baseName.replace('-TREES', '')
-    //     tuple(base, file)
-    // }
-    
-    // mlp_keyed = mlp_results.map { file ->
-    //     def base = file.baseName.replace('-MLP', '')
-    //     tuple(base, file)
-    // }
-    
-    // // Join results and prepare for comparison
-    // comparison_input = linear_keyed
-    //     .join(trees_keyed)
-    //     .join(mlp_keyed)
-    //     .map { base, linear, trees, mlp ->
-    //         def analysis = get_analysis_type(base)
-    //         tuple(analysis, linear, trees, mlp)
-    //     }
+    // linear_output
+    //     .mix(trees_output)
+    //     .mix(mlp_output)
+    //     .map {tuple(analysis, file) -> }
+
     
     // comparisons(comparison_input)
 }
