@@ -30,15 +30,15 @@ get_params <- function(args) {
     } else {
       NULL
     }
-    linear_formula <- if (!is.null(fname_trials)) {
+    if (!is.null(fname_trials)) {
       con <- file(fname_trials, "r")
       tmp <- readLines(con, n = 1)
+      print(tmp)
       close(con)
-      gsub("\"", "", unlist(strsplit(tmp[grep("Best model selected: ", tmp)], ": "))[2])
+      tmp
     } else {
       NA
     }
-    linear_formula
   } else {
     # "gp" or "remotesensing"
     NA
