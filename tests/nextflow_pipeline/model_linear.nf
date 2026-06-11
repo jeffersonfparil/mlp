@@ -1,4 +1,6 @@
 process linear_analysis {
+    label 'gpu'
+
     // publishDir "${params.root_outdir}/${analysis_type}", mode: 'copy'
     publishDir "${params.root_outdir}", 
         mode: 'copy', 

@@ -336,9 +336,14 @@ cd mlp/tests
 USE_SLURM=1
 if [[ $USE_SLURM -eq 1 ]]; then
    module load Nextflow/25.10.4 && \
-   nextflow run nextflow_pipeline/main.nf -c nextflow_pipeline/params.config -resume
+   nextflow run nextflow_pipeline/main.nf \
+    -c nextflow_pipeline/params.config \
+    -c nextflow_pipeline/process.config \
+    -resume
 else
-   pixi run nextflow run nextflow_pipeline/main.nf -c nextflow_pipeline/params.config -resume
+   pixi run nextflow run nextflow_pipeline/main.nf \
+    -c nextflow_pipeline/params.config \
+    -resume
 fi
 ```
 

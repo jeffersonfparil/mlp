@@ -1,6 +1,8 @@
 // Simulate datasets for trial analysis and GP CV using mlp (GPU required)
 
 process simulate_trials {
+    label 'gpu'
+
     publishDir "${params.root_outdir}/trials", mode: 'copy'
     
     input:
@@ -25,6 +27,8 @@ process simulate_trials {
 }
 
 process simulate_gp {
+    label 'gpu'
+
     publishDir "${params.root_outdir}/gp", mode: 'copy'
     
     input:
