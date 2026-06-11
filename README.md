@@ -333,47 +333,17 @@ pixi global install -c conda-forge -c bioconda nextflow
 ### On a single machine or node:
 ```shell
 cd mlp/tests
-USE_SLURM=1
-if [[ $USE_SLURM -eq 1 ]]; then
-   module load Nextflow/25.10.4 && \
-   nextflow run nextflow_pipeline/main.nf \
-    -c nextflow_pipeline/params.config \
-    -c nextflow_pipeline/process.config \
-    -resume
-else
-   pixi run nextflow run nextflow_pipeline/main.nf \
-    -c nextflow_pipeline/params.config \
-    -resume
-fi
+pixi run nextflow run nextflow_pipeline/main.nf \
+ -c nextflow_pipeline/params.config \
+ -resume
 ```
 
 ### On an HPC system with Slurm
 
 ```shell
-cd mlp/
-# export PATH="/usr/local/eb/software/generic/Miniconda3/24.7.1-0/bin/conda:$PATH" && pixi run snakemake --use-conda --profile slurm_profile
-# snakemake --profile slurm_profile
-# snakemake --executor slurm --jobs 100
-# pixi run snakemake --executor slum --jobs 100 --use-conda --default-resources slurm_account=dbiof2 --conda-base-path /usr/local/eb/software/generic/Miniconda3/24.7.1-0/bin/conda
-# pixi run snakemake \
-#   --executor slurm \
-#   --jobs 100 \
-#   --use-conda \
-#   --default-resources slurm_account=dbiof2 \
-#   --conda-base-path /usr/local/eb/software/generic/Miniconda3/24.7.1-0
-module purge
-module load Python/3.12.3-GCCcore-13.3.0
-module load Miniconda3/24.7.1-0
-module load snakemake/8.27.0-foss-2024a
-snakemake \
-  --executor slurm \
-  --jobs 100 \
-  --use-conda \
-  --default-resources slurm_account=dbiof2 \
-  --jobscript slurm/jobscript.sh # \
-#   --precommand "module purge; module load Miniconda3/24.7.1-0; module load snakemake"
-
-
+cd mlp/tests
+mkdir logs
+sbatch run_nextflow.sh
 ```
 
 # Miscellaneous
