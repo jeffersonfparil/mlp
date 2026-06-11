@@ -1,6 +1,6 @@
 #!/bin/bash
 if [[ $1 == "-h" || $1 == "--help" ]]; then
-    echo "Usage: sh randomisationgp.sh FNAME_INPUT DIRNAME_OUTPUT N_REPS N_FOLDS BASE_SEED"
+    echo "Usage: sh randomisationgprs.sh FNAME_INPUT DIRNAME_OUTPUT N_REPS N_FOLDS BASE_SEED"
     echo "Note that we start with index 1 for the first row of the data after the header line."
     echo "1. FNAME_INPUT: path to the input file for the analysis:"
     echo "2. DIRNAME_OUTPUT: directory where output files will be saved."
@@ -8,7 +8,7 @@ if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "4. N_FOLDS: number of folds for k-fold cross-validation."
     echo "5. BASE_SEED: base seed for random number generation."
     echo "Example: "
-    echo "bash randomisationgp.sh tmp/gp/simulated-DATA_TYPE_CONTINUOUS-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/gp 3 10 42"
+    echo "bash randomisationgprs.sh tmp/gp/simulated-DATA_TYPE_CONTINUOUS-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/gp 3 10 42"
     exit 0
 fi
 FNAME_INPUT=$1

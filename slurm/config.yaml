@@ -1,9 +1,0 @@
-executor: slurm
-jobs: 100
-cores: 1
-use-conda: true
-default-resources:
-  slurm_account: "dbiof2"
-  slurm_partition: "batch"
-  mem_mb: 1024
-  runtime: "1-00:00:00"

@@ -22,26 +22,26 @@ get_params <- function(args) {
     stop("Error: FNAME_1 and FNAME_2 do not correspond to the same dataset. Use -h or --help for usage information.")
   }
   id <- id_1
-  if (args[1] == "trials") {
-    fname_log_linear <- if (grepl("-LINEAR.tsv$", args[2])) {
-      file.path(dirname(args[2]), gsub("^output-", "linear_analysis-", gsub("-LINEAR.tsv", ".log", basename(args[2]))))
+  linear_formula <- if (args[1] == "trials") {
+    fname_trials <- if (grepl("-LINEAR.tsv$", args[2])) {
+      args[2]
     } else if (grepl("-LINEAR.tsv$", args[3])) {
-      file.path(dirname(args[3]), gsub("^output-", "linear_analysis-", gsub("-LINEAR.tsv", ".log", basename(args[3]))))
+      args[3]
     } else {
       NULL
     }
-    linear_formula <- if (!is.null(fname_log_linear)) {
-      if (!file.exists(fname_log_linear)) {
-        stop(paste("Error: Log file for linear analysis does not exist:", fname_log_linear))
-      }
-      tmp <- readLines(fname_log_linear)
-      gsub("\"", "", unlist(strsplit(tmp[grep("Best model selected: ", tmp)], ": "))[2])
+    if (!is.null(fname_trials)) {
+      con <- file(fname_trials, "r")
+      tmp <- readLines(con, n = 1)
+      print(tmp)
+      close(con)
+      tmp
     } else {
       NA
     }
   } else {
     # "gp" or "remotesensing"
-    linear_formula = NA
+    NA
   }
   fname_png <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.png"))
   fname_tsv <- file.path(args[4], paste0(id, "-", algo_1, "_vs_", algo_2, "-COMPARISON.tsv"))
@@ -63,7 +63,11 @@ compare_trial_analyses <- function(params) {
   # args <- c("trials", "tests/tmp/trials/output-australia.soybean-height-MLP.tsv", "tests/tmp/trials/output-australia.soybean-height-LINEAR.tsv", "tests/tmp/trials"); params <- get_params(args)
   # Load the effects from the best linear model
   df_1 <- {
-    df <- read.delim(params$fname_1, TRUE)
+    df <- if ((grepl("-LINEAR.tsv$", params$fname_1))) {
+      read.delim(params$fname_1, header = TRUE, skip = 1)
+    } else {
+      read.delim(params$fname_1, header = TRUE)
+    }
     if (length(grep("➵", df$ids)) > 0) {
       df <- df[grep("^gen", df$ids), ]
       df$ids <- gsub("gen➵", "", df$ids)
@@ -73,7 +77,11 @@ compare_trial_analyses <- function(params) {
     df
   }
   df_2 <- {
-    df <- read.delim(params$fname_2, TRUE)
+    df <- if ((grepl("-LINEAR.tsv$", params$fname_2))) {
+      read.delim(params$fname_2, header = TRUE, skip = 1)
+    } else {
+      read.delim(params$fname_2, header = TRUE)
+    }
     if (length(grep("➵", df$ids)) > 0) {
       df <- df[grep("^gen", df$ids), ]
       df$ids <- gsub("gen➵", "", df$ids)

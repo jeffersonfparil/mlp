@@ -11,12 +11,11 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("\t\t+ For 'gp' analysis, this should be a tab-separated file with a header row and columns for the response variable followed by the features.\n")
   cat("\t3. DIRNAME_OUTPUT: The output directory.\n")
   cat("For trials analysis, additional arguments are:\n")
-  cat("\t\t4. is_simulated: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t5. exclude_lm: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t6. exclude_lmer: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t7. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t8. exclude_asreml: TRUE/FALSE (Default: FALSE)\n")
-  cat("\t\t9. verbose: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t4. exclude_lm: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t5. exclude_lmer: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t6. exclude_sommer: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t7. exclude_asreml: TRUE/FALSE (Default: FALSE)\n")
+  cat("\t\t8. verbose: TRUE/FALSE (Default: FALSE)\n")
   cat("For genomic prediction and remote sensing analyses, additional arguments are:\n")
   cat("\t\t4. fname_randomisation: text file containing randomisation indices, i.e. paired indexes where odd positions are training and even positions are validation\n")
   cat("\t\t5. n_reps: numeric (Default: 3)\n")
@@ -33,7 +32,7 @@ if (args[1] == "-h" || args[1] == "--help") {
   cat("TRIALS ANALYSIS\n")
   cat("###############\n")
   cat("Rscript empiricalprep.R trials ${DIR}/datasets/agridat/australia.soybean.txt tmp\n")
-  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE FALSE TRUE TRUE TRUE TRUE\n")
+  cat("Rscript linear.R trials tmp/australia.soybean-yield.tsv tmp FALSE TRUE TRUE TRUE TRUE\n")
   cat("###########################\n")
   cat("GENOMIC PREDICTION ANALYSIS\n")
   cat("###########################\n")
@@ -65,12 +64,11 @@ get_params <- function(args) {
       "\t1. analysis_type",
       "\t2. input file name",
       "\t3. output directory",
-      "\t4. is_simulated (TRUE/FALSE)",
-      "\t5. exclude_lm (TRUE/FALSE)",
-      "\t6. exclude_lmer (TRUE/FALSE)",
-      "\t7. exclude_sommer (TRUE/FALSE)",
-      "\t8. exclude_asreml (TRUE/FALSE)",
-      "\t9. verbose (TRUE/FALSE)"
+      "\t4. exclude_lm (TRUE/FALSE)",
+      "\t5. exclude_lmer (TRUE/FALSE)",
+      "\t6. exclude_sommer (TRUE/FALSE)",
+      "\t7. exclude_asreml (TRUE/FALSE)",
+      "\t8. verbose (TRUE/FALSE)"
     ))
   }
   if (((analysis_type == "gp") || (analysis_type == "remotesensing")) && length(args) < 10) {
@@ -128,12 +126,12 @@ get_params <- function(args) {
   )
   suppressWarnings(
     if (analysis_type == "trials") {
-      params$trials$is_simulated <- if (args[4] == "TRUE") TRUE else FALSE
-      params$trials$exclude_lm <- if (args[5] == "TRUE") TRUE else FALSE
-      params$trials$exclude_lmer <- if (args[6] == "TRUE") TRUE else FALSE
-      params$trials$exclude_sommer <- if (args[7] == "TRUE") TRUE else FALSE
-      params$trials$exclude_asreml <- if (args[8] == "TRUE") TRUE else FALSE
-      params$trials$verbose <- if (args[9] == "TRUE") TRUE else FALSE
+      params$trials$is_simulated <- if (grepl("simulated-", args[2])) TRUE else FALSE
+      params$trials$exclude_lm <- if (args[4] == "TRUE") TRUE else FALSE
+      params$trials$exclude_lmer <- if (args[5] == "TRUE") TRUE else FALSE
+      params$trials$exclude_sommer <- if (args[6] == "TRUE") TRUE else FALSE
+      params$trials$exclude_asreml <- if (args[7] == "TRUE") TRUE else FALSE
+      params$trials$verbose <- if (args[8] == "TRUE") TRUE else FALSE
     } else if ((analysis_type == "gp") || (analysis_type == "remotesensing")) {
       if (!file.exists(args[4])) {
         stop(paste0("ERROR: The randomisation file '", args[4], "' does not exist."))
@@ -657,7 +655,8 @@ extract_entries_effects <- function(params) {
     out = list(df_effects = data.frame(ids = character(), effects = numeric()), formula = NA)
   }
   fname_output <- define_fname_output(params$fname_input)
-  write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t")
+  cat(out$formula, file = fname_output, sep = "\n")
+  write.table(out$df_effects, file = fname_output, row.names = FALSE, col.names = TRUE,  sep = "\t", append = TRUE)
   fname_output
 }
 
@@ -751,6 +750,8 @@ misc_sim <- function() {
 # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "TRUE")
 # args = c("remotesensing", "/home/jp3h/Documents/mlp/tests/tmp/remotesensing/Yield_07142021.tsv", "/home/jp3h/Documents/mlp/tests/tmp/remotesensing", "/home/jp3h/Documents/mlp/tests/tmp/remotesensing/output-Yield_07142021-RANDOMISATION.tsv", "2", "2", "100", "100", "BayesA", "42", "TRUE")
 params <- get_params(args)
+print(args)
+print(params)
 if (params$analysis_type == "trials") {
   extract_entries_effects(params)
 } else {

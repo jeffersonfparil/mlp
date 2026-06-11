@@ -16,10 +16,26 @@ parser.add_argument("output_dir", type=Path, help="Directory to save the output"
 
 parser.add_argument("--n-estimators", type=int, default=1_000, help="Number of estimators for XGBoost (for trials analysis)")
 parser.add_argument("--max-depth", type=int, default=3, help="Maximum depth of the trees (for trials analysis)")
+parser.add_argument("--learning-rate", type=float, default=0.1, help="Learning rate (for trials analysis)")
+
+parser.add_argument("--seed", type=int, default=42, help="Randomisation seed")
 
 parser.add_argument("--randomisation-input-file", type=Path, default=Path("."), help="Path to the randomisation input TSV file (for gp analysis)")
 parser.add_argument("--n-replicates", type=int, default=3, help="Number of replicates for randomisation (for gp analysis)")
 parser.add_argument("--n-folds", type=int, default=10, help="Number of folds for cross-validation (for gp analysis)")
+parser.add_argument("--early-stopping-rounds", type=int, default=10, help="Number of early stopping rounds for hyperparameter tuning/optimisation")
+
+def list_of_ints(arg):
+    return [int(x) for x in arg.split(',')]
+
+def list_of_floats(arg):
+    return [float(x) for x in arg.split(',')]
+
+parser.add_argument("--optim-n-estimators", type=list_of_ints, default=[1_000, 10_000], help="Number of estimators to test for hyperparameter tuning/optimisation")
+parser.add_argument("--optim-max-depth", type=list_of_ints, default=[3, 5, 10], help="Maximum depths of the trees to test for hyperparameter tuning/optimisation")
+parser.add_argument("--optim-learning-rate", type=list_of_floats, default=[0.01, 0.1], help="Learning rates to test for hyperparameter tuning/optimisation")
+parser.add_argument("--optim-subsample", type=list_of_floats, default=[0.5, 0.75, 1.0], help="Subsampling rates to test for hyperparameter tuning/optimisation")
+
 
 args = parser.parse_args()
 
@@ -38,8 +54,8 @@ def get_params(args):
             "n_estimators": args.n_estimators,
             "max_depth": args.max_depth,
             "objective": 'reg:squarederror',
-            "learning_rate": 0.1,
-            "random_state": 42,
+            "learning_rate": args.learning_rate,
+            "random_state": args.seed,
         }
     else:
         # 'gp' or 'remotesensing'
@@ -57,12 +73,12 @@ def get_params(args):
             "n_replicates": args.n_replicates,
             "n_folds": args.n_folds,
             "objective": 'reg:squarederror',
-            "n_estimators": [1_000, 10_000],
-            "max_depth": [3, 5, 10],
-            "learning_rate": [0.01, 0.1],
-            "subsample": [0.5, 0.75, 1.0],
-            "early_stopping_rounds": 10,
-            "random_state": 42,
+            "early_stopping_rounds": args.early_stopping_rounds,
+            "n_estimators": args.optim_n_estimators,
+            "max_depth": args.optim_max_depth,
+            "learning_rate": args.optim_learning_rate,
+            "subsample": args.optim_subsample,
+            "random_state": args.seed,
         }
 
 def extract_X_y(args):
@@ -87,12 +103,13 @@ def extract_X_y(args):
 def extract_randomisations(args):
     params = get_params(args) 
     df_randomisation = pd.read_csv(params["randomisation_input_file"], sep="\t", header=None)
+    print(df_randomisation)
     idx_training = []
     idx_validation = []
     i = 1
     for r in range(params["n_replicates"]):
         for f in range(params["n_folds"]):
-            # print(f"Replicate {r}, Fold {f}, i: {i}")
+            print(f"Replicate {r}, Fold {f}, i: {i}")
             idx_training.append([int(x)-1 for x in df_randomisation.iloc[i-1,0].split(",")])
             idx_validation.append([int(x)-1 for x in df_randomisation.iloc[i,0].split(",")])
             i += 2
@@ -186,7 +203,9 @@ def gp_repeated_kfold_cv(args):
     return None
 
 if __name__ == "__main__":
+    print(args)
     params = get_params(args)
+    print(params)
     if params["analysis_type"] == "trials":
         print("Extracting entries effects...")
         extract_entries_effects(args)
