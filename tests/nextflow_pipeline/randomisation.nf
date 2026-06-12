@@ -15,6 +15,7 @@ process randomisation_gp_rs {
     script:
     """
     bash ${params.scripts_dir}/randomisationgprs.sh \
+        ${analysis_type} \
         ${data_file} \
         . \
         ${params.n_reps} \

@@ -48,7 +48,7 @@ workflow {
         | flatten()
         | map { file -> tuple('trials', file) }
     
-    trials_empirical = Channel.fromList(params.trials_agridat_fnames)
+    trials_empirical = Channel.fromList(files("${params.trials_agridat_dir}/*.txt"))
         | empiricalprep_trials
         | flatten()
         | map { file -> tuple('trials', file) }
@@ -58,7 +58,7 @@ workflow {
         | flatten()
         | map { file -> tuple('gp', file) }
 
-    gp_empirical = Channel.fromList(params.gp_azodi2019_fnames)
+    gp_empirical = Channel.fromList(files("${params.gp_azodi2019_dir}/*_geno.csv"))
         | empiricalprep_gp
         | flatten()
         | map { file -> tuple('gp', file) }

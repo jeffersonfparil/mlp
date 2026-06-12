@@ -2,21 +2,24 @@
 if [[ $1 == "-h" || $1 == "--help" ]]; then
     echo "Usage: sh randomisationgprs.sh FNAME_INPUT DIRNAME_OUTPUT N_REPS N_FOLDS BASE_SEED"
     echo "Note that we start with index 1 for the first row of the data after the header line."
-    echo "1. FNAME_INPUT: path to the input file for the analysis:"
-    echo "2. DIRNAME_OUTPUT: directory where output files will be saved."
-    echo "3. N_REPS: number of replications of k-fold cross-validation."
-    echo "4. N_FOLDS: number of folds for k-fold cross-validation."
-    echo "5. BASE_SEED: base seed for random number generation."
+    echo "1. ANALYSIS_TYPE: 'trials' or 'gp' or 'remotesensing'."
+    echo "2. FNAME_INPUT: path to the input file for the analysis:"
+    echo "3. DIRNAME_OUTPUT: directory where output files will be saved."
+    echo "4. N_REPS: number of replications of k-fold cross-validation."
+    echo "5. N_FOLDS: number of folds for k-fold cross-validation."
+    echo "6. BASE_SEED: base seed for random number generation."
     echo "Example: "
-    echo "bash randomisationgprs.sh tmp/gp/simulated-DATA_TYPE_CONTINUOUS-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/gp 3 10 42"
+    echo "bash randomisationgprs.sh gp tmp/gp/simulated-DATA_TYPE_CONTINUOUS-N_500-P_1000-HIDDEN_LAYERS_1.tsv tmp/gp 3 10 42"
     exit 0
 fi
-FNAME_INPUT=$1
-DIRNAME_OUTDIR=$2
-N_REPS=$3
-N_FOLDS=$4
-BASE_SEED=$5
+ANALYSIS_TYPE=$1
+FNAME_INPUT=$2
+DIRNAME_OUTDIR=$3
+N_REPS=$4
+N_FOLDS=$5
+BASE_SEED=$6
 
+# ANALYSIS_TYPE="gp"
 # FNAME_INPUT="tests/tmp/gp/simulated-DATA_TYPE_CONTINUOUS-N_500-P_1000-HIDDEN_LAYERS_1.tsv"
 # DIRNAME_OUTDIR="tests/tmp/gp"
 # N_REPS=3
@@ -28,11 +31,16 @@ if [[ -z $DIRNAME_OUTDIR ]]; then echo "Error: Missing argument for output direc
 if [[ -z $N_REPS ]]; then echo "Error: Missing argument for number of replications of k-fold cross-validation (N_REPS)."; exit 1; fi
 if [[ -z $N_FOLDS ]]; then echo "Error: Missing argument for number of folds for k-fold cross-validation (N_FOLDS)."; exit 1; fi
 if [[ -z $BASE_SEED ]]; then echo "Error: Missing argument for base seed for random number generation (BASE_SEED)."; exit 1; fi
+if [[ $ANALYSIS_TYPE == "trials" ]]; then
+    # Dummy reps and folds as we won't use randomisations for the trials analyses
+    N_REPS=1
+    N_FOLDS=2
+fi
 N=$(echo $(cut -f1 $FNAME_INPUT | wc -l) - 1 | bc)
 M=$(echo "scale=0; $N / $N_FOLDS" | bc)
 P=$(head -n1 $FNAME_INPUT | cut -f2- | awk '{print NF}')
-if [[ $M -lt 10 ]]; then
-    echo "Error: Not enough folds for k-fold cross-validation. Please reduce the number of folds or increase the number of observations."
+if [[ $M -lt 5 ]]; then
+    echo "Error: Not enough folds for k-fold cross-validation (less than 5). Please reduce the number of folds or increase the number of observations."
     exit 1
 fi
 OUTPUT_CSV=${DIRNAME_OUTDIR}/output-$(basename $FNAME_INPUT | sed 's/.tsv$//g')-RANDOMISATION.tsv

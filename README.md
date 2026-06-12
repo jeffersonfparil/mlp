@@ -330,7 +330,7 @@ pixi global install -c conda-forge -c bioconda nextflow
 
 ## Run the workflow:
 
-### On a single machine or node:
+### On a single machine or one HPC node:
 ```shell
 cd mlp/tests
 pixi run nextflow run nextflow_pipeline/main.nf \
