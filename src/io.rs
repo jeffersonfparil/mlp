@@ -1191,7 +1191,10 @@ mod tests {
                 f.extension().and_then(|s| s.to_str()) == Some("svg") || 
                 f.extension().and_then(|s| s.to_str()) == Some("json") || 
                 f.extension().and_then(|s| s.to_str()) == Some("csv") || 
-                f.extension().and_then(|s| s.to_str()) == Some("tsv") 
+                f.extension().and_then(|s| s.to_str()) == Some("tsv") ||
+                f.extension().and_then(|s| s.to_str()) == Some("bed") ||
+                f.extension().and_then(|s| s.to_str()) == Some("bim") ||
+                f.extension().and_then(|s| s.to_str()) == Some("fam")
             ) {
                 std::fs::remove_file(&f)?;
             }
