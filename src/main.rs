@@ -28,19 +28,33 @@ use crate::marginal::Marginals;
 #[derive(Parser, Debug)]
 #[command(
     version,
-    about,
-    long_about = "Simple multilayer perceptron (MLP) from scratch"
+    about = "Multi-Layer Perceptron",
+    long_about = "A dependency-free Multi-Layer Perceptron (MLP) built from scratch in Rust.\n\n\
+    Designed specifically as an alternative to mixed linear models for analysing crop field trial data.\
+    It estimates explainable marginal effects, built fundamentally without external ML/DL black-box libraries or genomic data dependencies."
 )]
 struct Args {
-    /// Input file name
+    /// Path to the input dataset
+    ///
+    /// Delimited file containing the target values (e.g., phenotype data), and predictors 
+    /// which can be numeric (binary/continuous) and factor levels. If using PLINK format, 
+    /// provide the base name without extensions.
     #[arg(short = 'f', long)]
     fname: Option<String>,
+
+    /// Parse input as a PLINK binary dataset (.bed, .bim, .fam)
+    ///
+    /// Bypasses standard delimited text parsing to read raw PLINK genetic/phenotypic formats.
+    #[arg(long, action)]
+    plink: bool,
 
     /// Delimiter for the input data file
     #[arg(short = 'd', long, default_value = "\t")]
     delim: String,
 
-    /// Vector of column indexes corresponding to the target values in the input data file
+    /// Zero-based column indices for the target values
+    ///
+    /// Pass a comma-separated list to specify multiple target phenotypes for multi-task regression.
     #[arg(
         short = 't',
         long,
@@ -55,26 +69,38 @@ struct Args {
     n_hidden_layers: usize,
 
     /// Number of nodes per hidden layer
+    ///
+    /// Comma-separated list matching the length of `n_hidden_layers`.
     #[arg(long, value_parser, value_delimiter = ',', default_value = "64")]
     n_hidden_nodes: Vec<usize>,
 
     /// Dropout rates per hidden layer
+    ///
+    /// Comma-separated list of probabilities (0.0 to 1.0) to randomly zero-out nodes during training.
     #[arg(long, value_parser, value_delimiter = ',', default_value = "0.0")]
     dropout_rates: Vec<f32>,
 
-    /// Activation function (Choose from: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear") (Note: "LeakyReLU" under construction)
+    /// Activation function for hidden nodes
+    ///
+    /// Options: "ReLU", "Sigmoid", "HyperbolicTangent", "Linear".
     #[arg(long, default_value = "ReLU")]
     activation: String,
 
-    /// Cost function (Choose: "MSE", "MAE", "HL")
+    /// Cost/Loss function used to evaluate network error
+    ///
+    /// Options: "MSE", "MAE", "HL".
     #[arg(long, default_value = "MSE")]
     cost: String,
 
-    /// Optimiser (Choose: "Adam", "AdamMax", "GradientDescent")
+    /// Optimization algorithm for weight updates
+    ///
+    /// Options: "Adam", "AdamMax", "GradientDescent".
     #[arg(long, default_value = "Adam")]
     optimiser: String,
 
-    /// Weights initialisation (Choose: "He", "Cauchy", "Unifoirm", "StandardNormal")
+    /// Initialisation strategy for layer weights
+    ///
+    /// Options: "He", "Cauchy", "Uniform", "StandardNormal".
     #[arg(long, default_value = "He")]
     weights_initialisation: String,
 
@@ -118,11 +144,14 @@ struct Args {
     #[arg(long, default_value_t = 123)]
     seed: usize,
 
-    /// Filename of the output model (Default: "output_network-{%Y%m%d%H%M%S}.json")
+    /// Filename of the output network model 
+    ///
+    /// Saves the trained MLP architecture and weights in JSON format.
+    /// Default: "output_network-{%Y%m%d%H%M%S}.json"
     #[arg(short = 'o', long)]
     fname_network_output: Option<String>,
 
-    /// Verbose
+    /// Enable detailed progress logging
     #[arg(short = 'v', long, action)]
     verbose: bool,
 
@@ -219,36 +248,41 @@ struct Args {
     selection_weights_initialisations: Vec<String>,
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// Predict using a fitted network (fitted MLP model)
+    /// Execute prediction phase only
+    ///
+    /// Requires a pre-trained network JSON file passed via `--model`.
     #[arg(long, action)]
     predict_only: bool,
 
-    /// File name of the MLP model in JSON format
+    /// Path to a pre-trained MLP model in JSON format
     #[arg(short = 'm', long)]
     model: Option<String>,
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// Marginal effects estimation only
+    /// Execute only the explainable marginal effects extraction
+    ///
+    /// Skips training and requires a pre-trained model (JSON file passed via `--model`) to estimate main/interaction effects.
     #[arg(short = 'M', long, action)]
     marginals_only: bool,
 
-    // Skip marginal effects estimation
+    /// Halt execution after training without calculating marginal effects
     #[arg(long, action)]
     skip_marginals: bool,
 
     
-    /// Maximum number of interaction effects level, i.e. order 1 includes only the main effects, order 2 includes the main effects and pairwise interactions, and so on
+    /// Maximum interaction level for effects extraction
+    ///
+    /// Order 1: Main effects only. Order 2: Main + Pairwise interactions. Order 3: Main + Pairwise + Three-way.
     #[arg(long, default_value_t = 1)]
     marginals_order: usize,
     
-    /// Number of input values across the observed range per feature (or input node) to use in predictions
-    /// i.e. number of values for interpolate between minimum and maximum values observed in each feature or input node
+    /// Number of points to interpolate between observed min/max for each feature
     #[arg(long, default_value_t = 10)]
     n_interpolate_min_max: usize,
 
-    /// Use DeepSHAP instead of the perturbation method
-    /// Note that the current implementation of DeepSHAP generates only main effects and no interaction effects.
-    /// Do not enable this flag to use the default perturbation method if you require marginal interaction effects.
+    /// Use DeepSHAP for effect estimation instead of the default perturbation method
+    ///
+    /// Note: DeepSHAP currently only yields main effects. Do not use if interaction effects are required.
     #[arg(short = 'D', long, action)]
     deep_shap: bool,
 
@@ -292,16 +326,17 @@ struct Args {
     #[arg(short = 'l', long, default_value_t = 2)]
     simulation_n_hidden_layers: usize,
 
-    /// Two-parameter distribution from which the simulated weights will be sample from
-    /// Select from: "normal","lognormal","cauchy","weibull","gamma","beta"
+    /// Distribution from which synthetic network weights are sampled
+    ///
+    /// Options: "normal", "lognormal", "cauchy", "weibull", "gamma", "beta".
     #[arg(long, default_value = "normal")]
     simulation_weights_distribution: String,
 
-    /// First parameter of the distribution from which the weights will be sampled from
+    /// Parameter 1 (e.g., mean or location or shape) for the weight distribution
     #[arg(long, default_value_t = 0.0)]
     simulation_weights_distribution_param_1: f64,
 
-    /// First parameter of the distribution from which the weights will be sampled from
+    /// Parameter 2 (e.g., variance or scale) for the weight distribution
     #[arg(long, default_value_t = 1.0)]
     simulation_weights_distribution_param_2: f64,
 }
@@ -333,7 +368,11 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
             fname_simulated
         }
     };
-    Data::read_delimited(&fname, &args.delim, &args.column_indices_of_targets)
+    if args.plink {
+        return Data::from_plink(&fname)
+    } else {
+        return Data::read_delimited(&fname, &args.delim, &args.column_indices_of_targets)
+    }
 }
 
 fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> {
