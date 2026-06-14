@@ -1118,10 +1118,28 @@ mod tests {
         println!("data_reloaded: {}", data_reloaded);
         println!("data_simulated_reloaded: {}", data_simulated_reloaded);
         // Plink data format
-        data.to_plink("test_data")?;
-        let data_reloaded_from_plink = Data::from_plink("test_data")?;
-        assert!(data.features.summat()? - data_reloaded_from_plink.features.summat()? < 1e-5);
-        println!("data_reloaded_from_plink: {:?}", data_reloaded_from_plink);
+        data_simulated.to_plink("test_data_simulated")?;
+        let data_simulated_reloaded_from_plink = Data::from_plink("test_data_simulated")?;
+        println!("data_simulated_reloaded_from_plink: {}", data_simulated_reloaded_from_plink);
+        let original_targets: Vec<f32> = data_simulated.targets.to_host()?;
+        let reloaded_targets: Vec<f32> = data_simulated_reloaded_from_plink.targets.to_host()?;
+        let original_features: Vec<f32> = data_simulated.features.to_host()?;
+        let reloaded_features: Vec<f32> = data_simulated_reloaded_from_plink.features.to_host()?;
+        println!("original_targets: {:?}", original_targets);
+        println!("reloaded_targets: {:?}", reloaded_targets);
+        println!("original_features: {:?}", original_features);
+        println!("reloaded_features: {:?}", reloaded_features);
+        for i in 0..original_targets.len() {
+            assert!(original_targets[i] == reloaded_targets[i])
+        }
+        for i in 0..original_features.len() {
+            let q = if original_features[i] < 0.5 {
+                0.0
+            } else {
+                1.0
+            };
+            assert!(q == reloaded_features[i])
+        }
         // Initialise the network from reloaded data
         let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
