@@ -25,6 +25,15 @@ use crate::network::{Network, WeightsInitialisation, NetworkError};
 use crate::optimisers::{OptimisationParameters, Optimiser, OptimiserError};
 use crate::marginal::Marginals;
 
+fn parse_bound_f32(s: &str) -> Result<f32, String> {
+    let v: f32 = s.parse().map_err(|e| format!("invalid float: {e}"))?;
+    if (0.0..=1.0).contains(&v) {
+        Ok(v)
+    } else {
+        Err(format!("value {v} is out of range [0, 1]"))
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(
     version,
@@ -77,7 +86,7 @@ struct Args {
     /// Dropout rates per hidden layer
     ///
     /// Comma-separated list of probabilities (0.0 to 1.0) to randomly zero-out nodes during training.
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "0.0")]
+    #[arg(long, value_parser=parse_bound_f32, value_delimiter = ',', default_value = "0.0")]
     dropout_rates: Vec<f32>,
 
     /// Activation function for hidden nodes
@@ -113,11 +122,11 @@ struct Args {
     n_burnin_epochs: usize,
 
     /// Fraction of the maximum number of epochs to wait before enabling the criteria for early stopping
-    #[arg(long, default_value_t = 0.01)]
+    #[arg(long, value_parser=parse_bound_f32, default_value_t = 0.01)]
     f_patient_epochs: f32,
 
     /// Fraction of the observations to be used in the estimation of cost at every epoch (using a fixed set of randomly chosen [seeded] observations across all epochs)
-    #[arg(long, default_value_t = 0.00)]
+    #[arg(long, value_parser=parse_bound_f32, default_value_t = 0.00)]
     f_validation: f32,
 
     /// Number of training batches to split the input data into
@@ -125,7 +134,7 @@ struct Args {
     n_batches: usize,
 
     /// Learning rate (η)
-    #[arg(long, default_value_t = 0.001)]
+    #[arg(long, value_parser=parse_bound_f32, default_value_t = 0.001)]
     learning_rate: f32,
 
     /// First moment decay (β₁)
@@ -160,66 +169,66 @@ struct Args {
     #[arg(long, action)]
     hyperparameter_optimisation: bool,
 
-    /// Range of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,1,1")]
-    range_hidden_layers: Vec<usize>,
+    /// Vector of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    selection_hidden_layers: Vec<usize>,
 
-    /// Range of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "256,256,256"
+        default_value = "128,1024"
     )]
-    range_hidden_layer_nodes: Vec<usize>,
+    selection_hidden_layer_nodes: Vec<usize>,
 
-    /// Range of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(
         long,
-        value_parser,
+        value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0,0.0,0.01"
+        default_value = "0.0"
     )]
-    range_dropout_rates: Vec<f32>,
+    selection_dropout_rates: Vec<f32>,
 
-    /// Range of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(
         long,
-        value_parser,
+        value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-4,1e-4,1e-4"
+        default_value = "1e-3"
     )]
-    range_learning_rates: Vec<f32>,
+    selection_learning_rates: Vec<f32>,
 
-    /// Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "100,1000,1000")]
-    range_n_epochs: Vec<usize>,
+    /// Vector of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
+    selection_n_epochs: Vec<usize>,
 
-    /// Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10,10,10")]
-    range_n_burnin_epochs: Vec<usize>,
+    /// Vector of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "100")]
+    selection_n_burnin_epochs: Vec<usize>,
 
-    /// Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
     #[arg(
         long,
-        value_parser,
+        value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.1,0.1"
+        default_value = "0.1"
     )]
-    range_f_patient_epochs: Vec<f32>,
+    selection_f_patient_epochs: Vec<f32>,
 
-    /// Range of proportions of the observations to be used in within training validation set
+    /// Vector of proportions of the observations to be used in within training validation set
     #[arg(
         long,
-        value_parser,
+        value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.1,0.1"
+        default_value = "0.0"
     )]
-    range_f_validation: Vec<f32>,
+    selection_f_validation: Vec<f32>,
 
-    /// Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,1,1")]
-    range_n_batches: Vec<usize>,
+    /// Vector of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
     #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,Linear")]
@@ -234,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "GradientDescent,Adam"
+        default_value = "Adam,GradientDescent"
     )]
     selection_optimisers: Vec<String>,
 
@@ -243,7 +252,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "He,Cauchy"
+        default_value = "He,Uniform"
     )]
     selection_weights_initialisations: Vec<String>,
 
@@ -269,7 +278,6 @@ struct Args {
     #[arg(long, action)]
     skip_marginals: bool,
 
-    
     /// Maximum interaction level for effects extraction
     ///
     /// Order 1: Main effects only. Order 2: Main + Pairwise interactions. Order 3: Main + Pairwise + Three-way.
@@ -383,11 +391,17 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
     } else {
         args.n_hidden_nodes.clone()
     };
+    if n_hidden_nodes.len() != n_hidden_layers {
+        return Err(Box::new(NetworkError::OtherError(format!("The number of supplied values of hidden nodes ({:?}) is not equal to the number of hidden layers ({})", n_hidden_nodes, n_hidden_layers))))
+    }
     let dropout_rates: Vec<f32> = if (n_hidden_layers > 1) & (args.dropout_rates.len() == 1) {
         vec![args.dropout_rates[0]; n_hidden_layers]
     } else {
         args.dropout_rates.clone()
     };
+    if dropout_rates.len() != n_hidden_layers {
+        return Err(Box::new(NetworkError::OtherError(format!("The number of supplied values of dropout rates ({:?}) is not equal to the number of hidden layers ({})", dropout_rates, n_hidden_layers))))
+    }
     let weights_initialisation = match args.weights_initialisation.as_ref() {
         "He" => WeightsInitialisation::He,
         "Cauchy" => WeightsInitialisation::Cauchy,
@@ -616,142 +630,7 @@ fn train_with_hyperparameter_optimisation(
     args: &Args,
     network: &mut Network,
 ) -> Result<String, Box<dyn Error>> {
-    let range_hidden_layers = match args.range_hidden_layers.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_hidden_layers={:?})",
-                    args.range_hidden_layers
-                ),
-            )));
-        }
-        false => Some((
-            args.range_hidden_layers[0],
-            args.range_hidden_layers[1],
-            args.range_hidden_layers[2],
-        )),
-    };
-    let range_hidden_layer_nodes = match args.range_hidden_layer_nodes.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_hidden_layer_nodes={:?})",
-                    args.range_hidden_layer_nodes
-                ),
-            )));
-        }
-        false => Some((
-            args.range_hidden_layer_nodes[0],
-            args.range_hidden_layer_nodes[1],
-            args.range_hidden_layer_nodes[2],
-        )),
-    };
-    let range_dropout_rates = match args.range_dropout_rates.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_dropout_rates={:?})",
-                    args.range_dropout_rates
-                ),
-            )));
-        }
-        false => Some((
-            args.range_dropout_rates[0],
-            args.range_dropout_rates[1],
-            args.range_dropout_rates[2],
-        )),
-    };
-    let range_learning_rates = match args.range_learning_rates.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_learning_rates={:?})",
-                    args.range_learning_rates
-                ),
-            )));
-        }
-        false => Some((
-            args.range_learning_rates[0],
-            args.range_learning_rates[1],
-            args.range_learning_rates[2],
-        )),
-    };
-    let range_n_epochs = match args.range_n_epochs.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_n_epochs={:?})",
-                    args.range_n_epochs
-                ),
-            )));
-        }
-        false => Some((
-            args.range_n_epochs[0],
-            args.range_n_epochs[1],
-            args.range_n_epochs[2],
-        )),
-    };
-    let range_n_burnin_epochs = match args.range_n_burnin_epochs.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_n_burnin_epochs={:?})",
-                    args.range_n_burnin_epochs
-                ),
-            )));
-        }
-        false => Some((
-            args.range_n_burnin_epochs[0],
-            args.range_n_burnin_epochs[1],
-            args.range_n_burnin_epochs[2],
-        )),
-    };
-    let range_f_patient_epochs = match args.range_f_patient_epochs.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_f_patient_epochs={:?})",
-                    args.range_f_patient_epochs
-                ),
-            )));
-        }
-        false => Some((
-            args.range_f_patient_epochs[0],
-            args.range_f_patient_epochs[1],
-            args.range_f_patient_epochs[2],
-        )),
-    };
-    let range_f_validation = match args.range_f_validation.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of proportions of the observations to be used in within training validation for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_f_validation={:?})",
-                    args.range_f_validation
-                ),
-            )));
-        }
-        false => Some((
-            args.range_f_validation[0],
-            args.range_f_validation[1],
-            args.range_f_validation[2],
-        )),
-    };
-    let range_n_batches = match args.range_n_batches.len() != 3 {
-        true => {
-            return Err(Box::new(OptimiserError::OptimisationParameterError(
-                format!(
-                    "Range of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size; range_n_batches={:?})",
-                    args.range_n_batches
-                ),
-            )));
-        }
-        false => Some((
-            args.range_n_batches[0],
-            args.range_n_batches[1],
-            args.range_n_batches[2],
-        )),
-    };
-    let selection_activations: Option<Vec<Activation>> = {
+    let selection_activations: Vec<Activation> = {
         let mut v: Vec<Activation> = Vec::new();
         for x in &args.selection_activations {
             v.push(match x.as_ref() {
@@ -762,9 +641,9 @@ fn train_with_hyperparameter_optimisation(
                 _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
             });
         }
-        Some(v)
+        v
     };
-    let selection_costs: Option<Vec<Cost>> = {
+    let selection_costs: Vec<Cost> = {
         let mut v: Vec<Cost> = Vec::new();
         for x in &args.selection_costs {
             v.push(match x.as_ref() {
@@ -774,9 +653,9 @@ fn train_with_hyperparameter_optimisation(
                 _ => return Err(Box::new(CostError::UnimplementedCost)),
             });
         }
-        Some(v)
+        v
     };
-    let selection_optimisers: Option<Vec<Optimiser>> = {
+    let selection_optimisers: Vec<Optimiser> = {
         let mut v: Vec<Optimiser> = Vec::new();
         for x in &args.selection_optimisers {
             v.push(match x.as_ref() {
@@ -786,9 +665,9 @@ fn train_with_hyperparameter_optimisation(
                 _ => return Err(Box::new(OptimiserError::UnimplementedOptimiser)),
             });
         }
-        Some(v)
+        v
     };
-    let selection_weights_initialisations: Option<Vec<WeightsInitialisation>> = {
+    let selection_weights_initialisations: Vec<WeightsInitialisation> = {
         let mut v: Vec<WeightsInitialisation> = Vec::new();
         for x in &args.selection_weights_initialisations {
             v.push(match x.as_ref() {
@@ -799,22 +678,22 @@ fn train_with_hyperparameter_optimisation(
                 e => return Err(Box::new(NetworkError::OtherError(format!("Unrecognised weights initialisation: {}", e)))),
             });
         }
-        Some(v)
+        v
     };
     let network_hyper_optimised = network.hyperoptimise(
-        range_hidden_layers,
-        range_hidden_layer_nodes,
-        range_dropout_rates,
-        range_learning_rates,
-        range_n_epochs,
-        range_n_burnin_epochs,
-        range_f_patient_epochs,
-        range_f_validation,
-        range_n_batches,
-        selection_activations,
-        selection_costs,
-        selection_optimisers,
-        selection_weights_initialisations,
+        &args.selection_hidden_layers,
+        &args.selection_hidden_layer_nodes,
+        &args.selection_dropout_rates,
+        &args.selection_learning_rates,
+        &args.selection_n_epochs,
+        &args.selection_n_burnin_epochs,
+        &args.selection_f_patient_epochs,
+        &args.selection_f_validation,
+        &args.selection_n_batches,
+        &selection_activations,
+        &selection_costs,
+        &selection_optimisers,
+        &selection_weights_initialisations,
         args.verbose,
     )?;
     // Save the hyperparameter-optimised-trained network

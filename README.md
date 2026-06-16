@@ -347,12 +347,10 @@ nextflow run nextflow_pipeline/main.nf \
 
 ```shell
 cd mlp/tests
-mkdir logs
 sbatch run_nextflow.sh
 ```
 
 # Miscellaneous
-
 
 ## MLPInterrogator.jl
 

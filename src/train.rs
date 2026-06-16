@@ -9,7 +9,7 @@ use rand_chacha::ChaCha12Rng;
 use rayon::prelude::*;
 use std::error::Error;
 use std::fmt;
-use std::ops::Add;
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 #[derive(Debug, PartialEq)]
@@ -35,52 +35,20 @@ impl fmt::Display for TrainingError {
     }
 }
 
-fn prep_each_hyperparam<T>(param_min_max_step: (T, T, T)) -> Result<Vec<T>, Box<dyn Error>>
-where
-    T: Copy + PartialOrd + Add<Output = T> + Default + PartialEq,
-{
-    let (min, max, step) = param_min_max_step;
-    if step == T::default() {
-        return Err(Box::new(TrainingError::OtherError(
-            "Step must be non-zero.".to_string(),
-        )));
-    }
-    // if step > 0 and max < min -> invalid; if step < 0 and max > min -> invalid
-    if (step > T::default() && max < min) || (step < T::default() && max > min) {
-        return Err(Box::new(TrainingError::OtherError(
-            "Invalid range.".to_string(),
-        )));
-    }
-    let mut selection: Vec<T> = Vec::new();
-    let mut x = min;
-    if step > T::default() {
-        while x <= max {
-            selection.push(x);
-            x = x + step;
-        }
-    } else {
-        while x >= max {
-            selection.push(x);
-            x = x + step; // step is negative here
-        }
-    }
-    Ok(selection)
-}
-
 fn prep_all_hyperparams(
-    range_hidden_layers: Option<(usize, usize, usize)>,
-    range_hidden_layer_nodes: Option<(usize, usize, usize)>,
-    range_dropout_rates: Option<(f32, f32, f32)>,
-    range_learning_rates: Option<(f32, f32, f32)>,
-    range_n_epochs: Option<(usize, usize, usize)>,
-    range_n_burnin_epochs: Option<(usize, usize, usize)>,
-    range_f_patient_epochs: Option<(f32, f32, f32)>,
-    range_f_validation: Option<(f32, f32, f32)>,
-    range_n_batches: Option<(usize, usize, usize)>,
-    selection_activations: Option<Vec<Activation>>,
-    selection_costs: Option<Vec<Cost>>,
-    selection_optimisers: Option<Vec<Optimiser>>,
-    selection_weights_initialisations: Option<Vec<WeightsInitialisation>>,
+    selection_hidden_layers: &Vec<usize>,
+    selection_hidden_layer_nodes: &Vec<usize>,
+    selection_dropout_rates: &Vec<f32>,
+    selection_learning_rates: &Vec<f32>,
+    selection_n_epochs: &Vec<usize>,
+    selection_n_burnin_epochs: &Vec<usize>,
+    selection_f_patient_epochs: &Vec<f32>,
+    selection_f_validation: &Vec<f32>,
+    selection_n_batches: &Vec<usize>,
+    selection_activations: &Vec<Activation>,
+    selection_costs: &Vec<Cost>,
+    selection_optimisers: &Vec<Optimiser>,
+    selection_weights_initialisations: &Vec<WeightsInitialisation>,
 ) -> Result<
     Vec<(
         usize,
@@ -99,67 +67,95 @@ fn prep_all_hyperparams(
     )>,
     Box<dyn Error>,
 > {
-    let selection_hidden_layers: Vec<usize> = match range_hidden_layers {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((1, 3, 1))?,
+    let selection_hidden_layers: Vec<usize> = selection_hidden_layers.clone().into_iter().collect::<HashSet<_>>().into_iter().collect();
+    let selection_hidden_layer_nodes: Vec<usize> = selection_hidden_layer_nodes.clone().into_iter().collect::<HashSet<_>>().into_iter().collect();
+    let selection_dropout_rates: Vec<f32> = {
+        let mut rates = selection_dropout_rates.clone();
+        rates.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        rates.dedup_by(|a, b| a == b);
+        if rates.iter().any(|&r| !(0.0..=1.0).contains(&r)) {
+            return Err(Box::new(TrainingError::OtherError(format!(
+                "Drop-out rates out of bounds: {:?}",
+                rates
+            ))));
+        }
+        rates
     };
-    let selection_hidden_layer_nodes: Vec<usize> = match range_hidden_layer_nodes {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((100, 500, 100))?,
+    let selection_learning_rates: Vec<f32> = {
+        let mut rates = selection_learning_rates.clone();
+        rates.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        rates.dedup_by(|a, b| a == b);
+        if rates.iter().any(|&r| !(0.0..=1.0).contains(&r)) {
+            return Err(Box::new(TrainingError::OtherError(format!(
+                "Learning rates out of bounds: {:?}",
+                rates
+            ))));
+        }
+        rates
     };
-    let selection_dropout_rates: Vec<f32> = match range_dropout_rates {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((0.0, 0.5, 0.01))?,
+    let selection_n_epochs: Vec<usize> = selection_n_epochs.clone().into_iter().collect::<HashSet<_>>().into_iter().collect();
+    let selection_n_burnin_epochs: Vec<usize> = selection_n_burnin_epochs.clone().into_iter().collect::<HashSet<_>>().into_iter().collect();
+    let selection_f_patient_epochs: Vec<f32> = {
+        let mut fracs = selection_f_patient_epochs.clone();
+        fracs.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        fracs.dedup_by(|a, b| a == b);
+        if fracs.iter().any(|&r| !(0.0..=1.0).contains(&r)) {
+            return Err(Box::new(TrainingError::OtherError(format!(
+                "Fractions of patient epochs out of bounds: {:?}",
+                fracs
+            ))));
+        }
+        fracs
     };
-    let selection_learning_rates: Vec<f32> = match range_learning_rates {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((1e-5, 1e-2, 1e-4))?,
+    let selection_f_validation: Vec<f32> = {
+        let mut fracs = selection_f_validation.clone();
+        fracs.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        fracs.dedup_by(|a, b| a == b);
+        if fracs.iter().any(|&r| !(0.0..=1.0).contains(&r)) {
+            return Err(Box::new(TrainingError::OtherError(format!(
+                "Fractions of patient epochs out of bounds: {:?}",
+                fracs
+            ))));
+        }
+        fracs
     };
-    let selection_n_epochs: Vec<usize> = match range_n_epochs {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((5, 10, 1))?,
-    };
-    let selection_n_burnin_epochs: Vec<usize> = match range_n_burnin_epochs {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((0, 2, 1))?,
-    };
-    let selection_f_patient_epochs: Vec<f32> = match range_f_patient_epochs {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((0.5, 1.0, 0.5))?,
-    };
-    let selection_f_validation: Vec<f32> = match range_f_validation {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((0.0, 0.5, 0.01))?,
-    };
-    let selection_n_batches: Vec<usize> = match range_n_batches {
-        Some(x) => prep_each_hyperparam(x)?,
-        None => prep_each_hyperparam((1, 3, 1))?,
-    };
-    let selection_activations: Vec<Activation> = match selection_activations {
-        Some(x) => x,
-        None => vec![Activation::ReLU],
-    };
-    let selection_costs: Vec<Cost> = match selection_costs {
-        Some(x) => x,
-        None => vec![Cost::MSE],
-    };
-    let selection_optimisers: Vec<Optimiser> = match selection_optimisers {
-        Some(x) => x,
-        None => vec![
-            Optimiser::Adam,
-            Optimiser::AdamMax,
-            Optimiser::GradientDescent,
-        ],
-    };
-    let selection_weights_initialisations: Vec<WeightsInitialisation> = match selection_weights_initialisations {
-        Some(x) => x,
-        None => vec![
-            WeightsInitialisation::He,
-            WeightsInitialisation::Cauchy,
-            WeightsInitialisation::Uniform,
-            WeightsInitialisation::StandardNormal,
-        ],
-    };
+    let selection_n_batches: Vec<usize> = selection_n_batches.clone().into_iter().collect::<HashSet<_>>().into_iter().collect();
+    let selection_activations: Vec<Activation> = selection_activations
+        .clone()
+        .into_iter()
+        .fold(Vec::new(), |mut acc, item| {
+            if !acc.contains(&item) {
+                acc.push(item);
+            }
+            acc
+        });
+    let selection_costs: Vec<Cost> = selection_costs
+        .clone()
+        .into_iter()
+        .fold(Vec::new(), |mut acc, item| {
+            if !acc.contains(&item) {
+                acc.push(item);
+            }
+            acc
+        });
+    let selection_optimisers: Vec<Optimiser> = selection_optimisers
+        .clone()
+        .into_iter()
+        .fold(Vec::new(), |mut acc, item| {
+            if !acc.contains(&item) {
+                acc.push(item);
+            }
+            acc
+        });
+    let selection_weights_initialisations: Vec<WeightsInitialisation> = selection_weights_initialisations
+        .clone()
+        .into_iter()
+        .fold(Vec::new(), |mut acc, item| {
+            if !acc.contains(&item) {
+                acc.push(item);
+            }
+            acc
+        });
     let mut param_combinations: Vec<(
         usize,
         usize,
@@ -258,13 +254,21 @@ impl Network {
     ) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
         let mut epochs: Vec<f64> = Vec::new();
         let mut costs: Vec<f64> = Vec::new();
-        let n_patient_epochs = (optimisation_parameters.f_patient_epochs
+        let n_patient_epochs = if (optimisation_parameters.f_patient_epochs < 0.0) | (optimisation_parameters.f_patient_epochs > 1.0) {
+            return Err(Box::new(TrainingError::OtherError(format!("The fraction of patient epochs is out of bounds: {}", optimisation_parameters.f_patient_epochs))))
+        } else {
+            (optimisation_parameters.f_patient_epochs
             * optimisation_parameters.n_epochs as f32)
-            .floor() as usize;
+            .floor() as usize
+        };
         // Note that for large networks this can be very VRAM-hungry! TODO: make this more efficient probably for non-vross-validating runs
         // With or without cross-validation
         let n: usize = self.targets.n_cols;
-        let n_validation: usize = (n as f32 * optimisation_parameters.f_validation).floor() as usize;
+        let n_validation: usize = if (optimisation_parameters.f_validation < 0.0) | (optimisation_parameters.f_validation > 1.0) {
+            return Err(Box::new(TrainingError::OtherError(format!("The fraction of observations for validation is out of bounds: {}", optimisation_parameters.f_validation))))
+        } else {
+            (n as f32 * optimisation_parameters.f_validation).floor() as usize
+        };
         let mut rng = ChaCha12Rng::seed_from_u64(self.seed as u64);
         let validation_indexes: Vec<usize> = (0..n).choose_multiple(&mut rng, n_validation);
         let training_indexes: Vec<usize> = (0..n)
@@ -410,32 +414,32 @@ impl Network {
 
     pub fn hyperoptimise(
         self: &Self,
-        range_hidden_layers: Option<(usize, usize, usize)>,
-        range_hidden_layer_nodes: Option<(usize, usize, usize)>,
-        range_dropout_rates: Option<(f32, f32, f32)>,
-        range_learning_rates: Option<(f32, f32, f32)>,
-        range_n_epochs: Option<(usize, usize, usize)>,
-        range_n_burnin_epochs: Option<(usize, usize, usize)>,
-        range_f_patient_epochs: Option<(f32, f32, f32)>,
-        range_f_validation: Option<(f32, f32, f32)>,
-        range_n_batches: Option<(usize, usize, usize)>,
-        selection_activations: Option<Vec<Activation>>,
-        selection_costs: Option<Vec<Cost>>,
-        selection_optimisers: Option<Vec<Optimiser>>,
-        selection_weights_initialisations: Option<Vec<WeightsInitialisation>>,
+        selection_hidden_layers: &Vec<usize>,
+        selection_hidden_layer_nodes: &Vec<usize>,
+        selection_dropout_rates: &Vec<f32>,
+        selection_learning_rates: &Vec<f32>,
+        selection_n_epochs: &Vec<usize>,
+        selection_n_burnin_epochs: &Vec<usize>,
+        selection_f_patient_epochs: &Vec<f32>,
+        selection_f_validation: &Vec<f32>,
+        selection_n_batches: &Vec<usize>,
+        selection_activations: &Vec<Activation>,
+        selection_costs: &Vec<Cost>,
+        selection_optimisers: &Vec<Optimiser>,
+        selection_weights_initialisations: &Vec<WeightsInitialisation>,
         verbose: bool,
     ) -> Result<Self, Box<dyn Error>> {
         self.check_dimensions()?;
         let param_combinations = prep_all_hyperparams(
-            range_hidden_layers,
-            range_hidden_layer_nodes,
-            range_dropout_rates,
-            range_learning_rates,
-            range_n_epochs,
-            range_n_burnin_epochs,
-            range_f_patient_epochs,
-            range_f_validation,
-            range_n_batches,
+            selection_hidden_layers,
+            selection_hidden_layer_nodes,
+            selection_dropout_rates,
+            selection_learning_rates,
+            selection_n_epochs,
+            selection_n_burnin_epochs,
+            selection_f_patient_epochs,
+            selection_f_validation,
+            selection_n_batches,
             selection_activations,
             selection_costs,
             selection_optimisers,
@@ -738,35 +742,35 @@ mod tests {
         assert!(network_epochs_5.loss()? > network_epochs_200.loss()?);
 
         // Hyper-parameter optimisations
-        let range_hidden_layers = Some((1, 2, 1));
-        let range_hidden_layer_nodes = Some((5, 5, 5));
-        let range_dropout_rates = Some((0.0, 0.0, 0.1));
-        let range_learning_rates = Some((0.0001, 0.0001, 0.0001));
-        let range_n_epochs = Some((1, 3, 1));
-        let range_n_burnin_epochs = Some((0, 2, 1));
-        let range_f_patient_epochs = Some((0.5, 0.5, 0.5));
-        let range_f_validation = Some((0.0, 0.1, 0.1));
-        let range_n_batches = Some((1, 2, 1));
-        let selection_activations = Some(vec![Activation::ReLU]);
-        let selection_costs = Some(vec![Cost::MSE]);
-        let selection_optimisers = Some(vec![Optimiser::GradientDescent]);
-        let selection_weights_initialisations = Some(vec![WeightsInitialisation::He, WeightsInitialisation::Cauchy]);
+        let selection_hidden_layers = vec![1, 2];
+        let selection_hidden_layer_nodes = vec![5];
+            let selection_dropout_rates = vec![0.0];
+        let selection_learning_rates = vec![0.0001];
+        let selection_n_epochs = vec![1, 2, 3];
+        let selection_n_burnin_epochs = vec![0, 1, 2];
+        let selection_f_patient_epochs = vec![0.5];
+        let selection_f_validation = vec![0.0, 0.1];
+        let selection_n_batches = vec![1, 2];
+        let selection_activations = vec![Activation::ReLU];
+        let selection_costs = vec![Cost::MSE];
+        let selection_optimisers = vec![Optimiser::GradientDescent];
+        let selection_weights_initialisations = vec![WeightsInitialisation::He, WeightsInitialisation::Cauchy];
         
         let verbose = true;
         let network_hyper_optimised = network.hyperoptimise(
-            range_hidden_layers,
-            range_hidden_layer_nodes,
-            range_dropout_rates,
-            range_learning_rates,
-            range_n_epochs,
-            range_n_burnin_epochs,
-            range_f_patient_epochs,
-            range_f_validation,
-            range_n_batches,
-            selection_activations,
-            selection_costs,
-            selection_optimisers,
-            selection_weights_initialisations,
+            &selection_hidden_layers,
+            &selection_hidden_layer_nodes,
+            &selection_dropout_rates,
+            &selection_learning_rates,
+            &selection_n_epochs,
+            &selection_n_burnin_epochs,
+            &selection_f_patient_epochs,
+            &selection_f_validation,
+            &selection_n_batches,
+            &selection_activations,
+            &selection_costs,
+            &selection_optimisers,
+            &selection_weights_initialisations,
             verbose,
         )?;
         println!("network_hyper_optimised:\n{}", network_hyper_optimised);

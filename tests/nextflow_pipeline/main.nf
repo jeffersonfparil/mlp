@@ -105,7 +105,6 @@ workflow {
         | flatMap {it}
         // | view()
     
-
     all_outputs
         | comparisons
         // | view()
