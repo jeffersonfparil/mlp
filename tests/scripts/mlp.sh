@@ -53,13 +53,14 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     time ${MLP} \
         -f ${FNAME_INPUT} \
         -o ${FNAME_OUTPUT_JSON} \
-        -v > ${FNAME_OUTPUT_JSON}.log
+        -v \
+        --do-not-save-network > ${FNAME_OUTPUT_JSON}.log
     # Clean-up just a bit
     mkdir -p $TMP_OUTDIR
     for f in $(grep "Find the loss curve saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
     for f in $(grep "Find the observed vs predicted scatterplot saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
     for f in $(grep "Find the marginal effects (perturbation estimates) barplot saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
-    mv $FNAME_OUTPUT_JSON $TMP_OUTDIR
+    # mv $FNAME_OUTPUT_JSON $TMP_OUTDIR
     mv $FNAME_OUTPUT_MARGINALS_TMP $FNAME_OUTPUT_MARGINALS
 else
     echo "#########################################################################################################"
@@ -87,7 +88,7 @@ else
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
     FNAME_OUTPUT_CV=${DIRNAME_OUTPUT}/$BNAME_OUTPUT
     TMP_OUTDIR="${DIRNAME_OUTPUT}/tmp_dir-${BNAME_OUTPUT%.*}"
-    rm -R $TMP_OUTDIR $FNAME_OUTPUT_JSON $FNAME_OUTPUT_CV 2> /dev/null
+    rm -R $TMP_OUTDIR $FNAME_OUTPUT_CV 2> /dev/null
     mkdir $TMP_OUTDIR
     echo "INPUT: $FNAME_INPUT"
     echo "OUTPUT: $FNAME_OUTPUT_CV"
@@ -121,7 +122,8 @@ else
                 -o ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
                 --hyperparameter-optimisation \
-                --skip-marginals > ${FNAME_OUTPUT_CV}.log
+                --skip-marginals \
+                --do-not-save-network > ${FNAME_OUTPUT_CV}.log
             SELECTED_N_HIDDEN_LAYERS=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Layers: " | awk -F': '  '{print $2}')
             SELECTED_N_HIDDEN_NODES=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Nodes: " | awk -F': '  '{print $2}')
             SELECTED_DROPOUT_RATE=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Dropout Rate: " | awk -F': '  '{print $2}')
@@ -143,7 +145,8 @@ else
                 -f ${TMP_OUTDIR}/VALIDATION_SET.tmp \
                 -m ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
-                --predict-only >> ${FNAME_OUTPUT_CV}.log
+                --predict-only \
+                --do_not_save_network >> ${FNAME_OUTPUT_CV}.log
             cut -f1 ${TMP_OUTDIR}/VALIDATION_SET.tmp > ${TMP_OUTDIR}/true.tmp
             cut -f1 ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv > ${TMP_OUTDIR}/pred.tmp
             paste -d'\t' ${TMP_OUTDIR}/true.tmp ${TMP_OUTDIR}/pred.tmp > ${TMP_OUTDIR}/true_vs_pred.tmp
@@ -158,7 +161,7 @@ else
             CORR="$(echo "scale=12; $V_TRUE_PRED / (($S_TRUE * $S_PRED) + 0.00000000001)" | bc | sed 's/[.]/0./g')"
             R2="$(echo "scale=12; 1.00 - ($MSE / (($S_TRUE^2) + 0.00000000001))" | bc | sed 's/[.]/0./g')"
             rm ${TMP_OUTDIR}/VALIDATION_SET.tmp
-            rm ${TMP_OUTDIR}/OUTPUT.tmp.json
+            # rm ${TMP_OUTDIR}/OUTPUT.tmp.json
             rm ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv
             # Update the output file
             echo -ne "$(basename $FNAME_INPUT)\t$REP\t$FOLD\t$NT\t$NV\tmlp\t" >> ${FNAME_OUTPUT_CV}.tmp

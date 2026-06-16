@@ -336,11 +336,6 @@ cd mlp/tests
 pixi run nextflow run nextflow_pipeline/main.nf \
  -c nextflow_pipeline/params.config \
  -resume
-
-pixi shell
-nextflow run nextflow_pipeline/main.nf \
- -c nextflow_pipeline/params_test.config \
- -resume
 ```
 
 ### On an HPC system with Slurm

@@ -170,7 +170,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Vector of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2")]
     selection_hidden_layers: Vec<usize>,
 
     /// Vector of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
@@ -347,6 +347,13 @@ struct Args {
     /// Parameter 2 (e.g., variance or scale) for the weight distribution
     #[arg(long, default_value_t = 1.0)]
     simulation_weights_distribution_param_2: f64,
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Miscellaneous flags and arguments
+
+    /// Do not save the network (for benchmarking purposes to save on time and resources by not writing the model as JSON into disk)
+    #[arg(long, action)]
+    do_not_save_network: bool,
 }
 
 fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {

@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 
+use rayon::prelude::*;
+
 /// Matrix is stored in GPU memory
 /// I have decided to store data in a row-major format just because I feel like it :-P
 /// Also all floats are stored as f32
@@ -54,11 +56,20 @@ impl Matrix {
         let stream = self.data.context().default_stream();
         let mut source: Vec<f32> = vec![0.0; self.n_rows * self.n_cols];
         stream.memcpy_dtoh(&self.data, &mut source)?;
-        for (i, &row_idx) in row_indexes.iter().enumerate() {
+        // for (i, &row_idx) in row_indexes.iter().enumerate() {
+        //     for (j, &col_idx) in col_indexes.iter().enumerate() {
+        //         destination[i * n_cols + j] = source[row_idx * self.n_cols + col_idx];
+        //     }
+        // }
+        destination
+        .par_chunks_mut(n_cols)
+        .zip(row_indexes.par_iter())
+        .for_each(|(dest_row, &row_idx)| {
+            let src_row_offset = row_idx * self.n_cols;
             for (j, &col_idx) in col_indexes.iter().enumerate() {
-                destination[i * n_cols + j] = source[row_idx * self.n_cols + col_idx];
+                dest_row[j] = source[src_row_offset + col_idx];
             }
-        }
+        });
         let data_dev: CudaSlice<f32> = stream.clone_htod(&destination)?;
         Ok(Matrix::new(data_dev, n_rows, n_cols)?)
     }
