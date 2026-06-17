@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Write, Read};
 use std::io::{BufReader, BufWriter};
 use std::time::Instant;
 use chrono::Utc;
@@ -681,6 +681,145 @@ impl Data {
         )?;
         Ok(network)
     }
+
+    pub fn to_plink(&self, bfile_prefix: &str) -> Result<(), Box<dyn Error>> {
+        let p = self.features.n_rows;
+        let n = self.features.n_cols;
+        let stream = self.features.data.context().default_stream();
+        let mut features_host = vec![0.0f32; p * n];
+        stream.memcpy_dtoh(&self.features.data, &mut features_host)?;
+        // Assuming target matrix is k x n, and we just want the first row for the .fam phenotype
+        let mut targets_host = vec![0.0f32; self.targets.n_rows * n];
+        stream.memcpy_dtoh(&self.targets.data, &mut targets_host)?;
+        let mut bim_file = File::create(format!("{}.bim", bfile_prefix))?;
+        for i in 0..p {
+            let snp_name = format!("SNP_{}", self.feature_names[i]);
+            // Format: Chromosome, SNP ID, Genetic Distance (Morgans), Base-pair Position, Allele 1, Allele 2
+            // Using dummy positional data (0) and generic A/G alleles for simulation.
+            writeln!(bim_file, "0\t{}\t0\t0\tA\tG", snp_name)?;
+        }
+        let mut fam_file = File::create(format!("{}.fam", bfile_prefix))?;
+        for j in 0..n {
+            let pheno = targets_host[j]; // Fetching the phenotype for sample j
+            let pheno_str = if pheno.is_nan() {
+                "-9".to_string() // PLINK standard for missing phenotypes
+            } else {
+                pheno.to_string()
+            };
+            // Format: Family ID, Individual ID, Paternal ID, Maternal ID, Sex (0=unknown), Phenotype
+            writeln!(fam_file, "FID_{}\tIID_{}\t0\t0\t0\t{}", j, j, pheno_str)?;
+        }
+        let mut bed_file = File::create(format!("{}.bed", bfile_prefix))?;
+        // Write PLINK magic bytes (0x6c, 0x1b) and mode (0x01 for SNP-major)
+        bed_file.write_all(&[0x6c, 0x1b, 0x01])?;
+        let bytes_per_snp = (n + 3) / 4;
+        let mut buffer = vec![0u8; bytes_per_snp];
+        for i in 0..p {
+            // Zero out the buffer for the new SNP row
+            buffer.fill(0);
+            for j in 0..n {
+                let val = features_host[i * n + j];
+                // Map the f32 dosage back to PLINK 2-bit codes
+                let plink_code = if val.is_nan() {
+                    0b01 // Missing
+                } else {
+                    let rounded = val.round();
+                    if (rounded - 2.0).abs() < f32::EPSILON {
+                        0b00 // Homozygous A1
+                    } else if (rounded - 1.0).abs() < f32::EPSILON {
+                        0b10 // Heterozygous
+                    } else if rounded.abs() < f32::EPSILON {
+                        0b11 // Homozygous A2
+                    } else {
+                        0b01 // Fallback to missing if the value is completely out of bounds
+                    }
+                };
+                let byte_idx = j / 4;
+                let bit_idx = (j % 4) * 2;
+                // Apply the code to the specific bits in the byte
+                buffer[byte_idx] |= plink_code << bit_idx;
+            }
+            bed_file.write_all(&buffer)?;
+        }
+        Ok(())
+    }
+
+    pub fn from_plink(bfile_prefix: &str) -> Result<Self, Box<dyn Error>> {
+        let bim_file = File::open(format!("{}.bim", bfile_prefix))?;
+        let bim_reader = BufReader::new(bim_file);
+        let mut feature_names = Vec::new();
+        for line in bim_reader.lines() {
+            let line = line?;
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                // Column 2 in .bim is the variant identifier
+                feature_names.push(parts[1].to_string());
+            }
+        }
+        let p = feature_names.len();
+        let fam_file = File::open(format!("{}.fam", bfile_prefix))?;
+        let fam_reader = BufReader::new(fam_file);
+        let mut targets_host = Vec::new();
+        for line in fam_reader.lines() {
+            let line = line?;
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 6 {
+                // Column 6 in .fam is the phenotype
+                // -9 is traditionally used for missing phenotypes in PLINK
+                let pheno: f32 = parts[5].parse().unwrap_or(f32::NAN);
+                targets_host.push(pheno);
+            }
+        }
+        let n = targets_host.len();
+        let k = 1; // Assuming a single phenotype column from the .fam file
+        let target_names = vec!["phenotype".to_string()];
+        let mut bed_file = File::open(format!("{}.bed", bfile_prefix))?;
+        let mut magic = [0u8; 3];
+        bed_file.read_exact(&mut magic)?;
+        // Check magic bytes: 0x6c, 0x1b, and 0x01 (SNP-major mode)
+        if magic[0] != 0x6c || magic[1] != 0x1b {
+            return Err("Invalid PLINK BED file magic number.".into());
+        }
+        let snp_major = magic[2] == 0x01;
+        if !snp_major {
+            return Err("Only SNP-major BED files are supported.".into());
+        }
+        // Genotype matrix host allocation: p x n
+        let mut features_host = vec![0.0f32; p * n];
+        let bytes_per_snp = (n + 3) / 4;
+        let mut buffer = vec![0u8; bytes_per_snp];
+        for i in 0..p {
+            bed_file.read_exact(&mut buffer)?;
+            for j in 0..n {
+                let byte_idx = j / 4;
+                let bit_idx = (j % 4) * 2;
+                let byte = buffer[byte_idx];
+                let genotype_code = (byte >> bit_idx) & 0b11;
+                // Map the 2-bit PLINK codes to additive dosage f32 values
+                let val = match genotype_code {
+                    0b00 => 2.0, // Homozygous for the first allele
+                    0b10 => 1.0, // Heterozygous
+                    0b11 => 0.0, // Homozygous for the second allele
+                    0b01 => f32::NAN, // Missing genotype (needs imputation handling downstream)
+                    _ => unreachable!(),
+                };
+                // Assuming row-major order for the CUDA Matrix formulation (p rows, n columns)
+                features_host[i * n + j] = val;
+            }
+        }
+        let ctx = CudaContext::new(0)?;
+        let stream = ctx.default_stream();
+        let features_dev: CudaSlice<f32> = stream.clone_htod(&features_host)?;
+        let targets_dev: CudaSlice<f32> = stream.clone_htod(&targets_host)?;
+        let features = Matrix::new(features_dev, p, n)?;
+        let targets = Matrix::new(targets_dev, k, n)?;
+        Ok(Self {
+            features,
+            targets,
+            feature_names,
+            target_names,
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -978,6 +1117,29 @@ mod tests {
         );
         println!("data_reloaded: {}", data_reloaded);
         println!("data_simulated_reloaded: {}", data_simulated_reloaded);
+        // Plink data format
+        data_simulated.to_plink("test_data_simulated")?;
+        let data_simulated_reloaded_from_plink = Data::from_plink("test_data_simulated")?;
+        println!("data_simulated_reloaded_from_plink: {}", data_simulated_reloaded_from_plink);
+        let original_targets: Vec<f32> = data_simulated.targets.to_host()?;
+        let reloaded_targets: Vec<f32> = data_simulated_reloaded_from_plink.targets.to_host()?;
+        let original_features: Vec<f32> = data_simulated.features.to_host()?;
+        let reloaded_features: Vec<f32> = data_simulated_reloaded_from_plink.features.to_host()?;
+        println!("original_targets: {:?}", original_targets);
+        println!("reloaded_targets: {:?}", reloaded_targets);
+        println!("original_features: {:?}", original_features);
+        println!("reloaded_features: {:?}", reloaded_features);
+        for i in 0..original_targets.len() {
+            assert!(original_targets[i] == reloaded_targets[i])
+        }
+        for i in 0..original_features.len() {
+            let q = if original_features[i] < 0.5 {
+                0.0
+            } else {
+                1.0
+            };
+            assert!(q == reloaded_features[i])
+        }
         // Initialise the network from reloaded data
         let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
@@ -1047,7 +1209,10 @@ mod tests {
                 f.extension().and_then(|s| s.to_str()) == Some("svg") || 
                 f.extension().and_then(|s| s.to_str()) == Some("json") || 
                 f.extension().and_then(|s| s.to_str()) == Some("csv") || 
-                f.extension().and_then(|s| s.to_str()) == Some("tsv") 
+                f.extension().and_then(|s| s.to_str()) == Some("tsv") ||
+                f.extension().and_then(|s| s.to_str()) == Some("bed") ||
+                f.extension().and_then(|s| s.to_str()) == Some("bim") ||
+                f.extension().and_then(|s| s.to_str()) == Some("fam")
             ) {
                 std::fs::remove_file(&f)?;
             }

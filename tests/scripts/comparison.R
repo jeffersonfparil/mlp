@@ -239,7 +239,7 @@ if (args[1] == "-h" || args[1] == "--help") {
 # args <- c("trials", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-MLP.tsv", "~/Documents/mlp/tests/tmp/trials/output-australia.soybean-yield-TREES.tsv", "~/Documents/mlp/tests/tmp/trials")
 # args <- c("gp", "~/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-LINEAR.tsv", "~/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-TREES.tsv", "~/Documents/mlp/tests/tmp/gp")
 # args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-MLP.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp")
-# args <- c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_2-TREES.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp")
+# args <- c("gp", "/home/jp3h/Documents/mlp/tests/output/gp/output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_1000-HIDDEN_LAYERS_1-LINEAR.tsv", "/home/jp3h/Documents/mlp/tests/output/gp/output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_1000-HIDDEN_LAYERS_1-MLP.tsv", "/home/jp3h/Documents/mlp/tests/output/gp")
 params <- get_params(args)
 if (params$analysis_type == "trials") {
   compare_trial_analyses(params)

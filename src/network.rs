@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 // TODO: revise comments also add docs to make sure we know how each field correspond to each other including their dimensions, i.e. activations is the odd-one-out as it includes the input layer plus all hidden layers and the output layer
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum WeightsInitialisation {
     He,
     Cauchy,

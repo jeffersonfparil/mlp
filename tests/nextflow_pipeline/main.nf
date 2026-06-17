@@ -8,7 +8,6 @@ include { trees_analysis } from './model_trees.nf'
 include { mlp_analysis } from './model_mlp.nf'
 include { comparisons } from './comparisons.nf'
 
-// Helper function: generate parameter combinations
 def generate_trials_params() {
     params.n_years.collect { y ->
         params.n_sites.collect { s ->
@@ -42,13 +41,12 @@ def get_analysis_type(filename) {
 }
 
 workflow {
-    
     trials_simulated = Channel.fromList(generate_trials_params())
         | simulate_trials
         | flatten()
         | map { file -> tuple('trials', file) }
     
-    trials_empirical = Channel.fromList(params.trials_agridat_fnames)
+    trials_empirical = Channel.fromList(files("${params.trials_agridat_dir}/*.txt"))
         | empiricalprep_trials
         | flatten()
         | map { file -> tuple('trials', file) }
@@ -58,7 +56,7 @@ workflow {
         | flatten()
         | map { file -> tuple('gp', file) }
 
-    gp_empirical = Channel.fromList(params.gp_azodi2019_fnames)
+    gp_empirical = Channel.fromList(files("${params.gp_azodi2019_dir}/*_geno.csv"))
         | empiricalprep_gp
         | flatten()
         | map { file -> tuple('gp', file) }
@@ -105,7 +103,6 @@ workflow {
         | flatMap {it}
         // | view()
     
-
     all_outputs
         | comparisons
         // | view()

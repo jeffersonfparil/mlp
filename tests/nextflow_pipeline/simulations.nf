@@ -1,5 +1,3 @@
-// Simulate datasets for trial analysis and GP CV using mlp (GPU required)
-
 process simulate_trials {
     label 'gpu'
 

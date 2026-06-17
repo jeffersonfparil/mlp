@@ -12,8 +12,12 @@ module load Nextflow/25.10.4
 
 WORKDIR=${HOME}/Documents/mlp/tests
 cd $WORKDIR
-
+mkdir logs
 nextflow run nextflow_pipeline/main.nf \
     -c nextflow_pipeline/params.config \
-    -c nextflow_pipeline/process.config
-    # -resume
+    -c nextflow_pipeline/process.config \
+    -resume \
+    -with-trace logs/trace.txt \
+    -with-report logs/report.html \
+    -with-timeline logs/timeline.txt \
+    -with-dag logs/flowchart.dot

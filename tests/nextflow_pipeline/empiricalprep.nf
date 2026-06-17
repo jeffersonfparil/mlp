@@ -1,5 +1,3 @@
-// Processing of empirical data in preparation for trial analysis, GP CV and remote-sensing analysis (GPU is not required)
-
 process empiricalprep_trials {
     publishDir "${params.root_outdir}/trials", mode: 'copy'
     
@@ -11,13 +9,13 @@ process empiricalprep_trials {
     
     script:
     """
-    mkdir -p TMPDIR-${fname}
+    mkdir -p ${fname}.tmpdir
     Rscript ${params.scripts_dir}/empiricalprep.R \
         trials \
-        ${params.trials_agridat_dir}/${fname} \
-        TMPDIR-${fname}
-    mv TMPDIR-${fname}/* .
-    rm -rf TMPDIR-${fname}
+        ${fname} \
+        ${fname}.tmpdir
+    mv ${fname}.tmpdir/* .
+    rm -rf ${fname}.tmpdir
     """
 }
 
@@ -32,13 +30,13 @@ process empiricalprep_gp {
     
     script:
     """
-    mkdir -p TMPDIR-${fname}
+    mkdir -p ${fname}.tmpdir
     Rscript ${params.scripts_dir}/empiricalprep.R \
         gp \
-        ${params.gp_azodi2019_dir}/${fname} \
-        TMPDIR-${fname}
-    mv TMPDIR-${fname}/* .
-    rm -rf TMPDIR-${fname}
+        ${fname} \
+        ${fname}.tmpdir
+    mv ${fname}.tmpdir/* .
+    rm -rf ${fname}.tmpdir
     """
 }
 
@@ -64,4 +62,3 @@ process empiricalprep_remotesensing {
         ./
     """
 }
-

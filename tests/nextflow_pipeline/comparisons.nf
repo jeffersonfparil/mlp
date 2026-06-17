@@ -1,5 +1,4 @@
 process comparisons {
-    // publishDir "${params.root_outdir}/${analysis_type}", mode: 'copy'
     publishDir "${params.root_outdir}", 
         mode: 'copy', 
         saveAs: { filename -> "${analysis_type}/${filename}" }

@@ -1,7 +1,4 @@
-// Randomisation for GP CV and remote-sensing analysis for use across linear, trees, and mlp models (GPU is not required)
-
 process randomisation_gp_rs {
-    // publishDir "${params.root_outdir}/${analysis_type}", mode: 'copy'
     publishDir "${params.root_outdir}", 
         mode: 'copy', 
         saveAs: { filename -> "${analysis_type}/${filename}" }
@@ -15,6 +12,7 @@ process randomisation_gp_rs {
     script:
     """
     bash ${params.scripts_dir}/randomisationgprs.sh \
+        ${analysis_type} \
         ${data_file} \
         . \
         ${params.n_reps} \
