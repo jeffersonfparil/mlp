@@ -258,8 +258,8 @@ impl Network {
             return Err(Box::new(TrainingError::OtherError(format!("The fraction of patient epochs is out of bounds: {}", optimisation_parameters.f_patient_epochs))))
         } else {
             (optimisation_parameters.f_patient_epochs
-            * optimisation_parameters.n_epochs as f32)
-            .floor() as usize
+            * (optimisation_parameters.n_epochs - 1) as f32)
+            .floor() as usize + 1
         };
         // Note that for large networks this can be very VRAM-hungry! TODO: make this more efficient probably for non-vross-validating runs
         // With or without cross-validation

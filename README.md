@@ -340,7 +340,11 @@ pixi run nextflow run nextflow_pipeline/main.nf \
 # SMALL TEST
 pixi run nextflow run nextflow_pipeline/main.nf \
     -c nextflow_pipeline/params_test.config \
-    -resume
+    -resume \
+    -with-trace trace.txt \
+    -with-report report.html \
+    -with-timeline timeline.txt \
+    -with-dag flowchart.dot
 
 ```
 
