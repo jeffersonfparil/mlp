@@ -146,7 +146,8 @@ else
                 -m ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
                 --predict-only \
-                --do_not_save_network >> ${FNAME_OUTPUT_CV}.log
+                --do-not-save-network >> ${FNAME_OUTPUT_CV}.log
+            # cat ${FNAME_OUTPUT_CV}.log
             cut -f1 ${TMP_OUTDIR}/VALIDATION_SET.tmp > ${TMP_OUTDIR}/true.tmp
             cut -f1 ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv > ${TMP_OUTDIR}/pred.tmp
             paste -d'\t' ${TMP_OUTDIR}/true.tmp ${TMP_OUTDIR}/pred.tmp > ${TMP_OUTDIR}/true_vs_pred.tmp
@@ -161,7 +162,7 @@ else
             CORR="$(echo "scale=12; $V_TRUE_PRED / (($S_TRUE * $S_PRED) + 0.00000000001)" | bc | sed 's/[.]/0./g')"
             R2="$(echo "scale=12; 1.00 - ($MSE / (($S_TRUE^2) + 0.00000000001))" | bc | sed 's/[.]/0./g')"
             rm ${TMP_OUTDIR}/VALIDATION_SET.tmp
-            # rm ${TMP_OUTDIR}/OUTPUT.tmp.json
+            rm ${TMP_OUTDIR}/OUTPUT.tmp.json
             rm ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv
             # Update the output file
             echo -ne "$(basename $FNAME_INPUT)\t$REP\t$FOLD\t$NT\t$NV\tmlp\t" >> ${FNAME_OUTPUT_CV}.tmp

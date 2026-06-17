@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "64,1024"
+        default_value = "256"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -201,11 +201,11 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "100")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "0")]
     selection_n_burnin_epochs: Vec<usize>,
 
     /// Vector of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
@@ -213,7 +213,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.01"
+        default_value = "0.1"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -252,7 +252,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "He,Uniform"
+        default_value = "He"
     )]
     selection_weights_initialisations: Vec<String>,
 

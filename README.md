@@ -330,22 +330,18 @@ pixi global install -c conda-forge -c bioconda nextflow
 
 ## Run the workflow:
 
-### On a single machine or one HPC node:
+### On a single machine or one HPC node for testing:
 ```shell
 cd mlp/tests
-pixi run nextflow run nextflow_pipeline/main.nf \
-    -c nextflow_pipeline/params.config \
-    -resume
-
-# SMALL TEST
+mkdir logs
 pixi run nextflow run nextflow_pipeline/main.nf \
     -c nextflow_pipeline/params_test.config \
     -resume \
-    -with-trace trace.txt \
-    -with-report report.html \
-    -with-timeline timeline.txt \
-    -with-dag flowchart.dot
-
+    -with-trace logs/trace.txt \
+    -with-report logs/report.html \
+    -with-timeline logs/timeline.txt \
+    -with-dag logs/flowchart.dot
+pixi run dot -Tsvg logs/flowchart.dot > logs/flowchart.svg
 ```
 
 ### On an HPC system with Slurm
