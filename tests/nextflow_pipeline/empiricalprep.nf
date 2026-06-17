@@ -1,5 +1,3 @@
-// Processing of empirical data in preparation for trial analysis, GP CV and remote-sensing analysis (GPU is not required)
-
 process empiricalprep_trials {
     publishDir "${params.root_outdir}/trials", mode: 'copy'
     
@@ -64,4 +62,3 @@ process empiricalprep_remotesensing {
         ./
     """
 }
-

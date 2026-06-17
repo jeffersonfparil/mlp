@@ -8,7 +8,6 @@ include { trees_analysis } from './model_trees.nf'
 include { mlp_analysis } from './model_mlp.nf'
 include { comparisons } from './comparisons.nf'
 
-// Helper function: generate parameter combinations
 def generate_trials_params() {
     params.n_years.collect { y ->
         params.n_sites.collect { s ->
@@ -42,7 +41,6 @@ def get_analysis_type(filename) {
 }
 
 workflow {
-    
     trials_simulated = Channel.fromList(generate_trials_params())
         | simulate_trials
         | flatten()
