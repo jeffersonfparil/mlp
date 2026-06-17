@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import shap
 
+print(xgb.build_info())
+
 parser = argparse.ArgumentParser(description="XGBoost for trial analysis and genomic prediction")
 parser.add_argument("analysis_type", help="The type of analysis to perform (trials or gp or remotesensing)")
 parser.add_argument("input_file", type=Path, help="Path to the input TSV file")
@@ -36,8 +38,43 @@ parser.add_argument("--optim-max-depth", type=list_of_ints, default=[3, 5, 10], 
 parser.add_argument("--optim-learning-rate", type=list_of_floats, default=[0.01, 0.1], help="Learning rates to test for hyperparameter tuning/optimisation")
 parser.add_argument("--optim-subsample", type=list_of_floats, default=[0.5, 0.75, 1.0], help="Subsampling rates to test for hyperparameter tuning/optimisation")
 
-
 args = parser.parse_args()
+# class Args:
+#     def __init__(
+#         self,
+#         analysis_type="trials",
+#         input_file=Path.home() / "Documents/mlp/tests/output/trials/simulated-YEARS_2-SITES_2-TREATMENTS_2-ENTRIES_10-REPLICATIONS_3-HIDDEN_LAYERS_1.tsv",
+#         output_dir=Path.home() / "Documents/mlp/tests/output/trials",
+#         randomisation_input_file=Path.home() / "Documents/mlp/tests/output/trials/output-simulated-YEARS_2-SITES_2-TREATMENTS_2-ENTRIES_10-REPLICATIONS_3-HIDDEN_LAYERS_1-RANDOMISATION.tsv",
+#         n_replicates=1,
+#         n_folds=2,
+#         early_stopping_rounds=0,
+#         n_estimators=100,
+#         max_depth=3,
+#         learning_rate=0.001,
+#         subsample=1.0,
+#         optim_n_estimators=[100],
+#         optim_max_depth=[3],
+#         optim_learning_rate=[0.001],
+#         optim_subsample=[1.0],
+#         seed=42
+#     ):
+#         self.analysis_type=analysis_type
+#         self.input_file=input_file
+#         self.output_dir=output_dir
+#         self.randomisation_input_file=randomisation_input_file
+#         self.n_replicates=n_replicates
+#         self.n_folds=n_folds
+#         self.early_stopping_rounds=early_stopping_rounds
+#         self.n_estimators=n_estimators
+#         self.max_depth=max_depth
+#         self.learning_rate=learning_rate
+#         self.subsample=subsample
+#         self.optim_n_estimators=optim_n_estimators
+#         self.optim_max_depth=optim_max_depth
+#         self.optim_learning_rate=optim_learning_rate
+#         self.optim_subsample=optim_subsample
+#         self.seed=seed
 
 def get_params(args):
     if (args.analysis_type != "trials") and (args.analysis_type != "gp") and (args.analysis_type != "remotesensing"):
@@ -119,7 +156,7 @@ def define_fname_output(args):
     return args.output_dir / f"output-{args.input_file.stem}-TREES.tsv"
     
 def extract_entries_effects(args):
-    # args = Args(analysis_type="trials", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/trials/australia.soybean-yield.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/trials"), randomisation_input_file=Path("."), n_replicates=3, n_folds=5)
+    # args = Args()
     params = get_params(args)
     X, y = extract_X_y(args)
     model = xgb.XGBRegressor(
@@ -145,7 +182,7 @@ def extract_entries_effects(args):
     return None
 
 def gp_repeated_kfold_cv(args):
-    # args = Args(analysis_type="gp", input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv"), output_dir=Path("/home/jp3h/Documents/mlp/tests/tmp/gp"), randomisation_input_file=Path("/home/jp3h/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANDOMISATION.tsv"), n_replicates=3, n_folds=5)
+    # args = Args()
     params = get_params(args) 
     X, y = extract_X_y(args)
     idx_validation, idx_training = extract_randomisations(args)

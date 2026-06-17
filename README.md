@@ -334,8 +334,14 @@ pixi global install -c conda-forge -c bioconda nextflow
 ```shell
 cd mlp/tests
 pixi run nextflow run nextflow_pipeline/main.nf \
- -c nextflow_pipeline/params.config \
- -resume
+    -c nextflow_pipeline/params.config \
+    -resume
+
+# SMALL TEST
+pixi run nextflow run nextflow_pipeline/main.nf \
+    -c nextflow_pipeline/params_test.config \
+    -resume
+
 ```
 
 ### On an HPC system with Slurm
