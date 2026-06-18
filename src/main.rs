@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "256"
+        default_value = "1024"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
