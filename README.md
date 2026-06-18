@@ -348,7 +348,7 @@ pixi run dot -Tsvg logs/flowchart.dot > logs/flowchart.svg
 
 ```shell
 cd mlp/tests
-sbatch run_nextflow.sh
+sbatch run_nextflow.sh # Note: re-build with 1,000 hidden nodes as default and re-run benchmarking...
 ```
 
 # Miscellaneous
