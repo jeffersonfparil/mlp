@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "256"
+        default_value = "1024"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -196,7 +196,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-4,1e-3"
+        default_value = "1e-4"
     )]
     selection_learning_rates: Vec<f32>,
 
@@ -222,7 +222,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0"
+        default_value = "0.1"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -243,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,AdamMax,GradientDescent"
+        default_value = "Adam,AdamMax"
     )]
     selection_optimisers: Vec<String>,
 
