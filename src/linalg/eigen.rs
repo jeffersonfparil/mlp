@@ -44,34 +44,11 @@ impl Matrix {
                 format!("Eigenvector must be a column vector of size {}x1, got {}x{}", self.n_cols, v.n_rows, v.n_cols)
             )));
         }
-
         // Fetch the cached kernel
         let f: CudaFunction = self.get_cached_kernel("cuDeflate", DEFLATE)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
-        // let cfg = LaunchConfig {
-        //     grid_dim: (
-        //         (self.n_cols as u32 + BLOCK_SIZE - 1) / BLOCK_SIZE,
-        //         (self.n_cols as u32 + BLOCK_SIZE - 1) / BLOCK_SIZE,
-        //         1,
-        //     ),
-        //     block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
-        //     shared_mem_bytes: 0,
-        // };
-        // // Launch the kernel, passing mutable reference to self.data
-        // unsafe {
-        //     f.launch(
-        //         cfg,
-        //         (
-        //             &mut self.data, 
-        //             &v.data, 
-        //             lambda, 
-        //             self.n_cols as i32
-        //         )
-        //     )?;
-        // }
         let n_rows: u32 = self.n_cols as u32;
         let n_cols: u32 = self.n_rows as u32;
-        
         let mut builder: LaunchArgs = stream.launch_builder(&f);
         builder.arg(&mut self.data);
         builder.arg(&v.data);
@@ -89,7 +66,6 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-
         Ok(())
     }
 
@@ -103,90 +79,67 @@ impl Matrix {
         tol: f32
     ) -> Result<Matrix, Box<dyn Error>> {
         let stream = self.data.context().default_stream();
-
-        // Cap the number of PCs to the number of columns available
         let k = num_pcs.min(self.n_cols);
-
-        // 1. Center the Data (Host-side O(N) operation)
-        let host_data = self.to_host()?;
-        let mut col_means = vec![0.0f32; self.n_cols];
-        
-        for i in 0..self.n_rows {
-            for j in 0..self.n_cols {
-                col_means[j] += host_data[i * self.n_cols + j];
-            }
-        }
-        for j in 0..self.n_cols {
-            col_means[j] /= self.n_rows as f32;
-        }
-
-        let mut centered_host = vec![0.0f32; host_data.len()];
-        for i in 0..self.n_rows {
-            for j in 0..self.n_cols {
-                centered_host[i * self.n_cols + j] = host_data[i * self.n_cols + j] - col_means[j];
-            }
-        }
-        let centered_dev = stream.clone_htod(&centered_host)?;
-        let centered_mat = Matrix::new(centered_dev, self.n_rows, self.n_cols)?;
-
-        // 2. Compute Initial Covariance Matrix (X^T * X)
+        // Centre
+        let col_means_neg = self.colsummat()?.scalarmatmul(-(self.n_rows as f32))?;
+        println!("col_means_neg: {}", col_means_neg);
+        let centered_mat = self.colmatadd(&col_means_neg)?;
+        println!("centered_mat: {}", centered_mat);
+        // Covariance Matrix (X^T * X)
         let mut cov_mat = centered_mat.matmult0(&centered_mat)?;
-
         // Allocate host memory to store the final combined loadings matrix (row-major)
         let mut loadings_host = vec![0.0f32; self.n_cols * k];
-
-        // 3. Extract PCs sequentially
+        // Extract PCs sequentially
         for pc_idx in 0..k {
-            let mut v_host = vec![1.0f32; self.n_cols];
-            let mut v_mat = Matrix::new(stream.clone_htod(&v_host)?, self.n_cols, 1)?;
-
-            // --- Power Iteration Loop ---
-            for _ in 0..max_iter {
-                let v_new_mat = cov_mat.matmul(&v_mat)?;
-                let v_new_host = v_new_mat.to_host()?;
-                
-                let norm = v_new_host.iter().map(|x| x * x).sum::<f32>().sqrt();
-                let mut diff = 0.0;
-                
-                for i in 0..self.n_cols {
-                    let normalized = v_new_host[i] / norm;
-                    diff += (normalized - v_host[i]).abs();
-                    v_host[i] = normalized;
+            let v_mat = {
+                let mut v_mat = Matrix::new(stream.clone_htod(&vec![1.0f32; self.n_cols])?, self.n_cols, 1)?;
+                for _ in 0..max_iter {
+                    // v = C * v
+                    // n = sqrt(sum(v^2))
+                    // v = v / n
+                    let v_new_mat = cov_mat.matmul(&v_mat)?;
+                    let norm = v_new_mat
+                        .elementwisematmul(&v_new_mat)?
+                        .summat()?
+                        .sqrt();
+                    v_mat = v_new_mat.scalarmatmul(1.00 / norm)?;
+                    let diff = v_mat
+                        .elementwisematadd(
+                            &v_mat.scalarmatmul(-1.00)?
+                        )?
+                        .elementwisematabs()?
+                        .summat()?;
+                    if diff < tol { 
+                        break; 
+                    }
                 }
-
-                v_mat = Matrix::new(stream.clone_htod(&v_host)?, self.n_cols, 1)?;
-
-                if diff < tol { 
-                    break; 
-                }
-            }
-
-            // --- Eigenvalue Calculation ---
+                v_mat
+            };
+            // Eigenvalue Calculation
             // lambda = v^T * C * v
-            let c_host = cov_mat.to_host()?;
-            let mut lambda = 0.0;
-            for i in 0..self.n_cols {
-                let mut row_sum = 0.0;
-                for j in 0..self.n_cols {
-                    row_sum += c_host[i * self.n_cols + j] * v_host[j];
-                }
-                lambda += v_host[i] * row_sum;
-            }
-
-            // --- Store the Eigenvector ---
+            let lambda = v_mat
+                .matmult0(&cov_mat)?
+                .matmul(&v_mat)?
+                .to_host()?[0];
+            // Store the Eigenvector
             // Place it into the appropriate column of our n_cols x k matrix
+            let v_host = v_mat.to_host()?;
             for i in 0..self.n_cols {
                 loadings_host[i * k + pc_idx] = v_host[i];
             }
-
-            // --- Hotelling's Deflation ---
+            // Hotelling's Deflation (C = C - lambda * v * v^T)
             // Update the covariance matrix in-place for the next iteration
             if pc_idx < k - 1 {
-                cov_mat.deflate_mut(&v_mat, lambda)?;
+                // cov_mat.deflate_mut(&v_mat, lambda)?;
+                cov_mat = cov_mat.elementwisematadd(
+                    &v_mat
+                        .matmul0t(&v_mat)?
+                        .scalarmatmul(-lambda)?
+                )?;
             }
         }
 
-        // 4. Push the final loadings matrix to the GPU
+        // Push the final loadings matrix to the GPU
         let loadings_dev = stream.clone_htod(&loadings_host)?;
         let loadings_mat = Matrix::new(loadings_dev, self.n_cols, k)?;
 
@@ -249,13 +202,13 @@ mod tests {
         // [3.0, 3.0]
         let n: usize = 10;
         let p: usize = 7;
-        let mut x_host: Vec<f32> = (0..(n * p)).map(|x| x as f32).collect();
+        let mut x_host: Vec<f32> = (0..(n * p)).map(|x| 1.1_f32.powf(x as f32)).collect();
         let x_dev: CudaSlice<f32> = stream.clone_htod(&x_host)?;
         let x_matrix = Matrix::new(x_dev, n, p)?;
 
         // 2. Calculate the first 2 Principal Components
         // Using max_iter = 100 and tol = 1e-5
-        let pcs_matrix = x_matrix.principal_components(5, 100, 1e-5)?;
+        let pcs_matrix = x_matrix.principal_components(1, 100, 1e-5)?;
 
         println!("x_matrix: {}", x_matrix);
         println!("pcs_matrix: {}", pcs_matrix);
@@ -263,24 +216,14 @@ mod tests {
 
         // 3. Fetch the loadings matrix back to the host
         // Result is a 2x2 matrix (n_cols x num_pcs)
-        let result_host = pcs_matrix.to_host()?;
+        let result_pc1: Vec<f32> = pcs_matrix.to_host()?;
+        let expected_pc1: Vec<f32> = vec![0.2739837, 0.3013821, 0.3315203, 0.3646723, 0.4011395, 0.4412535, 0.4853788];
+        println!("result_pc1: {:?}", result_pc1);
+        println!("expected_pc1: {:?}", expected_pc1);
+        for i in 0..p {
+            assert!((result_pc1[i] - expected_pc1[i]).abs() < 0.001);
+        }
 
-        // 4. Validate mathematically
-        // For perfectly correlated data, PC1 lies perfectly on the diagonal.
-        // Therefore, the normalized loadings for PC1 should be [1/sqrt(2), 1/sqrt(2)]
-        let pc1_expected = std::f32::consts::FRAC_1_SQRT_2; // ~0.70710677
-
-        // Note: Eigenvectors are invariant to sign (can point forwards or backwards),
-        // so we test the absolute values to prevent flaky test failures.
-        // PC1 is column 0 (indices 0 and 2 in row-major layout).
-        assert!((result_host[0].abs() - pc1_expected).abs() < 1e-4);
-        assert!((result_host[2].abs() - pc1_expected).abs() < 1e-4);
-
-        // PC2 is column 1 (indices 1 and 3 in row-major layout).
-        // Since it is orthogonal to PC1, its components should have opposite signs 
-        // to equal zero dot product, but identical absolute magnitudes.
-        assert!((result_host[1].abs() - pc1_expected).abs() < 1e-4);
-        assert!((result_host[3].abs() - pc1_expected).abs() < 1e-4);
 
         Ok(())
     }

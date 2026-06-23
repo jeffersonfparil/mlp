@@ -68,7 +68,7 @@ impl Matrix {
         }
         let colsums_dev: CudaSlice<f32> =
             self.data.context().default_stream().clone_htod(&colsums)?;
-        Ok(Self::new(colsums_dev, self.n_cols, 1)?)
+        Ok(Self::new(colsums_dev, 1, self.n_cols)?)
     }
 
     pub fn rowprodmat(self: &Self) -> Result<Self, Box<dyn Error>> {
@@ -94,7 +94,7 @@ impl Matrix {
         }
         let colprods_dev: CudaSlice<f32> =
             self.data.context().default_stream().clone_htod(&colprods)?;
-        Ok(Self::new(colprods_dev, self.n_cols, 1)?)
+        Ok(Self::new(colprods_dev, 1, self.n_cols)?)
     }
 }
 
