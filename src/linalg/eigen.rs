@@ -4,6 +4,8 @@ use cudarc::driver::{CudaSlice, CudaStream, LaunchConfig, PushKernelArg};
 use std::error::Error;
 use std::sync::Arc;
 
+// TODO: reverse rows and columns, i.e. because we have observations as columns and features as rows
+
 /// Stores the result of a fitted PCA model.
 #[repr(C)]
 #[derive(Debug, Clone)]

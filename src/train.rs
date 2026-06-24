@@ -3,6 +3,7 @@ use crate::costs::Cost;
 use crate::network::{Network, WeightsInitialisation};
 use crate::optimisers::{OptimisationParameters, Optimiser};
 use crate::progress_bar::ProgressBar;
+use crate::eigen::Eigen;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 // use rand_distr::weighted::Weight;
@@ -274,10 +275,21 @@ impl Network {
         let training_indexes: Vec<usize> = (0..n)
             .filter(|&x| !validation_indexes.contains(&x))
             .collect();
-        let (mut network_validation, mut network_training) = if n_validation > 0 {
-            (self.slice(&validation_indexes)?,  self.slice(&training_indexes)?)
+        
+        // TODO: allowing for use of PC projections as input
+        let (mut network_validation, mut network_training) = if optimisation_parameters.use_pc_rotation_as_input_layer == false {
+            if n_validation > 0 {
+                (self.slice(&validation_indexes)?,  self.slice(&training_indexes)?)
+            } else {
+                (self.slice(&vec![0])?, self.slice(&training_indexes)?)
+            }
         } else {
-            (self.slice(&vec![0])?, self.slice(&training_indexes)?)
+            let input_layer: Matrix = self.activations_per_layer[1].transpose()?;
+            let num_pcs: usize = input_layer.ncols
+            let max_iter: usize = 100;
+            let tol: f32 = 1e-5;
+            let pca: Eigen = input_layer.principal_components()?
+        }
         };
         // Pre-training burn-in epochs
         let mut pb = ProgressBar::new(optimisation_parameters.n_burnin_epochs, 50, format!("Burn-in {} epochs", optimisation_parameters.n_burnin_epochs));
