@@ -148,8 +148,11 @@ mod tests {
 
         let n: usize = 10;
         let p: usize = 7;
-        let k: usize = 1;
+        let k: usize = 3;
         let mut x_host: Vec<f32> = (0..(n * p)).map(|x| 1.1_f32.powf(x as f32)).collect();
+        for i in (0..(n*p)).step_by(10) {
+            x_host[i] = (n*p - i) as f32;
+        }
         let x_dev: CudaSlice<f32> = stream.clone_htod(&x_host)?;
         let x_matrix = Matrix::new(x_dev, n, p)?;
 
