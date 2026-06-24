@@ -75,15 +75,14 @@ impl Matrix {
                         .elementwisematmul(&v_new_mat)?
                         .summat()?
                         .sqrt();
-                        
-                    v_mat = v_new_mat.scalarmatmul(1.00 / norm)?;
-                    let diff = v_mat
+                    let v_new_normalized = v_new_mat.scalarmatmul(1.00 / norm)?;
+                    let diff = v_new_normalized
                         .elementwisematadd(
                             &v_mat.scalarmatmul(-1.00)?
                         )?
                         .elementwisematabs()?
                         .summat()?;
-                        
+                    v_mat = v_new_normalized;
                     if diff < tol { 
                         break; 
                     }
@@ -148,7 +147,7 @@ mod tests {
 
         let n: usize = 10;
         let p: usize = 7;
-        let k: usize = 3;
+        let k: usize = 1;
         let mut x_host: Vec<f32> = (0..(n * p)).map(|x| 1.1_f32.powf(x as f32)).collect();
         for i in (0..(n*p)).step_by(10) {
             x_host[i] = (n*p - i) as f32;
@@ -168,7 +167,7 @@ mod tests {
 
         // 3. Fetch the loadings matrix back to the host
         let result_pc1: Vec<f32> = pca_result.loadings.to_host()?;
-        let expected_pc1: Vec<f32> = vec![0.2739837, 0.3013821, 0.3315203, 0.3646723, 0.4011395, 0.4412535, 0.4853788];
+        let expected_pc1: Vec<f32> = vec![0.27251476, 0.30735815, 0.33886504, 0.3677933, 0.3586193, 0.4563054, 0.49431035];
         
         println!("result_pc1: {:?}", result_pc1);
         println!("expected_pc1: {:?}", expected_pc1);
