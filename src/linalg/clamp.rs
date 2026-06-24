@@ -34,9 +34,9 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuElementwiseClamp", CLAMP)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&mut out_dev);
@@ -47,8 +47,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -56,7 +56,7 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 }
 
