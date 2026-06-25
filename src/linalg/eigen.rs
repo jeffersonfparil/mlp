@@ -81,10 +81,12 @@ impl Matrix {
         let stream = self.data.context().default_stream();
         let k = num_pcs.min(self.n_cols);
         // Centre
-        let col_means_neg = self.colsummat()?.scalarmatmul(-(self.n_rows as f32))?;
-        println!("col_means_neg: {}", col_means_neg);
-        let centered_mat = self.colmatadd(&col_means_neg)?;
-        println!("centered_mat: {}", centered_mat);
+        let centered_mat = self.colmatadd(&
+            self.colsummat()?
+            .scalarmatmul(
+                -(self.n_rows as f32)
+            )?
+        )?;
         // Covariance Matrix (X^T * X)
         let mut cov_mat = centered_mat.matmult0(&centered_mat)?;
         // Allocate host memory to store the final combined loadings matrix (row-major)

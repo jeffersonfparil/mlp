@@ -201,11 +201,14 @@ compare_gp_or_remotesensing_analyses <- function(params) {
   if ((gsub("output-", "", params$id) != gsub(".tsv", "", unique(df_1$datasets))) || (gsub("output-", "", params$id) != gsub(".tsv", "", unique(df_2$datasets)))) {
     stop("Error: Dataset ID in linear and/or MLP results does not match the expected dataset ID.")
   }
-  png(params$fname_png, width = length(unique(df$models)) * 300)
+  png(params$fname_png, width = length(unique(df$models)) * 150, height = 600)
   par(mfrow=c(2, 1))
-  boxplot(corr ~ models, data = df, xlab = "", ylab = "Pearson's Correlation")
+  df_agg_corr <- aggregate(corr ~ models, data = df, FUN = mean)
+  df_agg_r2 <- aggregate(r2 ~ models, data = df, FUN = mean)
+  
+  boxplot(corr ~ models, data = df, xlab = "", ylab = "Pearson's Correlation", names = paste0(df_agg_corr[,1], "\n(corr=", round(100*df_agg_corr[,2]), "%)"))
   grid()
-  boxplot(r2 ~ models, data = df, xlab = "", ylab = "Coefficient of Determination (R²)")
+  boxplot(r2 ~ models, data = df, xlab = "", ylab = "Coefficient of Determination (R²)", names = paste0(df_agg_r2[,1], "\n(r2=", round(100*df_agg_r2[,2]), "%)"))
   grid()
   dev.off()
   write.table(df, params$fname_tsv, sep = "\t", row.names = FALSE, quote = FALSE)

@@ -83,6 +83,10 @@ else
     N=$(echo $(cut -f1 $FNAME_INPUT | wc -l) - 1 | bc)
     M=$(echo "scale=0; $N / $N_FOLDS" | bc)
     P=$(head -n1 $FNAME_INPUT | cut -f2- | awk '{print NF}')
+    N_NODES=$(echo "$P / 2" | bc)
+    if [[ $N_NODES -gt 1024 ]]; then
+        N_NODES="1024"
+    fi
     BNAME_INPUT=$(basename $FNAME_INPUT)
     BNAME_OUTPUT=$(echo $BNAME_INPUT | sed "s/.tsv$/-MLP.tsv/g")
     BNAME_OUTPUT="output-${BNAME_OUTPUT}"
@@ -122,6 +126,7 @@ else
                 -o ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
                 --hyperparameter-optimisation \
+                --selection-hidden-layer-nodes=${N_NODES} \
                 --skip-marginals \
                 --do-not-save-network > ${FNAME_OUTPUT_CV}.log
             SELECTED_N_HIDDEN_LAYERS=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Layers: " | awk -F': '  '{print $2}')

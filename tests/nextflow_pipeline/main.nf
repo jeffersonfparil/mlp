@@ -36,10 +36,6 @@ def generate_gp_params() {
     }.flatten().collate(4)
 }
 
-def get_analysis_type(filename) {
-    filename.contains('simulated-YEARS') || filename.contains('australia.soybean') ? 'trials' : 'gp'
-}
-
 workflow {
     trials_simulated = Channel.fromList(generate_trials_params())
         | simulate_trials

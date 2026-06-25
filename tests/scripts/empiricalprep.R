@@ -2,7 +2,6 @@ args = commandArgs(trailingOnly=TRUE)
 
 if (args[1] == "-h" || args[1] == "--help") {
   cat("This script prepares empirical datasets for testing the modeling functions. It takes an input file, identifies the response and explanatory variables, and creates output files in a standardized format for analysis. The script can handle both trial data and genotype-phenotype data.\n")
-  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
   cat("1. ANALYSIS_TYPE: 'trials' or 'gp'.\n")
   cat("- For trials and gp analyses:\n")
   cat("2. FNAME_INPUT: path to the input file for the analysis:\n")

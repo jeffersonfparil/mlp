@@ -1,6 +1,5 @@
 args <- commandArgs(trailingOnly = TRUE)
 if (args[1] == "-h" || args[1] == "--help") {
-  cat("Usage: Rscript empiricalprep.R ANALYSIS_TYPE FNAME_INPUT DIRNAME_OUTPUT\n")
   cat("Arguments:\n")
   cat("\t1. ANALYSIS_TYPE:\n")
   cat("\t\t+ 'trials' for extracting marginal effects of each genotype, or\n")
