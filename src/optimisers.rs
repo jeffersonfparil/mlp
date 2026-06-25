@@ -51,6 +51,7 @@ pub struct OptimisationParameters {
     pub second_moments_of_weights_per_layer: Vec<Matrix>,
     pub first_moments_of_biases_per_layer: Vec<Matrix>,
     pub second_moments_of_biases_per_layer: Vec<Matrix>,
+    pub use_pc_rotation_as_input_layer: bool,
 }
 
 impl fmt::Display for OptimisationParameters {
@@ -72,6 +73,7 @@ impl fmt::Display for OptimisationParameters {
                 - second_moments_of_weights_per_layer: [{}, ..., {}]
                 - first_moments_of_biases_per_layer: [{}, ..., {}]
                 - second_moments_of_biases_per_layer: [{}, ..., {}]
+                - use_pc_rotation_as_input_layer: {}
             ",
             self.optimiser,
             self.n_epochs,
@@ -95,6 +97,7 @@ impl fmt::Display for OptimisationParameters {
             self.second_moments_of_biases_per_layer[0],
             self.second_moments_of_biases_per_layer
                 [self.second_moments_of_biases_per_layer.len() - 1],
+            self.use_pc_rotation_as_input_layer,
         )
     }
 }
@@ -309,6 +312,7 @@ impl OptimisationParameters {
             second_moments_of_weights_per_layer: second_moments_of_weights_per_layer,
             first_moments_of_biases_per_layer: first_moments_of_biases_per_layer,
             second_moments_of_biases_per_layer: second_moments_of_biases_per_layer,
+            use_pc_rotation_as_input_layer: false,
         };
         Ok(out)
     }

@@ -238,9 +238,9 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuScalarMatMul", SCALARMATMUL)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&s);
         builder.arg(&self.data);
@@ -250,8 +250,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -259,16 +259,16 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn elementwisematinverse(self: &Self) -> Result<Self, Box<dyn Error>> {
         let f: CudaFunction = self.get_cached_kernel("cuElementwiseMatInverse", ELEMENTWISEMATINVERSE)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&mut out_dev);
@@ -277,8 +277,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -286,16 +286,16 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn elementwisematpower(self: &Self, power: f32) -> Result<Self, Box<dyn Error>> {
         let f: CudaFunction = self.get_cached_kernel("cuElementwiseMatPower", ELEMENTWISEMATPOWER)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&power);
         builder.arg(&self.data);
@@ -305,8 +305,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -314,7 +314,7 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn elementwisematmul(self: &Self, b: &Self) -> Result<Self, Box<dyn Error>> {
@@ -327,9 +327,9 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuElementwiseMatMul", ELEMENTWISEMATMUL)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -339,8 +339,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -348,7 +348,7 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn rowmatmul(self: &Self, b: &Self) -> Result<Self, Box<dyn Error>> {
@@ -361,9 +361,9 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuRowMatMul", ROWMATMUL)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -373,8 +373,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -382,7 +382,7 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn colmatmul(self: &Self, b: &Self) -> Result<Self, Box<dyn Error>> {
@@ -395,9 +395,9 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuColMatMul", COLMATMUL)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -407,8 +407,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -416,7 +416,7 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn matmul(self: &Self, b: &Self) -> Result<Self, Box<dyn Error>> {
@@ -429,10 +429,10 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuMatMul", MATMUL)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_rows: u32 = self.n_rows as u32;
-        let n_cols: u32 = b.n_cols as u32;
-        let p: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+        let n_rows: usize = self.n_rows;
+        let n_cols: usize = b.n_cols;
+        let p: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_rows * n_cols];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -443,8 +443,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_cols as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_rows as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -452,7 +452,7 @@ impl Matrix {
         unsafe {
             let _ = builder.launch(cfg);
         };
-        Ok(Self::new(out_dev, n_rows as usize, n_cols as usize)?)
+        Ok(Self::new(out_dev, n_rows, n_cols)?)
     }
 
     pub fn matmult0(self: &Self, b: &Self) -> Result<Self, Box<dyn Error>> {
@@ -465,10 +465,10 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuMatMulT0", MATMULT0)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let p_a: u32 = self.n_cols as u32;
-        let p_b: u32 = b.n_cols as u32;
-        let n: u32 = self.n_rows as u32;
-        let out: Vec<f32> = vec![0.0; (p_a * p_b) as usize];
+        let p_a: usize = self.n_cols;
+        let p_b: usize = b.n_cols;
+        let n: usize = self.n_rows;
+        let out: Vec<f32> = vec![0.0; p_a * p_b];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -479,8 +479,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (p_b + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (p_a + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((p_b as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((p_a as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -501,10 +501,10 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuMatMul0T", MATMUL0T)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let n_a: u32 = self.n_rows as u32;
-        let n_b: u32 = b.n_rows as u32;
-        let p: u32 = self.n_cols as u32;
-        let out: Vec<f32> = vec![0.0; (n_a * n_b) as usize];
+        let n_a: usize = self.n_rows;
+        let n_b: usize = b.n_rows;
+        let p: usize = self.n_cols;
+        let out: Vec<f32> = vec![0.0; n_a * n_b];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -515,8 +515,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_b + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (n_a + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_b as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_a as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
@@ -537,10 +537,10 @@ impl Matrix {
         let f: CudaFunction = self.get_cached_kernel("cuMatMulTT", MATMULTT)?;
         let stream: Arc<CudaStream> = self.data.context().default_stream();
         let mut builder: LaunchArgs = stream.launch_builder(&f);
-        let p_a: u32 = self.n_cols as u32;
-        let n_b: u32 = b.n_rows as u32;
-        let m: u32 = self.n_rows as u32;
-        let out: Vec<f32> = vec![0.0; (p_a * n_b) as usize];
+        let p_a: usize = self.n_cols;
+        let n_b: usize = b.n_rows;
+        let m: usize = self.n_rows;
+        let out: Vec<f32> = vec![0.0; p_a * n_b];
         let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
         builder.arg(&self.data);
         builder.arg(&b.data);
@@ -551,8 +551,8 @@ impl Matrix {
         let cfg = LaunchConfig {
             block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
             grid_dim: (
-                (n_b + BLOCK_SIZE - 1) / BLOCK_SIZE,
-                (p_a + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((n_b as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                ((p_a as u32) + BLOCK_SIZE - 1) / BLOCK_SIZE,
                 1,
             ),
             shared_mem_bytes: 0,
