@@ -3,7 +3,8 @@ use crate::costs::Cost;
 use crate::network::{Network, WeightsInitialisation};
 use crate::optimisers::{OptimisationParameters, Optimiser};
 use crate::progress_bar::ProgressBar;
-use crate::eigen::Eigen;
+use crate::linalg::matrix::Matrix;
+use crate::linalg::eigen::Eigen;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 // use rand_distr::weighted::Weight;
@@ -252,6 +253,7 @@ impl Network {
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
         n_batches: &str,
+        verbose: bool,
     ) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
         let mut epochs: Vec<f64> = Vec::new();
         let mut costs: Vec<f64> = Vec::new();
@@ -285,11 +287,21 @@ impl Network {
             }
         } else {
             let input_layer: Matrix = self.activations_per_layer[1].transpose()?;
-            let num_pcs: usize = input_layer.ncols
+            let num_pcs: usize = if input_layer.n_cols < 50 {
+                input_layer.n_cols
+            } else {
+                50
+            };
             let max_iter: usize = 100;
             let tol: f32 = 1e-5;
-            let pca: Eigen = input_layer.principal_components()?
-        }
+            let pca: Eigen = input_layer.principal_components(num_pcs, max_iter, tol)?;
+
+            // TEMP
+            if n_validation > 0 {
+                (self.slice(&validation_indexes)?,  self.slice(&training_indexes)?)
+            } else {
+                (self.slice(&vec![0])?, self.slice(&training_indexes)?)
+            }
         };
         // Pre-training burn-in epochs
         let mut pb = ProgressBar::new(optimisation_parameters.n_burnin_epochs, 50, format!("Burn-in {} epochs", optimisation_parameters.n_burnin_epochs));
@@ -298,9 +310,13 @@ impl Network {
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
             network_training.predict()?;
-            pb.next();
+            if verbose {
+                pb.next();
+            }
         }
-        pb.finish();
+        if verbose {
+            pb.finish();
+        }
         // Training after burn-in
         let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
         for epoch in 0..optimisation_parameters.n_epochs {
@@ -318,7 +334,9 @@ impl Network {
                 costs.push(network_training.loss()? as f64);
             }
             // Update the network after training the training network
-            pb.next();
+            if verbose {
+                pb.next();
+            }
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
                 // println!("Early stopping at epoch {}", epoch);
@@ -327,7 +345,9 @@ impl Network {
        }
         // Update the network after training the training network
         self.replace_model(&network_training)?;
-        pb.finish();
+        if verbose {
+            pb.finish();
+        }
         self.predict()?;
         self.n_epochs = epochs.len();
         Ok((epochs, costs))
@@ -352,7 +372,7 @@ impl Network {
         let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = if optimisation_parameters.n_batches == 1 {
             // Only one batch, train on the whole dataset
             let mut params = optimisation_parameters.clone();
-            let (epochs, costs) = self.train_per_batch(&mut params, "1")?;
+            let (epochs, costs) = self.train_per_batch(&mut params, "1", verbose)?;
             // self.predict()?;
             (vec![epochs], vec![costs])
         } else {
@@ -382,7 +402,7 @@ impl Network {
                         );
                     }
                     let mut params = optimisation_parameters.clone();
-                    let result = network.train_per_batch(&mut params, &format!("{}", n));
+                    let result = network.train_per_batch(&mut params, &format!("{}", n), verbose);
                     match result {
                         Ok((epochs_batch, costs_batch)) => {
                             // epochs.lock().unwrap().push(epochs_batch);
@@ -736,7 +756,7 @@ mod tests {
         println!("cost prior to training = {}", cost_prior_to_training);
         println!("predictions before training: {}", network.targets);
         for _ in 0..7 {
-            network.train_per_batch(&mut optimisation_parameters, "1")?;
+            network.train_per_batch(&mut optimisation_parameters, "1", false)?;
         }
         println!("cost after training = {}", network.loss()?);
         println!("predictions after training: {}", network.targets);
@@ -768,7 +788,7 @@ mod tests {
         let selection_optimisers = vec![Optimiser::GradientDescent];
         let selection_weights_initialisations = vec![WeightsInitialisation::He, WeightsInitialisation::Cauchy];
         
-        let verbose = true;
+        let verbose = false;
         let network_hyper_optimised = network.hyperoptimise(
             &selection_hidden_layers,
             &selection_hidden_layer_nodes,

@@ -45,6 +45,13 @@ impl Matrix {
         Ok(out)
     }
 
+    pub fn to_host(&self) -> Result<Vec<f32>, Box<dyn Error>> {
+        let mut vec_host: Vec<f32> = vec![0.0; self.n_rows * self.n_cols];
+        let stream = self.data.context().default_stream();
+        stream.memcpy_dtoh(&self.data, &mut vec_host)?;
+        Ok(vec_host)
+    }
+
     pub fn slice(
         self: &Self,
         row_indexes: &Vec<usize>,
@@ -52,15 +59,9 @@ impl Matrix {
     ) -> Result<Self, Box<dyn Error>> {
         let n_rows = row_indexes.len();
         let n_cols = col_indexes.len();
-        let mut destination: Vec<f32> = vec![0.0; n_rows * n_cols];
         let stream = self.data.context().default_stream();
-        let mut source: Vec<f32> = vec![0.0; self.n_rows * self.n_cols];
-        stream.memcpy_dtoh(&self.data, &mut source)?;
-        // for (i, &row_idx) in row_indexes.iter().enumerate() {
-        //     for (j, &col_idx) in col_indexes.iter().enumerate() {
-        //         destination[i * n_cols + j] = source[row_idx * self.n_cols + col_idx];
-        //     }
-        // }
+        let source: Vec<f32> = self.to_host()?;
+        let mut destination: Vec<f32> = vec![0.0; n_rows * n_cols];
         destination
         .par_chunks_mut(n_cols)
         .zip(row_indexes.par_iter())
@@ -74,12 +75,24 @@ impl Matrix {
         Ok(Matrix::new(data_dev, n_rows, n_cols)?)
     }
 
-    pub fn to_host(&self) -> Result<Vec<f32>, Box<dyn Error>> {
-        let mut vec_host: Vec<f32> = vec![0.0; self.n_rows * self.n_cols];
+    // Try to avoid transposing this way as this is memory expensive as we create a new Matrix
+    pub fn transpose(&self) -> Result<Matrix, Box<dyn Error>> {
+        let n_rows = self.n_cols;
+        let n_cols = self.n_rows;
         let stream = self.data.context().default_stream();
-        stream.memcpy_dtoh(&self.data, &mut vec_host)?;
-        Ok(vec_host)
+        let source: Vec<f32> = self.to_host()?;
+        let mut destination: Vec<f32> = vec![0.0; n_rows * n_cols];
+        for i in 0..self.n_rows {
+            for j in 0..self.n_cols {
+                let idx_src = i * self.n_cols;
+                let idx_des = j * self.n_rows;
+                destination[idx_des + i] = source[idx_src + j];
+            }
+        }
+        let data_dev: CudaSlice<f32> = stream.clone_htod(&destination)?;
+        Ok(Matrix::new(data_dev, n_rows, n_cols)?)
     }
+
 }
 
 impl fmt::Display for Matrix {
@@ -494,6 +507,18 @@ mod tests {
         MatrixError::OutOfMemory("Test error".to_string());
         MatrixError::CompileError("Test error".to_string());
         MatrixError::OtherError("Test error".to_string());
+
+
+        let a_matrix_transposed = a_matrix.transpose()?;
+        println!("a_matrix: {}", a_matrix);
+        println!("a_matrix_transposed: {}", a_matrix_transposed);
+        for i in 0..a_matrix.n_rows {
+            for j in 0..a_matrix.n_cols {
+                let x = a_matrix.slice(&vec![i], &vec![j])?.to_host()?[0];
+                let y = a_matrix_transposed.slice(&vec![j], &vec![i])?.to_host()?[0];
+                assert_eq!(x, y);
+            }
+        }
 
         Ok(())
     }

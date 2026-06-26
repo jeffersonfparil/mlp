@@ -51,3 +51,38 @@ params {
     seed = 42
     verbose   = "TRUE"
 }
+
+executor {
+    name = 'slurm'
+    queueSize = 50
+    submitRateLimit = '10/1s'
+}
+
+executor {
+    name = 'local'
+    cpus = 24
+    memory = '100 GB'
+}
+
+process {
+    executor = 'slurm'
+    clusterOptions = '--account=dbiof2'
+    // executor = 'local'
+
+    // Defaults
+    queue  = 'batch'
+    cpus   = 4
+    memory = '50 GB'
+    time   = '7d'
+
+    withLabel: 'gpu' {
+        queue  = 'gpu'
+        cpus   = 1
+        memory = '100 GB'
+        time   = '7d'
+        clusterOptions = '--account=dbiof2 --gres=gpu:h100:1'
+    }
+
+    // Critical: hook the Pixi environment into every Slurm job step
+    beforeScript = 'eval "$(pixi shell-hook)"' // Will use ${HOME}/Documents/mlp/pixi.toml
+}

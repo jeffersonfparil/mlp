@@ -337,10 +337,7 @@ mkdir logs
 pixi run nextflow run nextflow_pipeline/main.nf \
     -c nextflow_pipeline/params_test.config \
     -resume \
-    -with-trace logs/trace.txt \
-    -with-report logs/report.html \
-    -with-timeline logs/timeline.txt \
-    -with-dag logs/flowchart.dot
+
 pixi run dot -Tsvg logs/flowchart.dot > logs/flowchart.svg
 ```
 

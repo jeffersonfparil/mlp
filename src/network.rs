@@ -1,5 +1,6 @@
 use crate::activations;
 use crate::costs;
+use crate::linalg::eigen::Eigen;
 use crate::linalg::matrix::Matrix;
 // use crate::progress_bar;
 // use crate::progress_bar::ProgressBar;
@@ -63,6 +64,7 @@ pub struct Network {
     pub weights_initialisation: WeightsInitialisation, // weights initialisation
     pub n_epochs: usize,                               // number of epochs ran
     pub seed: usize,                                   // random seed for reproducibility
+    // pub eigen: Eigen,                                  // eigendecomposition of the transpose of the input layer
 }
 
 impl fmt::Display for Network {
