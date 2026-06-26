@@ -173,7 +173,7 @@ struct Args {
     #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
     selection_hidden_layers: Vec<usize>,
 
-    /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of observations whichever is smaller)
+    /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of features whichever is smaller)
     #[arg(
         long,
         value_parser,
@@ -687,13 +687,13 @@ fn train_with_hyperparameter_optimisation(
         v
     };
     // Vector of number of nodes per hidden layer for hyperparameter optimisation.
-    // Defaults to 1,024 or half the number of observations whichever is smaller.
+    // Defaults to 1,024 or half the number of features whichever is smaller.
     let selection_hidden_layer_nodes: Vec<usize> = match &args.selection_hidden_layer_nodes {
         Some(x) => x.to_owned(),
         None => {
-            let n = network.activations_per_layer[0].n_cols; // number of observations
+            let n = network.activations_per_layer[0].n_rows; // number of features
             let n_hidden_nodes = n / 2;
-            let n_hidden_nodes_max = 1024;
+            let n_hidden_nodes_max = 1_024;
             if n_hidden_nodes < n_hidden_nodes_max {
                vec![n_hidden_nodes] 
             } else {
