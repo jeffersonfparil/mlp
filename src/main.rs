@@ -169,20 +169,19 @@ struct Args {
     #[arg(long, action)]
     hyperparameter_optimisation: bool,
 
-    /// Vector of number of hidden layers for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of number of hidden layers for hyperparameter optimisation
     #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
     selection_hidden_layers: Vec<usize>,
 
-    /// Vector of number of nodes per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of observations whichever is smaller)
     #[arg(
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1024"
     )]
-    selection_hidden_layer_nodes: Vec<usize>,
+    selection_hidden_layer_nodes: Option<Vec<usize>>,
 
-    /// Vector of dropout rates per hidden layer for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of dropout rates per hidden layer for hyperparameter optimisation
     #[arg(
         long,
         value_parser=parse_bound_f32,
@@ -191,7 +190,7 @@ struct Args {
     )]
     selection_dropout_rates: Vec<f32>,
 
-    /// Vector of learning rates for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of learning rates for hyperparameter optimisation
     #[arg(
         long,
         value_parser=parse_bound_f32,
@@ -200,15 +199,15 @@ struct Args {
     )]
     selection_learning_rates: Vec<f32>,
 
-    /// Vector of maximum number of training epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
+    /// Vector of maximum number of training epochs for hyperparameter optimisation
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000,1000")]
     selection_n_epochs: Vec<usize>,
 
-    /// Vector of burnin epochs for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of burnin epochs for hyperparameter optimisation
     #[arg(long, value_parser, value_delimiter = ',', default_value = "0")]
     selection_n_burnin_epochs: Vec<usize>,
 
-    /// Vector of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation
     #[arg(
         long,
         value_parser=parse_bound_f32,
@@ -222,11 +221,11 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1"
+        default_value = "0.0"
     )]
     selection_f_validation: Vec<f32>,
 
-    /// Vector of number of batches to split the dataset for hyperparameter optimisation (elements correspond to minimum, maximum and step size)
+    /// Vector of number of batches to split the dataset for hyperparameter optimisation
     #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
     selection_n_batches: Vec<usize>,
 
@@ -243,7 +242,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,AdamMax"
+        default_value = "Adam"
     )]
     selection_optimisers: Vec<String>,
 
@@ -687,9 +686,24 @@ fn train_with_hyperparameter_optimisation(
         }
         v
     };
+    // Vector of number of nodes per hidden layer for hyperparameter optimisation.
+    // Defaults to 1,024 or half the number of observations whichever is smaller.
+    let selection_hidden_layer_nodes: Vec<usize> = match &args.selection_hidden_layer_nodes {
+        Some(x) => x.to_owned(),
+        None => {
+            let n = network.activations_per_layer[0].n_cols; // number of observations
+            let n_hidden_nodes = n / 2;
+            let n_hidden_nodes_max = 1024;
+            if n_hidden_nodes < n_hidden_nodes_max {
+               vec![n_hidden_nodes] 
+            } else {
+                vec![n_hidden_nodes_max]
+            }
+        },
+    };
     let network_hyper_optimised = network.hyperoptimise(
         &args.selection_hidden_layers,
-        &args.selection_hidden_layer_nodes,
+        &selection_hidden_layer_nodes,
         &args.selection_dropout_rates,
         &args.selection_learning_rates,
         &args.selection_n_epochs,

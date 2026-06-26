@@ -251,6 +251,7 @@ impl Network {
         self: &mut Self,
         optimisation_parameters: &mut OptimisationParameters,
         n_batches: &str,
+        verbose: bool,
     ) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
         let mut epochs: Vec<f64> = Vec::new();
         let mut costs: Vec<f64> = Vec::new();
@@ -286,9 +287,13 @@ impl Network {
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
             network_training.predict()?;
-            pb.next();
+            if verbose {
+                pb.next();
+            }
         }
-        pb.finish();
+        if verbose {
+            pb.finish();
+        }
         // Training after burn-in
         let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
         for epoch in 0..optimisation_parameters.n_epochs {
@@ -306,7 +311,9 @@ impl Network {
                 costs.push(network_training.loss()? as f64);
             }
             // Update the network after training the training network
-            pb.next();
+            if verbose {
+                pb.next();
+            }
             // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
             if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
                 // println!("Early stopping at epoch {}", epoch);
@@ -315,7 +322,9 @@ impl Network {
        }
         // Update the network after training the training network
         self.replace_model(&network_training)?;
-        pb.finish();
+        if verbose {
+            pb.finish();
+        }
         self.predict()?;
         self.n_epochs = epochs.len();
         Ok((epochs, costs))
@@ -340,7 +349,7 @@ impl Network {
         let (epochs, costs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = if optimisation_parameters.n_batches == 1 {
             // Only one batch, train on the whole dataset
             let mut params = optimisation_parameters.clone();
-            let (epochs, costs) = self.train_per_batch(&mut params, "1")?;
+            let (epochs, costs) = self.train_per_batch(&mut params, "1", verbose)?;
             // self.predict()?;
             (vec![epochs], vec![costs])
         } else {
@@ -370,7 +379,7 @@ impl Network {
                         );
                     }
                     let mut params = optimisation_parameters.clone();
-                    let result = network.train_per_batch(&mut params, &format!("{}", n));
+                    let result = network.train_per_batch(&mut params, &format!("{}", n), verbose);
                     match result {
                         Ok((epochs_batch, costs_batch)) => {
                             // epochs.lock().unwrap().push(epochs_batch);
@@ -724,7 +733,7 @@ mod tests {
         println!("cost prior to training = {}", cost_prior_to_training);
         println!("predictions before training: {}", network.targets);
         for _ in 0..7 {
-            network.train_per_batch(&mut optimisation_parameters, "1")?;
+            network.train_per_batch(&mut optimisation_parameters, "1", false)?;
         }
         println!("cost after training = {}", network.loss()?);
         println!("predictions after training: {}", network.targets);
@@ -734,9 +743,9 @@ mod tests {
         let mut network_epochs_200 = network.clone();
         optimisation_parameters.n_batches = 1;
         optimisation_parameters.n_epochs = 5;
-        network_epochs_5.train(&mut optimisation_parameters, true)?;
+        network_epochs_5.train(&mut optimisation_parameters, false)?;
         optimisation_parameters.n_epochs = 200;
-        network_epochs_200.train(&mut optimisation_parameters, true)?;
+        network_epochs_200.train(&mut optimisation_parameters, false)?;
         println!("cost after training for 5 epochs = {}", network_epochs_5.loss()?);
         println!("cost after training for 200 epochs = {}", network_epochs_200.loss()?);
         assert!(network_epochs_5.loss()? > network_epochs_200.loss()?);
@@ -756,7 +765,7 @@ mod tests {
         let selection_optimisers = vec![Optimiser::GradientDescent];
         let selection_weights_initialisations = vec![WeightsInitialisation::He, WeightsInitialisation::Cauchy];
         
-        let verbose = true;
+        let verbose = false;
         let network_hyper_optimised = network.hyperoptimise(
             &selection_hidden_layers,
             &selection_hidden_layer_nodes,
