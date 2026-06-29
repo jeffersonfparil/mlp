@@ -333,14 +333,9 @@ pixi global install -c conda-forge -c bioconda nextflow
 ### On a single machine or one HPC node for testing:
 ```shell
 cd mlp/tests
-mkdir logs
 pixi run nextflow run nextflow_pipeline/main.nf \
-    -c nextflow_pipeline/params_test.config \
+    -c nextflow_pipeline/nextflow_test.config \
     -resume \
-    -with-trace logs/trace.txt \
-    -with-report logs/report.html \
-    -with-timeline logs/timeline.txt \
-    -with-dag logs/flowchart.dot
 pixi run dot -Tsvg logs/flowchart.dot > logs/flowchart.svg
 ```
 

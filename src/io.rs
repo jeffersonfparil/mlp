@@ -1194,7 +1194,7 @@ mod tests {
         // Marginals
         let mut marginals = Marginals::new(data.feature_names.clone(), 3)?;
         let number_of_values_for_interpolate_between_min_and_max: usize = 10;
-        marginals.estimate_perturb(&mut network, number_of_values_for_interpolate_between_min_and_max, true)?;
+        marginals.estimate_perturb(&mut network, number_of_values_for_interpolate_between_min_and_max, false)?;
         marginals.write_delimited("test_marginals.tsv", "\t")?;
         let marginals_reloaded = Marginals::read_delimited("test_marginals.tsv", "\t")?;
         // println!("marginals: {:?}", marginals);
