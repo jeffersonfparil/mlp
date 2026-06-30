@@ -114,8 +114,10 @@ else
             VALIDATION_IDX=$(head -n${IDX_RANDOMISATION} $FNAME_RANDOMISATION | tail -n1)
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/TRAINING_SET.tmp
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/VALIDATION_SET.tmp
-            awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
-            awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            # awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            # awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            printf '%s\n' "$TRAINING_IDX" | tr ',' '\n' | awk 'NR==FNR { b[$1+1]=1; next } FNR in b' - "$FNAME_INPUT" >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            printf '%s\n' "$VALIDATION_IDX" | tr ',' '\n' | awk 'NR==FNR { b[$1+1]=1; next } FNR in b' - "$FNAME_INPUT" >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
             # Fit with hyperparameter optimisation for optimiser, and weights initialisation
             ${MLP} \
                 -f ${TMP_OUTDIR}/TRAINING_SET.tmp \
