@@ -201,7 +201,7 @@ compare_gp_or_remotesensing_analyses <- function(params) {
   if ((gsub("output-", "", params$id) != gsub(".tsv", "", unique(df_1$datasets))) || (gsub("output-", "", params$id) != gsub(".tsv", "", unique(df_2$datasets)))) {
     stop("Error: Dataset ID in linear and/or MLP results does not match the expected dataset ID.")
   }
-  png(params$fname_png, width = length(unique(df$models)) * 300)
+  png(params$fname_png, width = length(unique(df$models)) * 150)
   par(mfrow=c(2, 1))
   boxplot(corr ~ models, data = df, xlab = "", ylab = "Pearson's Correlation")
   grid()
