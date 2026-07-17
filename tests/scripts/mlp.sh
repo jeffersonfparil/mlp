@@ -71,11 +71,11 @@ else
     N_FOLDS=$7
     # MLP=${HOME}/Documents/mlp/target/release/mlp
     # ANALYSIS_TYPE=gp
-    # FNAME_INPUT=${HOME}/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv
-    # DIRNAME_OUTPUT=${HOME}/Documents/mlp/tests/tmp/gp
-    # FNAME_RANDOMISATION=${HOME}/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANDOMISATION.tsv
-    # N_REPS=2
-    # N_FOLDS=2
+    # FNAME_INPUT=${HOME}/Documents/mlp/tests/output/gp/soy-HT.tsv
+    # DIRNAME_OUTPUT=${HOME}/Documents/mlp/tests/output/gp
+    # FNAME_RANDOMISATION=${HOME}/Documents/mlp/tests/output/gp/output-soy-HT-RANDOMISATION.tsv
+    # N_REPS=5
+    # N_FOLDS=10
     if [[ -z $FNAME_RANDOMISATION ]]; then echo "Error: Missing argument for path to the file containing randomisation indices (FNAME_RANDOMISATION)."; exit 1; fi
     if [[ ! -f $FNAME_RANDOMISATION ]]; then echo "Error: Randomisation file not found at the specified path: '${FNAME_RANDOMISATION}'."; exit 1; fi
     if [[ -z $N_REPS ]]; then echo "Error: Missing argument for number of replications of k-fold cross-validation (N_REPS)."; exit 1; fi
