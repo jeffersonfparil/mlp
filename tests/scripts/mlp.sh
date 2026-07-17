@@ -71,11 +71,11 @@ else
     N_FOLDS=$7
     # MLP=${HOME}/Documents/mlp/target/release/mlp
     # ANALYSIS_TYPE=gp
-    # FNAME_INPUT=${HOME}/Documents/mlp/tests/tmp/gp/simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1.tsv
-    # DIRNAME_OUTPUT=${HOME}/Documents/mlp/tests/tmp/gp
-    # FNAME_RANDOMISATION=${HOME}/Documents/mlp/tests/tmp/gp/output-simulated-DATA_TYPE_BINARY-N_500-P_1000-HIDDEN_LAYERS_1-RANDOMISATION.tsv
-    # N_REPS=2
-    # N_FOLDS=2
+    # FNAME_INPUT=${HOME}/Documents/mlp/tests/output/gp/soy-HT.tsv
+    # DIRNAME_OUTPUT=${HOME}/Documents/mlp/tests/output/gp
+    # FNAME_RANDOMISATION=${HOME}/Documents/mlp/tests/output/gp/output-soy-HT-RANDOMISATION.tsv
+    # N_REPS=5
+    # N_FOLDS=10
     if [[ -z $FNAME_RANDOMISATION ]]; then echo "Error: Missing argument for path to the file containing randomisation indices (FNAME_RANDOMISATION)."; exit 1; fi
     if [[ ! -f $FNAME_RANDOMISATION ]]; then echo "Error: Randomisation file not found at the specified path: '${FNAME_RANDOMISATION}'."; exit 1; fi
     if [[ -z $N_REPS ]]; then echo "Error: Missing argument for number of replications of k-fold cross-validation (N_REPS)."; exit 1; fi
@@ -114,8 +114,10 @@ else
             VALIDATION_IDX=$(head -n${IDX_RANDOMISATION} $FNAME_RANDOMISATION | tail -n1)
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/TRAINING_SET.tmp
             head -n1 $FNAME_INPUT > ${TMP_OUTDIR}/VALIDATION_SET.tmp
-            awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
-            awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            # awk -v idx="$TRAINING_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            # awk -v idx="$VALIDATION_IDX" 'BEGIN {FS="\t"; OFS="\t"} { split(idx, a, ","); for (i in a) b[a[i]+1] } NR in b' $FNAME_INPUT >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            printf '%s\n' "$TRAINING_IDX" | tr ',' '\n' | awk 'NR==FNR { b[$1+1]=1; next } FNR in b' - "$FNAME_INPUT" >> ${TMP_OUTDIR}/TRAINING_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
+            printf '%s\n' "$VALIDATION_IDX" | tr ',' '\n' | awk 'NR==FNR { b[$1+1]=1; next } FNR in b' - "$FNAME_INPUT" >> ${TMP_OUTDIR}/VALIDATION_SET.tmp # Note that we add 1 to the indexes because the indexes start with 1 corresponding to the first line of the data file after the header line
             # Fit with hyperparameter optimisation for optimiser, and weights initialisation
             ${MLP} \
                 -f ${TMP_OUTDIR}/TRAINING_SET.tmp \

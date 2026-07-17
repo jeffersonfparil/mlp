@@ -14,7 +14,7 @@ def generate_trials_params() {
             params.n_treatments.collect { t ->
                 params.n_entries.collect { e ->
                     params.n_replications.collect { r ->
-                        params.n_hidden_layers.collect { h ->
+                        params.n_hidden_layers_trials.collect { h ->
                             tuple(y, s, t, e, r, h)
                         }
                     }
@@ -28,7 +28,7 @@ def generate_gp_params() {
     params.data_types.collect { d ->
         params.n_observations.collect { n ->
             params.n_features.collect { p ->
-                params.n_hidden_layers.collect { h ->
+                params.n_hidden_layers_gp.collect { h ->
                     tuple(d, n, p, h)
                 }
             }
