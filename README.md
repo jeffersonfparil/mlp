@@ -335,7 +335,7 @@ pixi global install -c conda-forge -c bioconda nextflow
 cd mlp/tests
 pixi run nextflow run nextflow_pipeline/main.nf \
     -c nextflow_pipeline/nextflow_test.config \
-    -resume \
+    -resume
 pixi run dot -Tsvg logs/flowchart.dot > logs/flowchart.svg
 ```
 
