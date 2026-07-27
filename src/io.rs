@@ -243,12 +243,12 @@ impl Data {
             let n_rows = network.weights_per_layer[i].n_rows;
             let n_cols = network.weights_per_layer[i].n_cols;
             let m = n_rows * n_cols;
-            let alpha = 1.5; //controls the power-law topology for realistic gene networks
+            let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
             let mut weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed + i)?; // dense continuous effects
-            let mut mask = vec![false; m]; // scale-free topology mask
+            let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
             for col in 0..n_cols {
                 let u: f32 = rng.random();
-                let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;
+                let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
                 let mut target_rows: Vec<usize> = (0..n_rows).collect();
                 for r in 0..degree {
                     let swap_idx = rng.gen_range(r..n_rows);
