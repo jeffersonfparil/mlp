@@ -452,7 +452,7 @@ impl Data {
                 let idx = i*k + j;
                 match &targets_data_tmp[idx] {
                     Value::Numeric(x) => {
-                        if (targets_levels[j].len() > 0) & (!targets_levels[j].contains(&x.to_string())) {
+                        if (targets_levels[j].len() > 0) && (!targets_levels[j].contains(&x.to_string())) {
                             targets_levels[j].push(x.to_string());
                         } else {
                             // Note: we assume that the first 100 elements of the non-numeric target variable cannot be parsed as numeric
@@ -480,7 +480,7 @@ impl Data {
                 let idx = i*p + j;
                 match &features_data_tmp[idx] {
                     Value::Numeric(x) => {
-                        if (features_levels[j].len() > 0) & (!features_levels[j].contains(&x.to_string())) {
+                        if (features_levels[j].len() > 0) && (!features_levels[j].contains(&x.to_string())) {
                             features_levels[j].push(x.to_string());
                         } else {
                             // Note: we assume that the first element of the non-numeric target variable cannot be parsed as numeric

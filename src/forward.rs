@@ -142,7 +142,7 @@ mod tests {
         let sum_4: f32 = network.predictions.summat()?;
         assert!(network.targets.n_cols == network.predictions.n_cols);
         println!("network.predictions: {}", network.predictions);
-        assert!((sum_3 == 0.0) & (sum_4 != 0.0));
+        assert!((sum_3 == 0.0) && (sum_4 != 0.0));
         Ok(())
     }
 
