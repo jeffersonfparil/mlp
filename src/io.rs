@@ -163,7 +163,7 @@ impl Data {
         for j in 0..p {
             feature_names.push(format!("fcon_{}", j));
             for _i in 0..n {
-                features_host.push( rng.gen::<f32>());
+                features_host.push(rng.random());
             }
         }
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
@@ -198,7 +198,7 @@ impl Data {
         // Dummy targets, i.e. prior to simulating the weights as the initiator for Network uses He initialisation (sampling from a normal distribution)
         if verbose {println!("(3/8) Simulating dummy targets...")}
         let time = Instant::now();
-        let targets_host: Vec<f32> = (0..(k*n)).map(|_|  rng.gen::<f32>()).collect();
+        let targets_host: Vec<f32> = (0..(k*n)).map(|_| rng.random()).collect();
         // println!("n = {}", n);
         // println!("p = {}", p);
         // println!("k = {}", k);
