@@ -501,7 +501,7 @@ impl Data {
         let m = targets_levels
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -512,7 +512,7 @@ impl Data {
             let m_tmp = targets_levels[0..(j+1)]
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -522,7 +522,7 @@ impl Data {
             // println!("m_tmp={}", m_tmp);
             for i in 0..n {
                 let idx_source = i*k + j;
-                if targets_levels[j].len() == 0 {
+                if targets_levels[j].is_empty() {
                     // Numerics
                     let idx_destination = (m_tmp-1)*n + i;
                     targets_data[idx_destination] = match &targets_data_tmp[idx_source] {
@@ -561,7 +561,7 @@ impl Data {
         let m = features_levels
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -572,7 +572,7 @@ impl Data {
             let m_tmp = features_levels[0..(j+1)]
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -582,7 +582,7 @@ impl Data {
             // println!("m_tmp={}", m_tmp);
             for i in 0..n {
                 let idx_source = i*p + j;
-                if features_levels[j].len() == 0 {
+                if features_levels[j].is_empty() {
                     // Numerics
                     let idx_destination = (m_tmp-1)*n + i;
                     features_data[idx_destination] = match &features_data_tmp[idx_source] {
@@ -624,7 +624,7 @@ impl Data {
         let mut feature_names: Vec<String> = Vec::with_capacity(p);
         for i in 0..target_names_tmp.len() {
             let name: String = target_names_tmp[i].to_owned();
-            if targets_levels[i].len() == 0 {
+            if targets_levels[i].is_empty() {
                 target_names.push(name);
             } else {
                 for j in 0..targets_levels[i].len() {
@@ -635,7 +635,7 @@ impl Data {
         }
         for i in 0..feature_names_tmp.len() {
             let name: String = feature_names_tmp[i].to_owned();
-            if features_levels[i].len() == 0 {
+            if features_levels[i].is_empty() {
                 feature_names.push(name);
             } else {
                 for j in 0..features_levels[i].len() {
