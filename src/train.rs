@@ -556,7 +556,7 @@ impl Network {
                 n_hidden_nodes,
                 dropout_rate,
                 learning_rate,
-                n_epochs,
+                network.n_epochs, // using the actual number epochs ran
                 n_burnin_epochs,
                 f_patient_epochs,
                 f_validation,
