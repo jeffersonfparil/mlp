@@ -520,3 +520,32 @@ module add R
 ```
 
 </details>
+
+## Run comparisons on an on-going/incomplete run
+
+```shell
+DIR=/home/jp3h/Documents/mlp/tests/output/gp
+RSCRIPT=/home/jp3h/Documents/mlp/tests/scripts/comparison.R
+cd $DIR
+
+for f_mlp in $(ls output-*-*-MLP.tsv)
+do
+    f_linear=$(echo $f_mlp | sed 's/-MLP/-LINEAR/g')
+    f_trees=$(echo $f_mlp | sed 's/-MLP/-TREES/g')
+    # echo $f_mlp
+    # echo $f_linear
+    # echo $f_trees
+    if [ -f  $f_linear ]
+    then
+        echo $f_linear
+        pixi run Rscript $RSCRIPT gp $f_mlp $f_linear .
+    fi
+    if [ -f  $f_trees ]
+    then
+        echo $f_trees
+        pixi run Rscript $RSCRIPT gp $f_mlp $f_trees .
+    fi
+done
+
+
+```
