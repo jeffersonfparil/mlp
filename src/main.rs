@@ -200,7 +200,7 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000,20000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -230,7 +230,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,Linear")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -242,7 +242,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,AdamMax,GradientDescent"
+        default_value = "Adam,GradientDescent"
     )]
     selection_optimisers: Vec<String>,
 
