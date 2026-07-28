@@ -530,11 +530,11 @@ impl Network {
         for i in 0..networks_per_batch.len() {
             n_epochs += networks_per_batch[i].n_epochs;
         }
+        // Use the mean number of epochs actually ran
         self.n_epochs = ((n_epochs as f64) / (networks_per_batch.len() as f64)).round() as usize;
         // Update predictions using the merged parameters
         self.predict()?;
         self.backpropagation()?; // to fill-up the gradients
-
         Ok(())
     }
 

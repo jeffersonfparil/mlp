@@ -93,7 +93,7 @@ impl fmt::Display for Matrix {
                 self.data.len(),
                 self.data.num_bytes(),
             )
-        } else if (self.n_rows >= 4) & (self.n_cols >= 4) {
+        } else if (self.n_rows >= 4) && (self.n_cols >= 4) {
             let idx_rows: Vec<usize> = vec![0, 1, 2, self.n_rows - 1];
             let idx_cols: Vec<usize> = vec![0, 1, 2, self.n_cols - 1];
 
@@ -131,7 +131,7 @@ impl fmt::Display for Matrix {
                 vec_host[14],
                 vec_host[15],
             )
-        } else if (self.n_rows >= 4) & (self.n_cols == 1) {
+        } else if (self.n_rows >= 4) && (self.n_cols == 1) {
             let idx_rows: Vec<usize> = vec![0, 1, 2, self.n_rows - 1];
             let idx_cols: Vec<usize> = vec![0];
             let for_printing: Matrix = match self.slice(&idx_rows, &idx_cols) {
@@ -154,7 +154,7 @@ impl fmt::Display for Matrix {
                 vec_host[2],
                 vec_host[3],
             )
-        } else if (self.n_rows == 1) & (self.n_cols >= 4) {
+        } else if (self.n_rows == 1) && (self.n_cols >= 4) {
             let idx_rows: Vec<usize> = vec![0];
             let idx_cols: Vec<usize> = vec![0, 1, 2, self.n_cols - 1];
             let for_printing: Matrix = match self.slice(&idx_rows, &idx_cols) {
@@ -177,7 +177,7 @@ impl fmt::Display for Matrix {
                 vec_host[2],
                 vec_host[3],
             )
-        } else if (self.n_rows == 3) & (self.n_cols == 3) {
+        } else if (self.n_rows == 3) && (self.n_cols == 3) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -199,7 +199,7 @@ impl fmt::Display for Matrix {
                 vec_host[7],
                 vec_host[8],
             )
-        } else if (self.n_rows == 3) & (self.n_cols == 2) {
+        } else if (self.n_rows == 3) && (self.n_cols == 2) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -218,7 +218,7 @@ impl fmt::Display for Matrix {
                 vec_host[4],
                 vec_host[5],
             )
-        } else if (self.n_rows == 3) & (self.n_cols == 1) {
+        } else if (self.n_rows == 3) && (self.n_cols == 1) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -234,7 +234,7 @@ impl fmt::Display for Matrix {
                 vec_host[1],
                 vec_host[2],
             )
-        } else if (self.n_rows == 2) & (self.n_cols == 3) {
+        } else if (self.n_rows == 2) && (self.n_cols == 3) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -253,7 +253,7 @@ impl fmt::Display for Matrix {
                 vec_host[4],
                 vec_host[5],
             )
-        } else if (self.n_rows == 1) & (self.n_cols == 3) {
+        } else if (self.n_rows == 1) && (self.n_cols == 3) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -269,7 +269,7 @@ impl fmt::Display for Matrix {
                 vec_host[1],
                 vec_host[2],
             )
-        } else if (self.n_rows == 2) & (self.n_cols == 2) {
+        } else if (self.n_rows == 2) && (self.n_cols == 2) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -286,7 +286,7 @@ impl fmt::Display for Matrix {
                 vec_host[2],
                 vec_host[3],
             )
-        } else if (self.n_rows == 2) & (self.n_cols == 1) {
+        } else if (self.n_rows == 2) && (self.n_cols == 1) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),
@@ -301,7 +301,7 @@ impl fmt::Display for Matrix {
                 vec_host[0],
                 vec_host[1],
             )
-        } else if (self.n_rows == 1) & (self.n_cols == 2) {
+        } else if (self.n_rows == 1) && (self.n_cols == 2) {
             let vec_host = match self.to_host() {
                 Ok(vec) => vec,
                 Err(_) => return write!(f, "Matrix data could not be copied to host for display."),

@@ -200,7 +200,7 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000,20000")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -230,7 +230,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,Linear")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -242,7 +242,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam"
+        default_value = "Adam,AdamMax,GradientDescent"
     )]
     selection_optimisers: Vec<String>,
 
@@ -392,7 +392,7 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
 fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> {
     // Simplifying the number of nodes and dropout rates is a single value was entered or left at default
     let n_hidden_layers: usize = args.n_hidden_layers;
-    let n_hidden_nodes: Vec<usize> = if (n_hidden_layers > 1) & (args.n_hidden_nodes.len() == 1) {
+    let n_hidden_nodes: Vec<usize> = if (n_hidden_layers > 1) && (args.n_hidden_nodes.len() == 1) {
         vec![args.n_hidden_nodes[0]; n_hidden_layers]
     } else {
         args.n_hidden_nodes.clone()
@@ -400,7 +400,7 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
     if n_hidden_nodes.len() != n_hidden_layers {
         return Err(Box::new(NetworkError::OtherError(format!("The number of supplied values of hidden nodes ({:?}) is not equal to the number of hidden layers ({})", n_hidden_nodes, n_hidden_layers))))
     }
-    let dropout_rates: Vec<f32> = if (n_hidden_layers > 1) & (args.dropout_rates.len() == 1) {
+    let dropout_rates: Vec<f32> = if (n_hidden_layers > 1) && (args.dropout_rates.len() == 1) {
         vec![args.dropout_rates[0]; n_hidden_layers]
     } else {
         args.dropout_rates.clone()

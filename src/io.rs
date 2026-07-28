@@ -243,9 +243,26 @@ impl Data {
             let n_rows = network.weights_per_layer[i].n_rows;
             let n_cols = network.weights_per_layer[i].n_cols;
             let m = n_rows * n_cols;
-            let weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed)?;
-            // let weights: Matrix = Matrix::new(stream.clone_htod(&weights_host)?, network.weights_per_layer[i].n_rows, network.weights_per_layer[i].n_cols)?;
-            // println!("i={}; weights={}", i, weights);
+            let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
+            let mut weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed + i)?; // dense continuous effects
+            let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
+            for col in 0..n_cols {
+                let u: f32 = rng.random();
+                let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
+                let mut target_rows: Vec<usize> = (0..n_rows).collect();
+                for r in 0..degree {
+                    let swap_idx = rng.gen_range(r..n_rows);
+                    target_rows.swap(r, swap_idx);
+                }
+                for &row in target_rows.iter().take(degree) { 
+                    mask[row * n_cols + col] = true; 
+                }
+            }
+            for (idx, w) in weights_host.iter_mut().enumerate() { 
+                if !mask[idx] { 
+                    *w = 0.0; 
+                } 
+            }
             network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
             network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
         }
@@ -452,7 +469,7 @@ impl Data {
                 let idx = i*k + j;
                 match &targets_data_tmp[idx] {
                     Value::Numeric(x) => {
-                        if (targets_levels[j].len() > 0) & (!targets_levels[j].contains(&x.to_string())) {
+                        if (targets_levels[j].len() > 0) && (!targets_levels[j].contains(&x.to_string())) {
                             targets_levels[j].push(x.to_string());
                         } else {
                             // Note: we assume that the first 100 elements of the non-numeric target variable cannot be parsed as numeric
@@ -480,7 +497,7 @@ impl Data {
                 let idx = i*p + j;
                 match &features_data_tmp[idx] {
                     Value::Numeric(x) => {
-                        if (features_levels[j].len() > 0) & (!features_levels[j].contains(&x.to_string())) {
+                        if (features_levels[j].len() > 0) && (!features_levels[j].contains(&x.to_string())) {
                             features_levels[j].push(x.to_string());
                         } else {
                             // Note: we assume that the first element of the non-numeric target variable cannot be parsed as numeric
@@ -501,7 +518,7 @@ impl Data {
         let m = targets_levels
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -512,7 +529,7 @@ impl Data {
             let m_tmp = targets_levels[0..(j+1)]
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -522,7 +539,7 @@ impl Data {
             // println!("m_tmp={}", m_tmp);
             for i in 0..n {
                 let idx_source = i*k + j;
-                if targets_levels[j].len() == 0 {
+                if targets_levels[j].is_empty() {
                     // Numerics
                     let idx_destination = (m_tmp-1)*n + i;
                     targets_data[idx_destination] = match &targets_data_tmp[idx_source] {
@@ -561,7 +578,7 @@ impl Data {
         let m = features_levels
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -572,7 +589,7 @@ impl Data {
             let m_tmp = features_levels[0..(j+1)]
             .iter()
             .fold(0, |sum, x| {
-                if x.len() == 0 {
+                if x.is_empty() {
                     sum + 1
                 } else {
                     sum + x.len()
@@ -582,7 +599,7 @@ impl Data {
             // println!("m_tmp={}", m_tmp);
             for i in 0..n {
                 let idx_source = i*p + j;
-                if features_levels[j].len() == 0 {
+                if features_levels[j].is_empty() {
                     // Numerics
                     let idx_destination = (m_tmp-1)*n + i;
                     features_data[idx_destination] = match &features_data_tmp[idx_source] {
@@ -624,7 +641,7 @@ impl Data {
         let mut feature_names: Vec<String> = Vec::with_capacity(p);
         for i in 0..target_names_tmp.len() {
             let name: String = target_names_tmp[i].to_owned();
-            if targets_levels[i].len() == 0 {
+            if targets_levels[i].is_empty() {
                 target_names.push(name);
             } else {
                 for j in 0..targets_levels[i].len() {
@@ -635,7 +652,7 @@ impl Data {
         }
         for i in 0..feature_names_tmp.len() {
             let name: String = feature_names_tmp[i].to_owned();
-            if features_levels[i].len() == 0 {
+            if features_levels[i].is_empty() {
                 feature_names.push(name);
             } else {
                 for j in 0..features_levels[i].len() {
