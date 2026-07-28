@@ -230,7 +230,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,Linear")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -242,7 +242,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam"
+        default_value = "Adam,AdamMax,GradientDescent"
     )]
     selection_optimisers: Vec<String>,
 
@@ -251,7 +251,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "He,StandardNormal"
+        default_value = "He"
     )]
     selection_weights_initialisations: Vec<String>,
 
