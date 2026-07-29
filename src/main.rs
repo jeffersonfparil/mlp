@@ -170,7 +170,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Vector of number of hidden layers for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2")]
     selection_hidden_layers: Vec<usize>,
 
     /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of features whichever is smaller)
@@ -199,8 +199,8 @@ struct Args {
     )]
     selection_learning_rates: Vec<f32>,
 
-    /// Vector of maximum number of training epochs for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000,20000")]
+    /// Vector of maximum number of training epochs for hyperparameter optimisaion
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "100,1000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -230,7 +230,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,Linear")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -242,7 +242,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,GradientDescent"
+        default_value = "Adam"
     )]
     selection_optimisers: Vec<String>,
 
