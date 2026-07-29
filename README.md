@@ -346,6 +346,57 @@ cd mlp/tests
 sbatch run_nextflow.sh
 ```
 
+## Analysis and results:
+
+Open julia via: `cd mlp/tests/; julia --project=. --threads=23,1`
+
+```julia
+using DataFrames, CSV, StatsBase, CairoMakie, ColorSchemes, ProgressMeter
+dir = "output/gp"
+# dir = "output-bk-20260728/gp"
+files = readdir(dir) |>
+    x -> filter(y -> !isnothing(match(Regex("^output-"), y)), x) |>
+    x -> filter(y -> !isnothing(match(Regex("LINEAR|MLP|TREES"), y)), x) |>
+    x -> filter(y -> isnothing(match(Regex("COMPARISON|RANDOMISATION"), y)), x) |>
+    x -> abspath.(joinpath.(dir, x))
+df = nothing
+pb = Progress(length(files), desc="Reading and merging the GP CV data...")
+for f in files
+    # f = files[1]
+    df_tmp = CSV.read(f, DataFrame)
+    select!(df_tmp, [:datasets, :reps, :folds, :nt, :nv, :models, :corr, :r2])
+    df = if isnothing(df)
+        df_tmp
+    else
+		vcat(df, df_tmp)
+	end
+	next!(pb)
+end
+finish!(pb)
+
+df_summary = DataFrame(datasets=unique(df.datasets), mlp_corr_delta = NaN)
+for (i, d) in enumerate(df_summary.datasets)
+	# i = 1; d = df_summary.datasets[i]
+	# i = 60; d = df_summary.datasets[i]
+	# d = "simulated-DATA_TYPE_CONTINUOUS-N_1000-P_10000-HIDDEN_LAYERS_2.tsv"
+	# d = "simulated-DATA_TYPE_CONTINUOUS-N_500-P_10000-HIDDEN_LAYERS_2.tsv"
+	# d = "spruce-DBH.tsv"
+	# filter(x -> !isnothing(match(Regex(d), x.datasets)), df) |> df -> combine(groupby(df, [:datasets, :models]), [:corr => mean => "corr"])
+	df_agg = filter(x -> !isnothing(match(Regex(d), x.datasets)), df) |> df -> combine(groupby(df, [:models]), [:corr => mean => "corr"])
+	bool_mlp = df_agg.models .== "mlp"
+	if sum(bool_mlp) == 0
+		continue
+    end
+	df_summary.mlp_corr_delta[i] = df_agg.corr[bool_mlp][1] - maximum(df_agg.corr[.!bool_mlp])
+	if argmax(df_agg.corr) == findfirst(bool_mlp)
+		println(d)
+	end
+end
+filter!(x -> !isnan(x.mlp_corr_delta), df_summary)
+sort!(df_summary, :mlp_corr_delta)
+```
+
+
 # Miscellaneous
 
 ## MLPInterrogator.jl
