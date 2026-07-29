@@ -236,9 +236,9 @@ const RELU_DERIVATIVE: &str = "
     }
 ";
 
-const LEAKYRELU: &str = "
+const ELU: &str = "
     extern \"C\" __global__ void cuLeakyReLU(float a, float* A, float* B, int n_rows, int n_cols) {
-        // Leaky rectified linear unit activation kernel implementation
+        // Exponential linear unit activation kernel implementation
         // Arguments:
         //  - a: slope of the function
         //  - A: input matrix (n_rows x n_cols)
@@ -255,15 +255,15 @@ const LEAKYRELU: &str = "
             if (A[idx] > 0) {
                 B[idx] = A[idx];
             } else {
-                B[idx] = a * A[idx];
+                B[idx] = expf(A[idx]) - 1.0;
             }
         }
     }
 ";
 
-const LEAKYRELU_DERIVATIVE: &str = "
+const ELU_DERIVATIVE: &str = "
     extern \"C\" __global__ void cuLeakyReLUDerivative(float a, float* A, float* B, int n_rows, int n_cols) {
-        // Leaky rectified linear unit activation derivative kernel implementation
+        // Exponential linear unit activation derivative kernel implementation
         // Arguments:
         //  - a: slope of the function
         //  - A: input matrix (n_rows x n_cols)
@@ -280,7 +280,7 @@ const LEAKYRELU_DERIVATIVE: &str = "
             if (A[idx] > 0) {
                 B[idx] = 1.0;
             } else {
-                B[idx] = a;
+                B[idx] = expf(A[idx]);
             }
         }
     }
@@ -504,8 +504,8 @@ pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 
 // Different function signatures as above:
 
-pub fn leakyrelu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLU", LEAKYRELU)?;
+pub fn elu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLU", ELU)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -532,8 +532,8 @@ pub fn leakyrelu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
     Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
 }
 
-pub fn leakyreluderivative(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLUDerivative", LEAKYRELU_DERIVATIVE)?;
+pub fn eluderivative(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLUDerivative", ELU_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -733,20 +733,20 @@ mod tests {
         );
 
         // Needs work because of the additional slope parameter
-        let matrix_7 = leakyrelu(&a_matrix, 0.1)?;
+        let matrix_7 = elu(&a_matrix, 0.1)?;
         stream.memcpy_dtoh(&matrix_7.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
-        println!("After `leakyrelu`: a_host {:?}", a_host);
+        println!("After `elu`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
             vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0]
         );
 
-        let matrix_8 = leakyreluderivative(&a_matrix, 0.1)?;
+        let matrix_8 = eluderivative(&a_matrix, 0.1)?;
         stream.memcpy_dtoh(&matrix_8.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
-        println!("After `leakyreluderivative`: a_host {:?}", a_host);
+        println!("After `eluderivative`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         );
 
         Ok(())
