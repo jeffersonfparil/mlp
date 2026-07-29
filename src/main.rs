@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.00,0.25,0.50"
+        default_value = "0.0,0.5"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -201,7 +201,7 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisaion
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "500")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -243,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,GradientDescent"
+        default_value = "Adam"
     )]
     selection_optimisers: Vec<String>,
 
@@ -741,6 +741,7 @@ fn train_with_fixed_hyperparameters(
 ) -> Result<String, Box<dyn Error>> {
     network.activation = match args.activation.as_ref() {
         "ReLU" => Activation::ReLU,
+        "ELU" => Activation::ELU,
         "Sigmoid" => Activation::Sigmoid,
         "HyperbolicTangent" => Activation::HyperbolicTangent,
         "Linear" => Activation::Linear,

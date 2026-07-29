@@ -967,6 +967,7 @@ impl Network {
         network.predictions = predictions;
         network.activation = match serdifiable_network.activation.as_ref() {
             "ReLU" => Activation::ReLU,
+            "ELU" => Activation::ELU,
             "Sigmoid" => Activation::Sigmoid,
             "HyperbolicTangent" => Activation::HyperbolicTangent,
             "Linear" => Activation::Linear,
