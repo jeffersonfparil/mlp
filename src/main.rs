@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0,0.5"
+        default_value = "0.00,0.25,0.50"
     )]
     selection_dropout_rates: Vec<f32>,
 
