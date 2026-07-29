@@ -37,7 +37,7 @@ pub enum Activation {
     Sigmoid,
     HyperbolicTangent,
     ReLU,
-    LeakyReLU, // needs work to account for the additional slope parameter
+    ELU,
 }
 
 impl fmt::Display for Activation {
@@ -55,8 +55,8 @@ impl fmt::Display for Activation {
             Activation::ReLU => {
                 write!(f, "ReLU")
             }
-            Activation::LeakyReLU => {
-                write!(f, "LeakyReLU")
+            Activation::ELU => {
+                write!(f, "ELU")
             }
         }
     }
@@ -237,7 +237,7 @@ const RELU_DERIVATIVE: &str = "
 ";
 
 const ELU: &str = "
-    extern \"C\" __global__ void cuLeakyReLU(float a, float* A, float* B, int n_rows, int n_cols) {
+    extern \"C\" __global__ void cuELU(float* A, float* B, int n_rows, int n_cols) {
         // Exponential linear unit activation kernel implementation
         // Arguments:
         //  - a: slope of the function
@@ -262,7 +262,7 @@ const ELU: &str = "
 ";
 
 const ELU_DERIVATIVE: &str = "
-    extern \"C\" __global__ void cuLeakyReLUDerivative(float a, float* A, float* B, int n_rows, int n_cols) {
+    extern \"C\" __global__ void cuELUDerivative(float* A, float* B, int n_rows, int n_cols) {
         // Exponential linear unit activation derivative kernel implementation
         // Arguments:
         //  - a: slope of the function
@@ -504,15 +504,14 @@ pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 
 // Different function signatures as above:
 
-pub fn elu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLU", ELU)?;
+pub fn elu(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuELU", ELU)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
     let n_cols: u32 = a.n_cols as u32;
     let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
     let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
-    builder.arg(&s);
     builder.arg(&a.data);
     builder.arg(&mut out_dev);
     builder.arg(&n_rows);
@@ -532,15 +531,14 @@ pub fn elu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
     Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
 }
 
-pub fn eluderivative(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLUDerivative", ELU_DERIVATIVE)?;
+pub fn eluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuELUDerivative", ELU_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
     let n_cols: u32 = a.n_cols as u32;
     let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
     let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
-    builder.arg(&s);
     builder.arg(&a.data);
     builder.arg(&mut out_dev);
     builder.arg(&n_rows);
@@ -567,6 +565,7 @@ impl Activation {
             Activation::Sigmoid => sigmoid(a),
             Activation::HyperbolicTangent => hyperbolictangent(a),
             Activation::ReLU => relu(a),
+            Activation::ELU => elu(a),
             _ => {
                 return Err(Box::new(ActivationError::UnimplementedActivation));
             }
@@ -578,6 +577,7 @@ impl Activation {
             Activation::Sigmoid => sigmoidderivative(a),
             Activation::HyperbolicTangent => hyperbolictangentderivative(a),
             Activation::ReLU => reluderivative(a),
+            Activation::ELU => eluderivative(a),
             _ => {
                 return Err(Box::new(ActivationError::UnimplementedActivationDerivative));
             }
@@ -625,7 +625,7 @@ mod tests {
         let activation_1 = Activation::Sigmoid;
         let activation_2 = Activation::HyperbolicTangent;
         let activation_3 = Activation::ReLU;
-        let _activation_4 = Activation::LeakyReLU;
+        let _activation_4 = Activation::ELU;
 
         let matrix_1 = activation_1.activate(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_1.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
@@ -733,7 +733,7 @@ mod tests {
         );
 
         // Needs work because of the additional slope parameter
-        let matrix_7 = elu(&a_matrix, 0.1)?;
+        let matrix_7 = elu(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_7.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
         println!("After `elu`: a_host {:?}", a_host);
         assert_eq!(
@@ -741,7 +741,7 @@ mod tests {
             vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0]
         );
 
-        let matrix_8 = eluderivative(&a_matrix, 0.1)?;
+        let matrix_8 = eluderivative(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_8.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
         println!("After `eluderivative`: a_host {:?}", a_host);
         assert_eq!(

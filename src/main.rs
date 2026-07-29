@@ -170,7 +170,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Vector of number of hidden layers for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
     selection_hidden_layers: Vec<usize>,
 
     /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of features whichever is smaller)
@@ -178,15 +178,16 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
+        default_value = "32,128"
     )]
-    selection_hidden_layer_nodes: Option<Vec<usize>>,
+    selection_hidden_layer_nodes: Vec<usize>,
 
     /// Vector of dropout rates per hidden layer for hyperparameter optimisation
     #[arg(
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0"
+        default_value = "0.00,0.25,0.50"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -200,7 +201,7 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisaion
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "100,1000")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -221,7 +222,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1"
+        default_value = "0.25"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -230,7 +231,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,ELU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -242,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam"
+        default_value = "Adam,GradientDescent"
     )]
     selection_optimisers: Vec<String>,
 
@@ -641,6 +642,7 @@ fn train_with_hyperparameter_optimisation(
         for x in &args.selection_activations {
             v.push(match x.as_ref() {
                 "ReLU" => Activation::ReLU,
+                "ELU" => Activation::ELU,
                 "Sigmoid" => Activation::Sigmoid,
                 "HyperbolicTangent" => Activation::HyperbolicTangent,
                 "Linear" => Activation::Linear,
@@ -686,24 +688,24 @@ fn train_with_hyperparameter_optimisation(
         }
         v
     };
-    // Vector of number of nodes per hidden layer for hyperparameter optimisation.
-    // Defaults to 1,024 or half the number of features whichever is smaller.
-    let selection_hidden_layer_nodes: Vec<usize> = match &args.selection_hidden_layer_nodes {
-        Some(x) => x.to_owned(),
-        None => {
-            let n = network.activations_per_layer[0].n_rows; // number of features
-            let n_hidden_nodes = n / 2;
-            let n_hidden_nodes_max = 1_024;
-            if n_hidden_nodes < n_hidden_nodes_max {
-               vec![n_hidden_nodes] 
-            } else {
-                vec![n_hidden_nodes_max]
-            }
-        },
-    };
+    // // Vector of number of nodes per hidden layer for hyperparameter optimisation.
+    // // Defaults to 1,024 or half the number of features whichever is smaller.
+    // let selection_hidden_layer_nodes: Vec<usize> = match &args.selection_hidden_layer_nodes {
+    //     Some(x) => x.to_owned(),
+    //     None => {
+    //         let n = network.activations_per_layer[0].n_rows; // number of features
+    //         let n_hidden_nodes = n / 2;
+    //         let n_hidden_nodes_max = 1_024;
+    //         if n_hidden_nodes < n_hidden_nodes_max {
+    //            vec![n_hidden_nodes] 
+    //         } else {
+    //             vec![n_hidden_nodes_max]
+    //         }
+    //     },
+    // };
     let network_hyper_optimised = network.hyperoptimise(
         &args.selection_hidden_layers,
-        &selection_hidden_layer_nodes,
+        &args.selection_hidden_layer_nodes,
         &args.selection_dropout_rates,
         &args.selection_learning_rates,
         &args.selection_n_epochs,
