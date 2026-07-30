@@ -332,7 +332,11 @@ impl Network {
                 network_validation.backpropagation()?;
                 network_validation.optimise(optimisation_parameters)?;
                 network_validation.predict()?;
-                epochs.push(epoch as f64);
+                let t = match epochs.last() {
+                    Some(x) => x + 1.00,
+                    None => 0.00,
+                };
+                epochs.push(t);
                 // Validate
                 if n_validation > 0 {
                     network_training.replace_model(&network_validation)?;
@@ -427,6 +431,7 @@ impl Network {
             let fname_scatter_svg = self.plot_true_vs_pred(optimisation_parameters)?;
             println!("===============================================");
             println!("Final cost after training: {}", final_cost_value);
+            println!("Total number of epochs: {}", self.n_epochs);
             println!("Find the loss curve saved as: {}", fname_loss_svg);
             println!("Find the observed vs predicted scatterplot saved as: {}", fname_scatter_svg);
             println!("===============================================");
@@ -469,21 +474,23 @@ impl Network {
         )?;
         // Hyper-parameter optimisations
         let mut results: Vec<(
-            usize,
-            usize,
             f32,
-            f32,
-            usize,
-            usize,
-            f32,
-            f32,
-            usize,
-            Activation,
-            Cost,
-            Optimiser,
-            WeightsInitialisation,
-            f32,
-        )> = Vec::new();
+            (
+                usize,
+                usize,
+                f32,
+                f32,
+                usize,
+                usize,
+                f32,
+                f32,
+                usize,
+                Activation,
+                Cost,
+                Optimiser,
+                WeightsInitialisation,
+            ),
+        )> = Vec::new(); // will store the loss and hyperparameters used
         let mut best_params = (f32::MAX, param_combinations[0].clone());
         if verbose {
             println!(
@@ -559,27 +566,32 @@ impl Network {
                 Ok(x) => x,
                 Err(_) => f32::MAX,
             };
+            // Store the loss and the hyperparameters used
+            let loss_and_params_used = (
+                loss,
+                (
+                    n_hidden_layers,
+                    n_hidden_nodes,
+                    dropout_rate,
+                    learning_rate,
+                    network.n_epochs, // using the actual number epochs ran
+                    n_burnin_epochs,
+                    f_patient_epochs,
+                    f_validation,
+                    n_batches,
+                    activation,
+                    cost,
+                    optimiser,
+                    weights_initialisation,
+                ),
+            );
+            // Store the result of the training
+            results.push(loss_and_params_used.clone());
             // Check if loss is better
             if loss < best_params.0 {
-                best_params = (loss, p.clone());
+                best_params = loss_and_params_used;
             }
-            // Store the result of the training
-            results.push((
-                n_hidden_layers,
-                n_hidden_nodes,
-                dropout_rate,
-                learning_rate,
-                network.n_epochs, // using the actual number epochs ran
-                n_burnin_epochs,
-                f_patient_epochs,
-                f_validation,
-                n_batches,
-                activation.clone(),
-                cost.clone(),
-                optimiser.clone(),
-                weights_initialisation.clone(),
-                loss,
-            ));
+            
         }
         // Print the results
         if verbose {
@@ -588,20 +600,22 @@ impl Network {
                 "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Validation_Set | Batches | Activation | Cost | Optimiser | Weights_Initialisation | Final_Cost |"
             );
             for (
-                n_hidden_layers,
-                n_hidden_nodes,
-                dropout_rate,
-                learning_rate,
-                n_epochs,
-                n_burnin_epochs,
-                f_patient_epochs,
-                f_validation,
-                n_batches,
-                activation,
-                cost,
-                optimiser,
-                weights_initialisation,
                 loss,
+                (
+                    n_hidden_layers,
+                    n_hidden_nodes,
+                    dropout_rate,
+                    learning_rate,
+                    n_epochs,
+                    n_burnin_epochs,
+                    f_patient_epochs,
+                    f_validation,
+                    n_batches,
+                    activation,
+                    cost,
+                    optimiser,
+                    weights_initialisation,
+                ),
             ) in &results
             {
                 println!(

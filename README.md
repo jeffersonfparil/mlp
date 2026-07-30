@@ -404,7 +404,7 @@ sort!(df_summary, :mlp_corr_delta)
 ```shell
 cd mlp/tests/
 module load ASReml-R
-pixi run cargo build --release
+RUSTFLAGS="-Awarnings" pixi run cargo build --release
 MLP=${HOME}/Documents/mlp/target/release/mlp
 $MLP -h
 $MLP -v
@@ -423,18 +423,18 @@ FNAME_RANDOMISATION=output-${FNAME_SIMULATED_DATA%.tsv}-RANDOMISATION.tsv
 FNAME_LINEAR=output-${FNAME_SIMULATED_DATA%.tsv}-LINEAR.tsv
 FNAME_MLP=output-${FNAME_SIMULATED_DATA%.tsv}-MLP.tsv
 # SIMULATE
-bash scripts/simulate.sh -h
-bash scripts/simulate.sh $MLP gp . $T $N $P $L
+pixi run bash scripts/simulate.sh -h
+time pixi run bash scripts/simulate.sh $MLP gp . $T $N $P $L
 # RANDOMISE
-bash scripts/randomisationgprs.sh -h
-bash scripts/randomisationgprs.sh gp $FNAME_SIMULATED_DATA . $R $F $S
+pixi run bash scripts/randomisationgprs.sh -h
+time pixi run bash scripts/randomisationgprs.sh gp $FNAME_SIMULATED_DATA . $R $F $S
 # LINEAR MODELLING
-Rscript scripts/linear.R -h
-Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesB' TRUE
+pixi run Rscript scripts/linear.R -h
+time pixi run Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesB' TRUE
 # Output: "output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1-LINEAR.tsv"
 # MLP MODELLING
-bash scripts/mlp.sh -h
-bash scripts/mlp.sh $MLP gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F
+pixi run bash scripts/mlp.sh -h
+time pixi run  bash scripts/mlp.sh $MLP gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F
     
 
 
