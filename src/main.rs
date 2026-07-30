@@ -201,7 +201,7 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisaion
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "500")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
