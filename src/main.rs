@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1024"
+        default_value = "512"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0,0.2,0.4,0.6"
+        default_value = "0.2,0.6,0.8"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -196,12 +196,12 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-4"
+        default_value = "1e-4,1e-3"
     )]
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisaion
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -231,7 +231,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,ELU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,ELU,Sigmoid")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test

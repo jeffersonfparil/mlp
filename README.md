@@ -417,35 +417,30 @@ L=1
 R=3
 F=5
 S=42
-FNAME_INPUT="simulated-DATA_TYPE_${T}-N_${N}-P_${P}-HIDDEN_LAYERS_${L}.tsv"
-FNAME_RANDOMISATION=output-${FNAME_INPUT%.tsv}-RANDOMISATION.tsv
-FNAME_LINEAR=output-${FNAME_INPUT%.tsv}-LINEAR.tsv
-FNAME_MLP=output-${FNAME_INPUT%.tsv}-MLP.tsv
-
+FNAME_SIMULATED_DATA=simulated-DATA_TYPE_${T}-N_${N}-P_${P}-HIDDEN_LAYERS_${L}.tsv
+FNAME_SIMULATED_NETWORK=${FNAME_SIMULATED_DATA%.tsv}.json.tmp
+FNAME_RANDOMISATION=output-${FNAME_SIMULATED_DATA%.tsv}-RANDOMISATION.tsv
+FNAME_LINEAR=output-${FNAME_SIMULATED_DATA%.tsv}-LINEAR.tsv
+FNAME_MLP=output-${FNAME_SIMULATED_DATA%.tsv}-MLP.tsv
+# SIMULATE
 bash scripts/simulate.sh -h
 bash scripts/simulate.sh $MLP gp . $T $N $P $L
-
+# RANDOMISE
 bash scripts/randomisationgprs.sh -h
-bash scripts/randomisationgprs.sh gp $FNAME_INPUT . $R $F $S
-
+bash scripts/randomisationgprs.sh gp $FNAME_SIMULATED_DATA . $R $F $S
+# LINEAR MODELLING
 Rscript scripts/linear.R -h
-Rscript scripts/linear.R gp $FNAME_INPUT . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesB' TRUE
+Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesB' TRUE
 # Output: "output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1-LINEAR.tsv"
-
+# MLP MODELLING
 bash scripts/mlp.sh -h
-bash scripts/mlp.sh \
-    $MLP \
-    gp \
-    simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1.tsv \
-    . \
-    output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1-RANDOMISATION.tsv \
-    3 \
-    5
+bash scripts/mlp.sh $MLP gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F
     
 
 
 # Cleanup
-rm $FNAME_INPUT 
+rm $FNAME_SIMULATED_DATA 
+rm $FNAME_SIMULATED_NETWORK 
 rm $FNAME_RANDOMISATION
 rm $FNAME_LINEAR
 rm $FNAME_MLP
