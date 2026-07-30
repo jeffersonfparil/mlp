@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "1024"
+        default_value = "32,128"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.5,0.9"
+        default_value = "0.1,0.5,0.9"
     )]
     selection_dropout_rates: Vec<f32>,
 

@@ -403,7 +403,6 @@ sort!(df_summary, :mlp_corr_delta)
 
 ```shell
 cd mlp/tests/
-module load ASReml-R
 RUSTFLAGS="-Awarnings" pixi run cargo build --release
 MLP=${HOME}/Documents/mlp/target/release/mlp
 $MLP -h
@@ -436,7 +435,7 @@ time pixi run Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMI
 # MLP MODELLING
 pixi run bash scripts/mlp.sh -h
 time pixi run  bash scripts/mlp.sh $MLP gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F
-    
+
 
 
 # Cleanup
