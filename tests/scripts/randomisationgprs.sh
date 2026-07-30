@@ -43,6 +43,9 @@ if [[ $M -lt 5 ]]; then
     echo "Error: Not enough folds for k-fold cross-validation (less than 5). Please reduce the number of folds or increase the number of observations."
     exit 1
 fi
+echo "#################################################################"
+echo "### Defining the indices for repeated k-fold cross-validation ###"
+echo "#################################################################"
 OUTPUT_CSV=${DIRNAME_OUTDIR}/output-$(basename $FNAME_INPUT | sed 's/.tsv$//g')-RANDOMISATION.tsv
 touch $OUTPUT_CSV
 for REP in $(seq 1 $N_REPS); do
@@ -64,9 +67,10 @@ for REP in $(seq 1 $N_REPS); do
                 IDX_TRAINING+=("${IDX_SHUFFLED[i]}")
             fi
         done
-        echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
-        echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
+        # echo "IDX_TRAINING: ${IDX_TRAINING[@]}"
+        # echo "IDX_VALIDATION: ${IDX_VALIDATION[@]}"
         echo "${IDX_TRAINING[@]}" | sed -z 's/ /\n/g' | sort -n | sed -z 's/\n/,/g' | sed -z 's/^,//g' | sed -z 's/,$/\n/g' >> $OUTPUT_CSV
         echo "${IDX_VALIDATION[@]}" | sed -z 's/ /\n/g' | sort -n | sed -z 's/\n/,/g' | sed -z 's/^,//g' | sed -z 's/,$/\n/g' >> $OUTPUT_CSV
     done
 done
+echo "OUTPUT: '${OUTPUT_CSV}'"

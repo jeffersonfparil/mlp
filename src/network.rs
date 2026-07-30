@@ -546,13 +546,17 @@ impl Network {
         self.weights_per_layer = other.weights_per_layer.clone();
         self.biases_per_layer = other.biases_per_layer.clone();
         self.weights_x_biases_per_layer = other.weights_x_biases_per_layer.clone();
-        // Skip the activation layers containing the input data (features)
-        // Also we did not replace the targets and prediction matrices
-        self.weights_gradients_per_layer = other.weights_gradients_per_layer.clone();
-        self.biases_gradients_per_layer = other.biases_gradients_per_layer.clone();
+        // Notes:
+        // (1) Input layer, i.e. the first activation layer is not copied (uses existing input layer)
+        // (2) Output layer is also not copied (updated below with self.predict())
         self.activation = other.activation.clone();
         self.cost = other.cost.clone();
         self.n_epochs = other.n_epochs;
+        // Forward and backward pass to update the activations and gradients
+        self.forwardpass()?;
+        self.backpropagation()?;
+        // Update the predictions (output layer)
+        self.predict()?;
         Ok(())
     }
 }

@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "32,128"
+        default_value = "1024"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.00,0.25,0.50"
+        default_value = "0.0,0.2,0.4,0.6"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -201,7 +201,7 @@ struct Args {
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisaion
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "500")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -222,7 +222,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.25"
+        default_value = "0.5"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -243,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam"
+        default_value = "Adam,GradientDescent"
     )]
     selection_optimisers: Vec<String>,
 
@@ -361,7 +361,7 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
         Some(x) => x.to_owned(),
         None => {
             println!("No input file provided. Simulating data...");
-            let (data_simulated, network_simulated) = Data::simulate(
+            let (data_simulated, _network_simulated) = Data::simulate(
                 args.simulation_n_observations,
                 args.simulation_n_features_continuous,
                 args.simulation_n_features_categorical.clone(),

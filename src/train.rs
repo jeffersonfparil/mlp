@@ -294,8 +294,8 @@ impl Network {
         if verbose {
             pb.finish();
         }
-        // Training after burn-in
-        let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
+        // Training after burn-in (mini-batch 1 of 2, i.e. training set)
+        let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (mini-batch 1) (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
         for epoch in 0..optimisation_parameters.n_epochs {
             network_training.forwardpass()?;
             network_training.backpropagation()?;
@@ -319,13 +319,45 @@ impl Network {
                 // println!("Early stopping at epoch {}", epoch);
                 break;
             }
-       }
-        // Update the network after training the training network
-        self.replace_model(&network_training)?;
+        }
         if verbose {
             pb.finish();
         }
-        self.predict()?;
+        // Training after burn-in (mini-batch 2 of 2, i.e. validation set's turn to be the training set)
+        if n_validation > 0 {
+            network_validation.replace_model(&network_training)?;
+            let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (mini-batch 2) (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
+            for epoch in 0..optimisation_parameters.n_epochs {
+                network_validation.forwardpass()?;
+                network_validation.backpropagation()?;
+                network_validation.optimise(optimisation_parameters)?;
+                network_validation.predict()?;
+                epochs.push(epoch as f64);
+                // Validate
+                if n_validation > 0 {
+                    network_training.replace_model(&network_validation)?;
+                    network_training.predict()?;
+                    costs.push(network_training.loss()? as f64);
+                } else {
+                    costs.push(network_validation.loss()? as f64);
+                }
+                // Update the network after training the training network
+                if verbose {
+                    pb.next();
+                }
+                // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
+                if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
+                    // println!("Early stopping at epoch {}", epoch);
+                    break;
+                }
+            }
+            if verbose {
+                pb.finish();
+            }
+            network_training.replace_model(&network_validation)?;
+        }
+        // Update the network after training the training network
+        self.replace_model(&network_training)?;
         self.n_epochs = epochs.len();
         Ok((epochs, costs))
     }
@@ -724,6 +756,7 @@ mod tests {
         let mut network_epochs_200 = network.clone();
         optimisation_parameters.n_batches = 1;
         optimisation_parameters.n_epochs = 5;
+        optimisation_parameters.f_validation = 0.5;
         network_epochs_5.train(&mut optimisation_parameters, false)?;
         optimisation_parameters.n_epochs = 200;
         network_epochs_200.train(&mut optimisation_parameters, false)?;

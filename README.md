@@ -399,6 +399,55 @@ sort!(df_summary, :mlp_corr_delta)
 
 # Miscellaneous
 
+## Manual benchmarking tests
+
+```shell
+cd mlp/tests/
+module load ASReml-R
+pixi run cargo build --release
+MLP=${HOME}/Documents/mlp/target/release/mlp
+$MLP -h
+$MLP -v
+rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
+
+bash scripts/simulate.sh -h
+bash scripts/simulate.sh \
+    $MLP \
+    gp \
+    . \
+    CONTINUOUS \
+    100 \
+    10000 \
+    1
+
+bash scripts/randomisationgprs.sh -h
+bash scripts/randomisationgprs.sh \
+    gp \
+    simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1.tsv \
+    . \
+    3 \
+    5 \
+    42
+
+Rscript scripts/linear.R -h
+Rscript scripts/linear.R \
+    gp \
+    simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1.tsv \
+    . \
+    output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1-RANDOMISATION.tsv \
+    3 \
+    5 \
+    10000 \
+    1000 \
+    'BayesA' \
+    TRUE
+
+
+
+# Cleanup
+rm simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1.tsv
+```
+
 ## MLPInterrogator.jl
 
 <details>
