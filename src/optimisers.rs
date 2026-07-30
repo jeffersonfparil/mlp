@@ -31,6 +31,7 @@ pub enum Optimiser {
     GradientDescent,
     Adam,
     AdamMax,
+    AdamW,
 }
 
 #[repr(C)]
@@ -43,6 +44,7 @@ pub struct OptimisationParameters {
     pub f_validation: f32,        // v = 0.0 // fraction of the input layer's columns (observations) which will be set to compute cost after each epoch
     pub n_batches: usize,         // b = 1
     pub learning_rate: f32,       // η = 0.001
+    pub weight_decay: f32,        // λ = 0.01 (Used for AdamW decoupled decay)
     pub first_moment_decay: f32,  // β₁ = 0.900
     pub second_moment_decay: f32, // β₂ = 0.999
     pub epsilon: f32,             // ϵ = 1e-8 for numerical stability
@@ -261,6 +263,105 @@ pub fn adammax(
     Ok(())
 }
 
+pub fn adamw(
+    network: &mut Network,
+    optimiser_parameters: &mut OptimisationParameters,
+) -> Result<(), Box<dyn Error>> {
+    optimiser_parameters.time_step += 1;
+    let factor_first_moment: f32 = 1.00
+        / (1.00
+            - optimiser_parameters
+                .first_moment_decay
+                .powi(optimiser_parameters.time_step as i32));
+    let factor_second_moment: f32 = 1.00
+        / (1.00
+            - optimiser_parameters
+                .second_moment_decay
+                .powi(optimiser_parameters.time_step as i32));
+    for i in 0..(network.n_hidden_layers + 1) {
+        // ==========================================
+        // 1. Weights Update (WITH Decoupled Decay)
+        // ==========================================
+        optimiser_parameters.first_moments_of_weights_per_layer[i] = optimiser_parameters
+            .first_moments_of_weights_per_layer[i]
+            .scalarmatmul(optimiser_parameters.first_moment_decay)?
+            .elementwisematadd(
+                &network.weights_gradients_per_layer[i]
+                    .scalarmatmul(1.00f32 - optimiser_parameters.first_moment_decay)?,
+            )?;
+        optimiser_parameters.second_moments_of_weights_per_layer[i] = optimiser_parameters
+            .second_moments_of_weights_per_layer[i]
+            .scalarmatmul(optimiser_parameters.second_moment_decay)?
+            .elementwisematadd(
+                &network.weights_gradients_per_layer[i]
+                    .elementwisematpower(2.0)?
+                    .scalarmatmul(1.00f32 - optimiser_parameters.second_moment_decay)?,
+            )?;
+        let momentum = optimiser_parameters.first_moments_of_weights_per_layer[i]
+            .scalarmatmul(factor_first_moment)?;
+        let velocity = optimiser_parameters.second_moments_of_weights_per_layer[i]
+            .scalarmatmul(factor_second_moment)?;
+            
+        // Standard Adam step (scaled by -1.0 so we can add it)
+        let adam_update = momentum
+            .scalarmatmul(optimiser_parameters.learning_rate)?
+            .elementwisematmul(
+                &velocity
+                    .elementwisematsqrt()?
+                    .scalarmatadd(optimiser_parameters.epsilon)?
+                    .elementwisematinverse()?,
+            )?
+            .scalarmatmul(-1.0)?;
+            
+        // Decoupled Weight Decay step (scaled by -1.0 so we can add it)
+        let decay_update = network.weights_per_layer[i]
+            .scalarmatmul(optimiser_parameters.learning_rate * optimiser_parameters.weight_decay)?
+            .scalarmatmul(-1.0)?;
+
+        // Apply both Adam update and Decay to the weights
+        network.weights_per_layer[i] = network.weights_per_layer[i]
+            .elementwisematadd(&adam_update)?
+            .elementwisematadd(&decay_update)?;
+
+        // ==========================================
+        // 2. Biases Update (NO Weight Decay)
+        // ==========================================
+        optimiser_parameters.first_moments_of_biases_per_layer[i] = optimiser_parameters
+            .first_moments_of_biases_per_layer[i]
+            .scalarmatmul(optimiser_parameters.first_moment_decay)?
+            .elementwisematadd(
+                &network.biases_gradients_per_layer[i]
+                    .scalarmatmul(1.00f32 - optimiser_parameters.first_moment_decay)?,
+            )?;
+        optimiser_parameters.second_moments_of_biases_per_layer[i] = optimiser_parameters
+            .second_moments_of_biases_per_layer[i]
+            .scalarmatmul(optimiser_parameters.second_moment_decay)?
+            .elementwisematadd(
+                &network.biases_gradients_per_layer[i]
+                    .elementwisematpower(2.0)?
+                    .scalarmatmul(1.00f32 - optimiser_parameters.second_moment_decay)?,
+            )?;
+        let momentum_bias = optimiser_parameters.first_moments_of_biases_per_layer[i]
+            .scalarmatmul(factor_first_moment)?;
+        let velocity_bias = optimiser_parameters.second_moments_of_biases_per_layer[i]
+            .scalarmatmul(factor_second_moment)?;
+            
+        // Apply ONLY the Adam update to biases
+        network.biases_per_layer[i] = network.biases_per_layer[i].elementwisematadd(
+            &momentum_bias
+                .scalarmatmul(optimiser_parameters.learning_rate)?
+                .elementwisematmul(
+                    &velocity_bias
+                        .elementwisematsqrt()?
+                        .scalarmatadd(optimiser_parameters.epsilon)?
+                        .elementwisematinverse()?,
+                )?
+                .scalarmatmul(-1.0)?,
+        )?;
+    }
+    Ok(())
+}
+
 impl OptimisationParameters {
     pub fn new(network: &Network) -> Result<Self, Box<dyn Error>> {
         let stream = network.targets.data.context().default_stream();
@@ -301,6 +402,7 @@ impl OptimisationParameters {
             f_validation: 0.00,
             n_batches: 1,
             learning_rate: 0.001,
+            weight_decay: 0.01,
             first_moment_decay: 0.900,
             second_moment_decay: 0.999,
             epsilon: 1.0e-8,
@@ -323,6 +425,7 @@ impl Network {
             Optimiser::GradientDescent => gradientdescent(self, optimisation_parameters)?,
             Optimiser::Adam => adam(self, optimisation_parameters)?,
             Optimiser::AdamMax => adammax(self, optimisation_parameters)?,
+            Optimiser::AdamW => adamw(self, optimisation_parameters)?,
         };
         Ok(())
     }

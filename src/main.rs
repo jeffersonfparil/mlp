@@ -178,7 +178,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "32,128"
+        default_value = "128"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.5,0.9"
+        default_value = "0.1,0.5"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -231,7 +231,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,ELU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ELU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -243,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,GradientDescent"
+        default_value = "AdamW,AdamMax"
     )]
     selection_optimisers: Vec<String>,
 
@@ -668,6 +668,7 @@ fn train_with_hyperparameter_optimisation(
         for x in &args.selection_optimisers {
             v.push(match x.as_ref() {
                 "Adam" => Optimiser::Adam,
+                "AdamW" => Optimiser::AdamW,
                 "AdamMax" => Optimiser::AdamMax,
                 "GradientDescent" => Optimiser::GradientDescent,
                 _ => return Err(Box::new(OptimiserError::UnimplementedOptimiser)),
