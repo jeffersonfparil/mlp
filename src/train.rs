@@ -362,6 +362,9 @@ impl Network {
         }
         // Update the network after training the training network
         self.replace_model(&network_training)?;
+        // Also update the number of epochs with the actual number of epochs ran accounting for:
+        //  (1) early stopping and 
+        //  (2) batching effect if there is an inner validation set
         self.n_epochs = epochs.len();
         Ok((epochs, costs))
     }
@@ -398,8 +401,8 @@ impl Network {
                 let network: Network = self.slice(&col_indexes)?;
                 networks_per_batch.push(network);
             }
-            let mut epochs: Vec<Vec<f64>> = vec![Vec::new(); n];
-            let mut costs: Vec<Vec<f64>> = vec![Vec::new(); n];
+            let mut epochs: Vec<Vec<f64>> = Vec::with_capacity(n);
+            let mut costs: Vec<Vec<f64>> = Vec::with_capacity(n);
             for (i, network) in networks_per_batch.iter_mut().enumerate() {
                 if verbose {
                     println!(
@@ -407,8 +410,10 @@ impl Network {
                         i, network.targets.n_cols
                     );
                 }
+                if i > 0 {
+                    network.replace_model(self)?;
+                }
                 let mut params = optimisation_parameters.clone();
-                network.replace_model(self)?;
                 let result = network.train_per_batch(&mut params, &format!("{}", n), verbose);
                 match result {
                     Ok((epochs_batch, costs_batch)) => {
@@ -427,6 +432,8 @@ impl Network {
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {
+            // println!("epochs: {:?}", epochs);
+            // println!("costs: {:?}", costs);
             let fname_loss_svg = self.plot_loss(epochs, costs, optimisation_parameters)?;
             let fname_scatter_svg = self.plot_true_vs_pred(optimisation_parameters)?;
             println!("===============================================");
