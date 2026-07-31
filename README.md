@@ -407,11 +407,10 @@ RUSTFLAGS="-Awarnings" pixi run cargo build --release
 MLP=${HOME}/Documents/mlp/target/release/mlp
 $MLP -h
 $MLP -v
-$MLP -v --n-batches=2
 rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
 
 T=CONTINUOUS
-N=100
+N=500
 P=10000
 L=1
 R=3

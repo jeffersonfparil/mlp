@@ -187,7 +187,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.5"
+        default_value = "0.1,0.2,0.5,0.9"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -213,7 +213,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.01"
+        default_value = "0.0"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -222,7 +222,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.5"
+        default_value = "0.1,0.3,0.5"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -231,7 +231,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ELU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU,ELU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -243,7 +243,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "AdamW,AdamMax"
+        default_value = "GradientDescent,Adam,AdamW,AdamMax"
     )]
     selection_optimisers: Vec<String>,
 
