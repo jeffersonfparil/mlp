@@ -282,11 +282,12 @@ impl Network {
         };
         // Pre-training burn-in epochs
         let mut pb = ProgressBar::new(optimisation_parameters.n_burnin_epochs, 50, format!("Burn-in {} epochs", optimisation_parameters.n_burnin_epochs));
-        for _ in 0..optimisation_parameters.n_burnin_epochs {
+        for epoch in 0..optimisation_parameters.n_burnin_epochs {
             network_training.forwardpass()?;
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
             network_training.predict()?;
+            network_training.n_epochs = epoch;
             if verbose {
                 pb.next();
             }
@@ -301,6 +302,7 @@ impl Network {
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
             network_training.predict()?;
+            network_training.n_epochs = epoch;
             epochs.push(epoch as f64);
             // Validate
             if n_validation > 0 {

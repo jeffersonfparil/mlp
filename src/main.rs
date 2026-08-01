@@ -8,6 +8,7 @@ use rand::prelude::*;
 mod activations;
 mod backward;
 mod costs;
+mod dropout;
 mod forward;
 mod io;
 mod linalg;
@@ -187,7 +188,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.2,0.5,0.9"
+        default_value = "0.1,0.5,0.9"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -222,7 +223,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.3,0.5"
+        default_value = "0.5"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -243,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "GradientDescent,Adam,AdamW,AdamMax"
+        default_value = "Adam,AdamW,AdamMax"
     )]
     selection_optimisers: Vec<String>,
 
