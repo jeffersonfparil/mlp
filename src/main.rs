@@ -206,7 +206,7 @@ struct Args {
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "0")]
     selection_n_burnin_epochs: Vec<usize>,
 
     /// Vector of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0"
+        default_value = "0.01"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
