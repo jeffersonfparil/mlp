@@ -297,6 +297,8 @@ impl Network {
         }
         // Training after burn-in (mini-batch 1 of 2, i.e. training set)
         let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (mini-batch 1) (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
+        let mut lowest_training_cost: f64 = f64::INFINITY;
+        let mut lowest_validation_cost: f64 = f64::INFINITY;
         for epoch in 0..optimisation_parameters.n_epochs {
             network_training.forwardpass()?;
             network_training.backpropagation()?;
@@ -304,20 +306,31 @@ impl Network {
             network_training.predict()?;
             network_training.n_epochs = epoch;
             epochs.push(epoch as f64);
-            // Validate
-            if n_validation > 0 {
+            // Loss or cost
+            let training_cost = network_training.loss()? as f64;
+            let validation_cost = if n_validation > 0 {
                 network_validation.replace_model(&network_training)?;
-                network_validation.predict()?;
-                costs.push(network_validation.loss()? as f64);
+                network_validation.loss()? as f64
             } else {
-                costs.push(network_training.loss()? as f64);
-            }
-            // Update the network after training the training network
+                f64::INFINITY
+            };
+            lowest_training_cost = if training_cost < lowest_training_cost {
+                training_cost
+            } else {
+                lowest_training_cost
+            };
+            lowest_validation_cost = if validation_cost < lowest_validation_cost {
+                validation_cost
+            } else {
+                lowest_validation_cost
+            };
+            // Loss or costs is just the cost of the network being trained
+            costs.push(training_cost);
             if verbose {
                 pb.next();
             }
-            // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
-            if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
+            // Early stopping check
+            if (epoch > n_patient_epochs) && ((training_cost > lowest_training_cost) || (validation_cost > lowest_validation_cost))  {
                 // println!("Early stopping at epoch {}", epoch);
                 break;
             }
@@ -325,9 +338,11 @@ impl Network {
         if verbose {
             pb.finish();
         }
-        // Training after burn-in (mini-batch 2 of 2, i.e. validation set's turn to be the training set)
+        // Training after burn-in and training set training (mini-batch 2 of 2, i.e. validation set's turn to be the training set)
         if n_validation > 0 {
             network_validation.replace_model(&network_training)?;
+            let mut lowest_training_cost: f64 = f64::INFINITY;
+            let mut lowest_validation_cost: f64 = f64::INFINITY;
             let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (mini-batch 2) (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
             for epoch in 0..optimisation_parameters.n_epochs {
                 network_validation.forwardpass()?;
@@ -339,20 +354,29 @@ impl Network {
                     None => 0.00,
                 };
                 epochs.push(t);
-                // Validate
-                if n_validation > 0 {
+                // Loss or cost
+                let validation_cost = network_validation.loss()? as f64;
+                let training_cost = {
                     network_training.replace_model(&network_validation)?;
-                    network_training.predict()?;
-                    costs.push(network_training.loss()? as f64);
+                    network_training.loss()? as f64
+                };
+                lowest_validation_cost = if validation_cost < lowest_validation_cost {
+                    validation_cost
                 } else {
-                    costs.push(network_validation.loss()? as f64);
-                }
-                // Update the network after training the training network
+                    lowest_validation_cost
+                };
+                lowest_training_cost = if training_cost < lowest_training_cost {
+                    training_cost
+                } else {
+                    lowest_training_cost
+                };
+                // Loss or costs is just the cost of the network being trained
+                costs.push(validation_cost);
                 if verbose {
                     pb.next();
                 }
-                // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
-                if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
+                // Early stopping check
+                if (epoch > n_patient_epochs) && ((validation_cost > lowest_validation_cost) || (training_cost > lowest_training_cost))  {
                     // println!("Early stopping at epoch {}", epoch);
                     break;
                 }

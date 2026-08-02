@@ -179,7 +179,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "128"
+        default_value = "64"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -206,7 +206,7 @@ struct Args {
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "0")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "10")]
     selection_n_burnin_epochs: Vec<usize>,
 
     /// Vector of proportions of the maximum training epochs to start considering early stopping for hyperparameter optimisation
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,AdamW,AdamMax"
+        default_value = "Adam,AdamW"
     )]
     selection_optimisers: Vec<String>,
 
