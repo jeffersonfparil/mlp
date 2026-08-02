@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "GradientDescent,Adam,AdamW"
+        default_value = "Adam,AdamW"
     )]
     selection_optimisers: Vec<String>,
 
