@@ -135,9 +135,13 @@ impl Data {
         q: Vec<usize>,
         k: usize,
         d: usize,
-        dist: &str,
-        par1: f64,
-        par2: f64,
+        features_dist: &str,
+        features_par1: f64,
+        features_par2: f64,
+
+        weights_dist: &str,
+        weights_par1: f64,
+        weights_par2: f64,
         seed: usize,
         verbose: bool,
     ) -> Result<(Self, Network), Box<dyn Error>> {
@@ -146,9 +150,9 @@ impl Data {
         // q = vector of the number of levels in categorical variable
         // k = number of response variables or targets
         // d = number of hidden layers
-        // dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
-        // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
-        // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
+        // weights_dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
+        // weights_par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
+        // weights_par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
         // seed = randomisation seed for repeatability
 
         if verbose {println!("(1/8) Simulating feature ids...")}
@@ -157,14 +161,10 @@ impl Data {
         let n_features = p + n_features_categorical;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         // Features simulation
+        let mut features_host: Vec<f32> = simulate_weights(features_dist, features_par1, features_par2, p * n, seed)?;
         let mut feature_names: Vec<String> = Vec::with_capacity(n_features);
-        let mut features_host: Vec<f32> = Vec::with_capacity(n_features * n);
-        // Continuous features
         for j in 0..p {
             feature_names.push(format!("fcon_{}", j));
-            for _i in 0..n {
-                features_host.push(rng.random());
-            }
         }
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Categorical features (one-hot encoded) exploring all level combinations
@@ -244,14 +244,14 @@ impl Data {
             let n_cols = network.weights_per_layer[i].n_cols;
             let m = n_rows * n_cols;
             let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
-            let mut weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed + i)?; // dense continuous effects
+            let mut weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
             let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
             for col in 0..n_cols {
                 let u: f32 = rng.random();
                 let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
                 let mut target_rows: Vec<usize> = (0..n_rows).collect();
                 for r in 0..degree {
-                    let swap_idx = rng.gen_range(r..n_rows);
+                    let swap_idx = rng.random_range(r..n_rows);
                     target_rows.swap(r, swap_idx);
                 }
                 for &row in target_rows.iter().take(degree) { 
@@ -1103,7 +1103,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let (data_simulated, _network_simulated) = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42, true)?;
+        let (data_simulated, _network_simulated) = Data::simulate(100, 5, vec![2,3], 1, 2, "beta", 0.5, 0.5, "normal", 0.0, 1.0, 42, true)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);

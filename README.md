@@ -410,8 +410,8 @@ $MLP -v
 rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
 
 T=CONTINUOUS
-N=500
-P=10000
+N=5000
+P=1000
 L=1
 R=3
 F=5
@@ -429,7 +429,7 @@ pixi run bash scripts/randomisationgprs.sh -h
 time pixi run bash scripts/randomisationgprs.sh gp $FNAME_SIMULATED_DATA . $R $F $S
 # LINEAR MODELLING
 pixi run Rscript scripts/linear.R -h
-time pixi run Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesB' TRUE
+time pixi run Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesB' FALSE
 # Output: "output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1-LINEAR.tsv"
 # MLP MODELLING
 pixi run bash scripts/mlp.sh -h

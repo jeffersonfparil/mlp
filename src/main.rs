@@ -179,7 +179,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "64"
+        default_value = "256"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -188,7 +188,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1,0.5,0.9"
+        default_value = "0.0,0.2,0.4,0.6"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -197,7 +197,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-4"
+        default_value = "1e-5,1e-4"
     )]
     selection_learning_rates: Vec<f32>,
 
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.01"
+        default_value = "0.1"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -223,7 +223,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.5"
+        default_value = "0.0"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,AdamW"
+        default_value = "GradientDescent,Adam,AdamW"
     )]
     selection_optimisers: Vec<String>,
 
@@ -335,6 +335,21 @@ struct Args {
     #[arg(short = 'l', long, default_value_t = 2)]
     simulation_n_hidden_layers: usize,
 
+    /// Distribution from which synthetic continuous features are sampled
+    ///
+    /// Options: "normal", "lognormal", "cauchy", "weibull", "gamma", "beta".
+    #[arg(long, default_value = "beta")]
+    simulation_features_distribution: String,
+
+    /// Parameter 1 (e.g., mean or location or shape) for the feature distribution
+    #[arg(long, default_value_t = 0.5)]
+    simulation_features_distribution_param_1: f64,
+
+    /// Parameter 2 (e.g., variance or scale) for the feature distribution
+    #[arg(long, default_value_t = 0.5)]
+    simulation_features_distribution_param_2: f64,
+
+
     /// Distribution from which synthetic network weights are sampled
     ///
     /// Options: "normal", "lognormal", "cauchy", "weibull", "gamma", "beta".
@@ -368,6 +383,9 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
                 args.simulation_n_features_categorical.clone(),
                 args.simulation_n_output_columns,
                 args.simulation_n_hidden_layers,
+                &args.simulation_features_distribution,
+                args.simulation_features_distribution_param_1,
+                args.simulation_features_distribution_param_2,
                 &args.simulation_weights_distribution,
                 args.simulation_weights_distribution_param_1,
                 args.simulation_weights_distribution_param_2,
@@ -436,6 +454,9 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
         args.simulation_n_features_categorical.clone(),
         args.simulation_n_output_columns,
         args.simulation_n_hidden_layers,
+        &args.simulation_features_distribution,
+        args.simulation_features_distribution_param_1,
+        args.simulation_features_distribution_param_2,
         &args.simulation_weights_distribution,
         args.simulation_weights_distribution_param_1,
         args.simulation_weights_distribution_param_2,
