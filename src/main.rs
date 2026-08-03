@@ -179,7 +179,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "256"
+        default_value = "64"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -197,7 +197,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-5,1e-4"
+        default_value = "1e-4"
     )]
     selection_learning_rates: Vec<f32>,
 
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1"
+        default_value = "0.0"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -232,7 +232,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "Sigmoid,ReLU,ELU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test

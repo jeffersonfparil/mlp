@@ -3,8 +3,8 @@ use crate::network::Network;
 use std::error::Error;
 
 // To prevent exploding gradients we clamp the gradients to a reasonable range:
-const CLAMP_LOWER: f32 = -10_000.0;
-const CLAMP_UPPER: f32 = 10_000.0;
+const CLAMP_LOWER: f32 = -10.0;
+const CLAMP_UPPER: f32 = 10.0;
 
 impl Network {
     pub fn backpropagation(&mut self) -> Result<(), Box<dyn Error>> {
@@ -25,7 +25,7 @@ impl Network {
                 self.weights_per_layer[n_total_layers - i].matmult0(&delta[delta.len() - 1])?;
             // Activation derivative w.r.t. the sum of the weights (since Ω.S[end] == Ω.ŷ then the previous pre-activations are Ω.S[end-1])
             let idx: usize = n_total_layers - (i + 1);
-            self.dropout(idx)?;
+            self.dropout(idx)?; // apply the dropout mask randomly generated during forward pass
             let da_over_ds = self
                 .activation
                 .derivative(&self.weights_x_biases_per_layer[idx])?;

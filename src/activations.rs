@@ -117,7 +117,7 @@ const SIGMOID: &str = "
         int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
         if ((i < n_rows) && (j < n_cols)) {
             int idx = (i * n_cols) + j; // Linear index for the A and B matrices
-            B[idx] = 1.00 / (1.00 + exp(A[idx]));
+            B[idx] = 1.00 / (1.00 + exp(-A[idx]));
         }
     }
 ";
@@ -137,7 +137,7 @@ const SIGMOID_DERIVATIVE: &str = "
         int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
         if ((i < n_rows) && (j < n_cols)) {
             int idx = (i * n_cols) + j; // Linear index for the A and B matrices
-            float s = 1.00 / (1.00 + exp(A[idx]));
+            float s = 1.00 / (1.00 + exp(-A[idx]));
             B[idx] = s * (1.00 - s);
         }
     }

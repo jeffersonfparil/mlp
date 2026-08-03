@@ -63,6 +63,7 @@ pub struct Network {
     pub weights_initialisation: WeightsInitialisation, // weights initialisation
     pub n_epochs: usize,                               // number of epochs ran
     pub seed: usize,                                   // random seed for reproducibility
+    pub dropout_masks_per_layer: Vec<Matrix>           // dropout masks
 }
 
 impl fmt::Display for Network {
@@ -392,6 +393,7 @@ impl Network {
         let predictions: Matrix = Matrix::new(predictions_dev, n_output_nodes, n_observations)?;
         let mut weights_per_layer: Vec<Matrix> = vec![];
         let mut weights_gradients_per_layer: Vec<Matrix> = vec![];
+        let mut dropout_masks_per_layer: Vec<Matrix> = vec![];
         let mut biases_per_layer: Vec<Matrix> = vec![];
         let mut biases_gradients_per_layer: Vec<Matrix> = vec![];
         let mut weights_x_biases_per_layer: Vec<Matrix> = vec![];
@@ -401,6 +403,7 @@ impl Network {
             let p: usize = n_nodes[i];
             let weights_host: Vec<f32> = vec![0f32; n * p];
             let dweights_host: Vec<f32> = vec![0f32; n * p];
+            let dropouts_host: Vec<f32> = vec![1f32; n * 1];
             let biases_host: Vec<f32> = vec![0f32; n * 1];
             let dbiases_host: Vec<f32> = vec![0f32; n * 1];
             let weights_x_biases_host: Vec<f32> = vec![0f32; n * n_observations];
@@ -412,17 +415,20 @@ impl Network {
             }
             let weights_dev: CudaSlice<f32> = stream.clone_htod(&weights_host)?;
             let dweights_dev: CudaSlice<f32> = stream.clone_htod(&dweights_host)?;
+            let dropouts_dev: CudaSlice<f32> = stream.clone_htod(&dropouts_host)?;
             let biases_dev: CudaSlice<f32> = stream.clone_htod(&biases_host)?;
             let dbiases_dev: CudaSlice<f32> = stream.clone_htod(&dbiases_host)?;
             let weights_x_biases_dev: CudaSlice<f32> = stream.clone_htod(&weights_x_biases_host)?;
             let weights_matrix: Matrix = Matrix::new(weights_dev, n, p)?;
             let dweights_matrix: Matrix = Matrix::new(dweights_dev, n, p)?;
+            let dropouts_matrix: Matrix = Matrix::new(dropouts_dev, n, 1)?;
             let biases_matrix: Matrix = Matrix::new(biases_dev, n, 1)?;
             let dbiases_matrix: Matrix = Matrix::new(dbiases_dev, n, 1)?;
             let weights_x_biases_matrix: Matrix =
                 Matrix::new(weights_x_biases_dev, n, n_observations)?;
             weights_per_layer.push(weights_matrix);
             weights_gradients_per_layer.push(dweights_matrix);
+            dropout_masks_per_layer.push(dropouts_matrix);
             biases_per_layer.push(biases_matrix);
             biases_gradients_per_layer.push(dbiases_matrix);
             weights_x_biases_per_layer.push(weights_x_biases_matrix);
@@ -456,6 +462,7 @@ impl Network {
             weights_initialisation: weights_initialisation,
             n_epochs: 0,
             seed: seed,
+            dropout_masks_per_layer: dropout_masks_per_layer,
         };
         // He/Kaiming initialisation of weights by default as ReLU is tha default activation function
         out.init_weights(&weights_initialisation, seed)?;
