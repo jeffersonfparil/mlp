@@ -63,7 +63,8 @@ pub struct Network {
     pub weights_initialisation: WeightsInitialisation, // weights initialisation
     pub n_epochs: usize,                               // number of epochs ran
     pub seed: usize,                                   // random seed for reproducibility
-    pub dropout_masks_per_layer: Vec<Matrix>           // dropout masks
+    pub dropout_masks_per_layer: Vec<Matrix>,          // dropout masks
+    pub lambda: f32,                                   // L2 lambda penalty factor (default is 0.0, i.e. no penalty)
 }
 
 impl fmt::Display for Network {
@@ -110,7 +111,8 @@ impl fmt::Display for Network {
             biases_gradients_per_layer (len={}) = [
                 {} (sum={}), 
                 ..., 
-                {} (sum={})
+                {} (sum={}),
+            lambda = {}
             ]
             ",
             *stream,
@@ -197,6 +199,7 @@ impl fmt::Display for Network {
                 Ok(x) => x,
                 Err(_) => return Err(fmt::Error),
             },
+            self.lambda,
         )
     }
 }
@@ -463,6 +466,7 @@ impl Network {
             n_epochs: 0,
             seed: seed,
             dropout_masks_per_layer: dropout_masks_per_layer,
+            lambda: 0.1, // Default no L2 penalty
         };
         // He/Kaiming initialisation of weights by default as ReLU is tha default activation function
         out.init_weights(&weights_initialisation, seed)?;
@@ -490,6 +494,7 @@ impl Network {
         )?;
         network.activation = self.activation.clone();
         network.cost = self.cost.clone();
+        network.lambda = self.lambda;
         network.check_dimensions()?;
         Ok(network)
     }
@@ -553,6 +558,7 @@ impl Network {
         self.weights_per_layer = other.weights_per_layer.clone();
         self.biases_per_layer = other.biases_per_layer.clone();
         self.weights_x_biases_per_layer = other.weights_x_biases_per_layer.clone();
+        self.lambda = other.lambda;
         // Notes:
         // (1) Input layer, i.e. the first activation layer is not copied (uses existing input layer)
         // (2) Output layer is also not copied (updated below with self.predict())
