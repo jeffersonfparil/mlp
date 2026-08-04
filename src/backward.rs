@@ -41,9 +41,19 @@ impl Network {
         for i in 0..delta.len() {
             let j = delta.len() - (i + 1); // we start with the first hidden layer in Δ, i.e. we need to reverse Δ
             // Outer-product of the error in hidden layer 1 (l_1 x n) and the transpose of the activation at 1 layer below (n x l_0) to yield a gradient matrix corresponding to the weights matrix (l_1 x l_0)
-            self.weights_gradients_per_layer[i] = delta[j]
-                .matmul0t(&self.activations_per_layer[i])?
-                .clamp(CLAMP_LOWER, CLAMP_UPPER)?; // Clamping to prevent exploding gradients
+            self.weights_gradients_per_layer[i] = if self.lambda == 0.0 {
+                delta[j]
+                    .matmul0t(&self.activations_per_layer[i])?
+                    .clamp(CLAMP_LOWER, CLAMP_UPPER)?
+            } else {
+                delta[j]
+                    .matmul0t(&self.activations_per_layer[i])?
+                    .elementwisematadd(
+                        &self.weights_per_layer[i]
+                            .scalarmatmul(self.lambda)?
+                    )?
+                    .clamp(CLAMP_LOWER, CLAMP_UPPER)?
+            };
             // Sum-up the errors across n samples in the current hidden layer to calculate the gradients for the bias
             self.biases_gradients_per_layer[i] =
                 delta[j].rowsummat()?.clamp(CLAMP_LOWER, CLAMP_UPPER)?; // Clamping to prevent exploding gradients
