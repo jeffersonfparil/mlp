@@ -151,7 +151,7 @@ struct Args {
     epsilon: f32,
 
     /// Randomisation seed
-    #[arg(long, default_value_t = 123)]
+    #[arg(long, default_value_t = 1114)]
     seed: usize,
 
     /// Filename of the output network model 
@@ -197,7 +197,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-4"
+        default_value = "1e-3"
     )]
     selection_learning_rates: Vec<f32>,
 
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0"
+        default_value = "0.1"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -232,7 +232,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "Sigmoid,ReLU,ELU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "GradientDescent,Adam,AdamW"
+        default_value = "Adam"
     )]
     selection_optimisers: Vec<String>,
 
@@ -363,13 +363,6 @@ struct Args {
     /// Parameter 2 (e.g., variance or scale) for the weight distribution
     #[arg(long, default_value_t = 1.0)]
     simulation_weights_distribution_param_2: f64,
-
-    ////////////////////////////////////////////////////////////////////////////////
-    // Miscellaneous flags and arguments
-
-    /// Do not save the network (for benchmarking purposes to save on time and resources by not writing the model as JSON into disk)
-    #[arg(long, action)]
-    do_not_save_network: bool,
 }
 
 fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {

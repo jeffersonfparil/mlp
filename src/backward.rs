@@ -3,8 +3,8 @@ use crate::network::Network;
 use std::error::Error;
 
 // To prevent exploding gradients we clamp the gradients to a reasonable range:
-const CLAMP_LOWER: f32 = -10.0;
-const CLAMP_UPPER: f32 = 10.0;
+const CLAMP_LOWER: f32 = -1.0;
+const CLAMP_UPPER: f32 = 1.0;
 
 impl Network {
     pub fn backpropagation(&mut self) -> Result<(), Box<dyn Error>> {

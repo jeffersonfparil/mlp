@@ -53,8 +53,7 @@ if [[ $ANALYSIS_TYPE == "trials" ]]; then
     time ${MLP} \
         -f ${FNAME_INPUT} \
         -o ${FNAME_OUTPUT_JSON} \
-        -v \
-        --do-not-save-network > ${FNAME_OUTPUT_JSON}.log
+        -v > ${FNAME_OUTPUT_JSON}.log
     # Clean-up just a bit
     mkdir -p $TMP_OUTDIR
     for f in $(grep "Find the loss curve saved as: " ${FNAME_OUTPUT_JSON}.log | cut -d ':' -f2  | cut -d ' ' -f2); do mv $f $TMP_OUTDIR; done
@@ -124,8 +123,7 @@ else
                 -o ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
                 --hyperparameter-optimisation \
-                --skip-marginals \
-                --do-not-save-network > ${FNAME_OUTPUT_CV}.log
+                --skip-marginals > ${FNAME_OUTPUT_CV}.log
             SELECTED_N_HIDDEN_LAYERS=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Layers: " | awk -F': '  '{print $2}')
             SELECTED_N_HIDDEN_NODES=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Hidden Nodes: " | awk -F': '  '{print $2}')
             SELECTED_DROPOUT_RATE=$(grep -A14 "Best hyperparameters found:" ${FNAME_OUTPUT_CV}.log | grep "\- Dropout Rate: " | awk -F': '  '{print $2}')
@@ -147,8 +145,7 @@ else
                 -f ${TMP_OUTDIR}/VALIDATION_SET.tmp \
                 -m ${TMP_OUTDIR}/OUTPUT.tmp.json \
                 -v \
-                --predict-only \
-                --do-not-save-network >> ${FNAME_OUTPUT_CV}.log
+                --predict-only >> ${FNAME_OUTPUT_CV}.log
             # cat ${FNAME_OUTPUT_CV}.log
             cut -f1 ${TMP_OUTDIR}/VALIDATION_SET.tmp > ${TMP_OUTDIR}/true.tmp
             cut -f1 ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv > ${TMP_OUTDIR}/pred.tmp
