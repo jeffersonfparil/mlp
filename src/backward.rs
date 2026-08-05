@@ -42,10 +42,12 @@ impl Network {
             let j = delta.len() - (i + 1); // we start with the first hidden layer in Δ, i.e. we need to reverse Δ
             // Outer-product of the error in hidden layer 1 (l_1 x n) and the transpose of the activation at 1 layer below (n x l_0) to yield a gradient matrix corresponding to the weights matrix (l_1 x l_0)
             self.weights_gradients_per_layer[i] = if self.lambda == 0.0 {
+                // No L2 penalty
                 delta[j]
                     .matmul0t(&self.activations_per_layer[i])?
                     .clamp(CLAMP_LOWER, CLAMP_UPPER)?
             } else {
+                // L2 penalty
                 delta[j]
                     .matmul0t(&self.activations_per_layer[i])?
                     .elementwisematadd(

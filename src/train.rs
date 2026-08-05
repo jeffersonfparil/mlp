@@ -670,6 +670,9 @@ impl Network {
                 );
             }
         }
+
+        // TODO: some interpolation to get the best combination?
+
         // Build and train the network using the best hyperparameters
         let (
             loss_expected,

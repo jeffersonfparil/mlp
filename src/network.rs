@@ -466,7 +466,7 @@ impl Network {
             n_epochs: 0,
             seed: seed,
             dropout_masks_per_layer: dropout_masks_per_layer,
-            lambda: 0.1, // Default no L2 penalty
+            lambda: 0.0, // Default no L2 penalty
         };
         // He/Kaiming initialisation of weights by default as ReLU is tha default activation function
         out.init_weights(&weights_initialisation, seed)?;

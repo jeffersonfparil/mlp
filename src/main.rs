@@ -197,7 +197,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-3"
+        default_value = "1e-4,5e-4,1e-3"
     )]
     selection_learning_rates: Vec<f32>,
 
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam"
+        default_value = "Adam,AdamW"
     )]
     selection_optimisers: Vec<String>,
 
