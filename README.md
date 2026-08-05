@@ -410,7 +410,7 @@ $MLP -v
 rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
 
 T=CONTINUOUS
-N=1000
+N=100
 P=1000
 L=1
 R=3
