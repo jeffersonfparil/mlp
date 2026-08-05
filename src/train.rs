@@ -392,6 +392,10 @@ impl Network {
         //  (1) early stopping and 
         //  (2) batching effect if there is an inner validation set
         self.n_epochs = epochs.len();
+        // Remove the dropout mask after training
+        for i in 0..self.n_hidden_layers {
+            self.drop_dropout_mask(i)?;
+        }
         Ok((epochs, costs))
     }
 

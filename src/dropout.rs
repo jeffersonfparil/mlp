@@ -11,7 +11,7 @@ impl Network {
         let n_nodes = self.n_hidden_nodes[i];
         let n_dropped_nodes =
             (self.dropout_rates[i] * self.n_hidden_nodes[i] as f32).round() as usize;
-        let weights_x_dropout = if n_dropped_nodes > 0 {
+        if n_dropped_nodes > 0 {
             let idx_dropped_nodes = (0..n_nodes).choose_multiple(&mut rng, n_dropped_nodes);
             let mut d = vec![1.0f32; n_nodes];
             for i in idx_dropped_nodes {
@@ -33,6 +33,22 @@ impl Network {
             .rowmatmul(&self.dropout_masks_per_layer[i])?
             .matmul(&self.activations_per_layer[i])?
             .rowmatadd(&self.biases_per_layer[i])?;
+        Ok(())
+    }
+
+    pub fn drop_dropout_mask(&mut self, i: usize) -> Result<(), Box<dyn Error>> {
+        let mut rng = ChaCha12Rng::seed_from_u64((self.seed + i + self.n_epochs) as u64);
+        let n_nodes = self.n_hidden_nodes[i];
+        let n_dropped_nodes =
+            (self.dropout_rates[i] * self.n_hidden_nodes[i] as f32).round() as usize;
+        let d = vec![1.0f32; n_nodes];
+        let d_dev: CudaSlice<f32> = self
+            .targets
+            .data
+            .context()
+            .default_stream()
+            .clone_htod(&d)?;
+        self.dropout_masks_per_layer[i] = Matrix::new(d_dev, n_nodes, 1)?;
         Ok(())
     }
 }
