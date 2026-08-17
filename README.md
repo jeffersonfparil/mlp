@@ -410,8 +410,8 @@ $MLP -v
 rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
 
 T=CONTINUOUS
-N=100
-P=1000
+N=1000
+P=10000
 L=1
 R=3
 F=5
@@ -429,20 +429,43 @@ pixi run bash scripts/randomisationgprs.sh -h
 time pixi run bash scripts/randomisationgprs.sh gp $FNAME_SIMULATED_DATA . $R $F $S
 # LINEAR MODELLING
 pixi run Rscript scripts/linear.R -h
-time pixi run Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BRR' FALSE
+time pixi run Rscript scripts/linear.R gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F 10000 1000 'BayesA' FALSE
 # Output: "output-simulated-DATA_TYPE_CONTINUOUS-N_100-P_10000-HIDDEN_LAYERS_1-LINEAR.tsv"
 # MLP MODELLING
 pixi run bash scripts/mlp.sh -h
 time pixi run  bash scripts/mlp.sh $MLP gp $FNAME_SIMULATED_DATA . $FNAME_RANDOMISATION $R $F
-
-
-
+# Compare
+Rscript -e '
+    df_linear <- read.delim("'${FNAME_LINEAR}'", header=TRUE)
+    df_mlp <- read.delim("'${FNAME_MLP}'", header=TRUE)
+    df = rbind(
+        data.frame(model=df_linear$model, rep=df_linear$rep, fold=df_linear$fold, sd_true=df_linear$sd_true, sd_pred=df_linear$sd_pred, lm_intercept=df_linear$lm_intercept, lm_slope=df_linear$lm_slope, corr=df_linear$corr, r2=df_linear$r2, mae=df_linear$mae, rmse=df_linear$rmse), 
+        data.frame(model=df_mlp$model, rep=df_mlp$rep, fold=df_mlp$fold, sd_true=df_mlp$sd_true, sd_pred=df_mlp$sd_pred, lm_intercept=df_mlp$lm_intercept, lm_slope=df_mlp$lm_slope, corr=df_mlp$corr, r2=df_mlp$r2, mae=df_mlp$mae, rmse=df_mlp$rmse)
+    )
+    aggregate(cbind(corr,r2,rmse,mae,lm_intercept,lm_slope) ~ model, data=df, \(x) c(mean=mean(x), sd=sd(x)))
+'
 # Cleanup
 rm $FNAME_SIMULATED_DATA 
 rm $FNAME_SIMULATED_NETWORK 
 rm $FNAME_RANDOMISATION
 rm $FNAME_LINEAR
 rm $FNAME_MLP
+# Interpretations
+echo """
+# BOTTOM LINE:
+- Ranking genotypes for selection --> the two models are very similar, with some slight edge to BayesA
+- Predicting actual phenotypes --> I'd prefer the MLP!
+
+# DETAILS:
+BayesA achieved a marginally higher mean predictive correlation (0.392 ± 0.153) than the MLP (0.361 ± 0.122).
+However, the MLP consistently produced lower prediction errors, yielding lower RMSE (9.43 vs 9.91) and MAE (7.23 vs 7.77), 
+together with a substantially higher predictive R² (0.113 vs 0.026).
+
+xamination of prediction dispersion revealed stronger shrinkage in BayesA predictions (SD = 1.70) relative to the MLP (SD = 2.46), 
+despite both being much smaller than the observed phenotypic SD (10.32).
+These results suggest that BayesA preserved rank ordering slightly better, whereas the MLP produced predictions that more closely 
+matched the magnitude of observed phenotypic values.
+"""
 ```
 
 ## MLPInterrogator.jl

@@ -138,7 +138,6 @@ impl Data {
         features_dist: &str,
         features_par1: f64,
         features_par2: f64,
-
         weights_dist: &str,
         weights_par1: f64,
         weights_par2: f64,
@@ -238,6 +237,7 @@ impl Data {
         // Redefine the weights
         if verbose {println!("(6/8) Simulating weights and replacing the ones initialised in the Network struct...")}
         let time = Instant::now();
+        network.activation = Activation::Swish;
         let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
         for i in 0..(network.n_hidden_layers+1) {
             let n_rows = network.weights_per_layer[i].n_rows;
@@ -969,6 +969,7 @@ impl Network {
             "ReLU" => Activation::ReLU,
             "ELU" => Activation::ELU,
             "Sigmoid" => Activation::Sigmoid,
+            "Swish" => Activation::Swish,
             "HyperbolicTangent" => Activation::HyperbolicTangent,
             "Linear" => Activation::Linear,
             _ => return Err(Box::new(ActivationError::UnimplementedActivation)),

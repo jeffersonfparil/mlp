@@ -35,6 +35,7 @@ impl fmt::Display for ActivationError {
 pub enum Activation {
     Linear,
     Sigmoid,
+    Swish,
     HyperbolicTangent,
     ReLU,
     ELU,
@@ -48,6 +49,9 @@ impl fmt::Display for Activation {
             }
             Activation::Sigmoid => {
                 write!(f, "Sigmoid")
+            }
+            Activation::Swish => {
+                write!(f, "Swish")
             }
             Activation::HyperbolicTangent => {
                 write!(f, "HyperbolicTangent")
@@ -139,6 +143,47 @@ const SIGMOID_DERIVATIVE: &str = "
             int idx = (i * n_cols) + j; // Linear index for the A and B matrices
             float s = 1.00 / (1.00 + exp(-A[idx]));
             B[idx] = s * (1.00 - s);
+        }
+    }
+";
+
+const SWISH: &str = "
+    extern \"C\" __global__ void cuSwish(float* A, float* B, int n_rows, int n_cols) {
+        // Swish activation kernel implementation
+        // Arguments:
+        //  - A: input matrix (n_rows x n_cols)
+        //  - B: output matrix (n_rows x n_cols)
+        //  - n_rows: number of rows in A and B
+        //  - n_cols: number of columns in A and B
+        // Assumes:
+        //  - row-major storage
+        //  - matrices A and B are of the same size
+        int i = (blockIdx.y * blockDim.y) + threadIdx.y; // Row index
+        int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
+        if ((i < n_rows) && (j < n_cols)) {
+            int idx = (i * n_cols) + j; // Linear index for the A and B matrices
+            B[idx] = A[idx] / (1.00 + exp(-A[idx]));
+        }
+    }
+";
+
+const SWISH_DERIVATIVE: &str = "
+    extern \"C\" __global__ void cuSwishDerivative(float* A, float* B, int n_rows, int n_cols) {
+        // Swish activation derivative kernel implementation
+        // Arguments:
+        //  - A: input matrix (n_rows x n_cols)
+        //  - B: output matrix (n_rows x n_cols)
+        //  - n_rows: number of rows in A and B
+        //  - n_cols: number of columns in A and B
+        // Assumes:
+        //  - row-major storage
+        //  - matrices A and B are of the same size
+        int i = (blockIdx.y * blockDim.y) + threadIdx.y; // Row index
+        int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
+        if ((i < n_rows) && (j < n_cols)) {
+            int idx = (i * n_cols) + j; // Linear index for the A and B matrices
+            float s = 1.00 / (1.00 + exp(-A[idx]));
+            B[idx] = s + (A[idx] * s * (1.00 - s));
         }
     }
 ";
@@ -394,6 +439,60 @@ pub fn sigmoidderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
 }
 
+pub fn swish(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuSwish", SWISH)?;
+    let stream: Arc<CudaStream> = a.data.context().default_stream();
+    let mut builder: LaunchArgs = stream.launch_builder(&f);
+    let n_rows: u32 = a.n_rows as u32;
+    let n_cols: u32 = a.n_cols as u32;
+    let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+    let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
+    builder.arg(&a.data);
+    builder.arg(&mut out_dev);
+    builder.arg(&n_rows);
+    builder.arg(&n_cols);
+    let cfg = LaunchConfig {
+        block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
+        grid_dim: (
+            (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            1,
+        ),
+        shared_mem_bytes: 0,
+    };
+    unsafe {
+        let _ = builder.launch(cfg);
+    };
+    Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
+}
+
+pub fn swishderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuSwishDerivative", SWISH_DERIVATIVE)?;
+    let stream: Arc<CudaStream> = a.data.context().default_stream();
+    let mut builder: LaunchArgs = stream.launch_builder(&f);
+    let n_rows: u32 = a.n_rows as u32;
+    let n_cols: u32 = a.n_cols as u32;
+    let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+    let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
+    builder.arg(&a.data);
+    builder.arg(&mut out_dev);
+    builder.arg(&n_rows);
+    builder.arg(&n_cols);
+    let cfg = LaunchConfig {
+        block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
+        grid_dim: (
+            (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            1,
+        ),
+        shared_mem_bytes: 0,
+    };
+    unsafe {
+        let _ = builder.launch(cfg);
+    };
+    Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
+}
+
 pub fn hyperbolictangent(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     let f: CudaFunction = a.get_cached_kernel("cuHyperbolicTangent", HYPERBOLICTANGENT)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
@@ -502,8 +601,6 @@ pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
 }
 
-// Different function signatures as above:
-
 pub fn elu(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     let f: CudaFunction = a.get_cached_kernel("cuELU", ELU)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
@@ -563,6 +660,7 @@ impl Activation {
         match self {
             Activation::Linear => linear(a),
             Activation::Sigmoid => sigmoid(a),
+            Activation::Swish => swish(a),
             Activation::HyperbolicTangent => hyperbolictangent(a),
             Activation::ReLU => relu(a),
             Activation::ELU => elu(a),
@@ -575,6 +673,7 @@ impl Activation {
         match self {
             Activation::Linear => linearderivative(a),
             Activation::Sigmoid => sigmoidderivative(a),
+            Activation::Swish => swishderivative(a),
             Activation::HyperbolicTangent => hyperbolictangentderivative(a),
             Activation::ReLU => reluderivative(a),
             Activation::ELU => eluderivative(a),

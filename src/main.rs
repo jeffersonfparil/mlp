@@ -179,7 +179,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "128"
+        default_value = "64"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -188,7 +188,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0,0.2,0.4,0.6"
+        default_value = "0.0,0.1,0.2,0.3"
     )]
     selection_dropout_rates: Vec<f32>,
 
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0"
+        default_value = "0.02"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -223,7 +223,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.5"
+        default_value = "0.0"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -232,7 +232,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "Sigmoid,ReLU,ELU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "Sigmoid,Swish,ReLU,ELU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -659,6 +659,7 @@ fn train_with_hyperparameter_optimisation(
                 "ReLU" => Activation::ReLU,
                 "ELU" => Activation::ELU,
                 "Sigmoid" => Activation::Sigmoid,
+                "Swish" => Activation::Swish,
                 "HyperbolicTangent" => Activation::HyperbolicTangent,
                 "Linear" => Activation::Linear,
                 _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
@@ -759,6 +760,7 @@ fn train_with_fixed_hyperparameters(
         "ReLU" => Activation::ReLU,
         "ELU" => Activation::ELU,
         "Sigmoid" => Activation::Sigmoid,
+        "Swish" => Activation::Swish,
         "HyperbolicTangent" => Activation::HyperbolicTangent,
         "Linear" => Activation::Linear,
         _ => return Err(Box::new(ActivationError::UnimplementedActivation)),

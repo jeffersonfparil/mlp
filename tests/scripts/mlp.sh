@@ -102,7 +102,7 @@ else
     echo -ne "n_hidden_layers\tn_hidden_nodes\tdropout_rate\tlearning_rate\t" >> ${FNAME_OUTPUT_CV}.tmp
     echo -ne "n_epochs\tn_burnin_epochs\tn_patient_epochs\tn_validation\t" >> ${FNAME_OUTPUT_CV}.tmp
     echo -ne "n_batches\tactivation\tcost\toptimiser\tweights_initialisation\t" >> ${FNAME_OUTPUT_CV}.tmp
-    echo -e "corr\tr2" >> ${FNAME_OUTPUT_CV}.tmp
+    echo -e "sd_true\tsd_pred\tlm_intercept\tlm_slope\tmae\tmse\trmse\tcorr\tr2" >> ${FNAME_OUTPUT_CV}.tmp
     IDX_RANDOMISATION=0
     for REP in $(seq 1 $N_REPS); do
         # REP=1
@@ -150,16 +150,30 @@ else
             cut -f1 ${TMP_OUTDIR}/VALIDATION_SET.tmp > ${TMP_OUTDIR}/true.tmp
             cut -f1 ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv > ${TMP_OUTDIR}/pred.tmp
             paste -d'\t' ${TMP_OUTDIR}/true.tmp ${TMP_OUTDIR}/pred.tmp > ${TMP_OUTDIR}/true_vs_pred.tmp
-            NT=$(tail -n+2 ${TMP_OUTDIR}/TRAINING_SET.tmp | wc -l)
-            NV=$(tail -n+2 ${TMP_OUTDIR}/VALIDATION_SET.tmp | wc -l)
-            U_TRUE=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk '{sum+=$1; count++} END {printf("%.21f\n", sum/count)}')
-            U_PRED=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk '{sum+=$2; count++} END {printf("%.21f\n", sum/count)}')
-            S_TRUE=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk -v U_TRUE="$U_TRUE" '{sum+=(($1-U_TRUE)^2); count++} END {printf("%.21f\n", sqrt(sum/(count-1)))}')
-            S_PRED=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk -v U_PRED="$U_PRED" '{sum+=(($2-U_PRED)^2); count++} END {printf("%.21f\n", sqrt(sum/(count-1)))}')
-            V_TRUE_PRED=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk -v U_TRUE="$U_TRUE" -v U_PRED="$U_PRED" '{sum+=(($1-U_TRUE)*($2-U_PRED)); count++} END {printf("%.21f\n", sum/(count-1))}')
-            MSE=$(tail -n+2 ${TMP_OUTDIR}/true_vs_pred.tmp | awk '{sum+=(($1 - $2)^2); count++} END {printf("%.21f\n", sum/(count - 1))}')
-            CORR="$(echo "scale=12; $V_TRUE_PRED / (($S_TRUE * $S_PRED) + 0.00000000001)" | bc | sed 's/[.]/0./g')"
-            R2="$(echo "scale=12; 1.00 - ($MSE / (($S_TRUE^2) + 0.00000000001))" | bc | sed 's/[.]/0./g')"
+            read -r SD_TRUE SD_PRED LM_INTERCEPT LM_SLOPE MAE MSE RMSE CORR R2 < <(
+                Rscript -e '
+                    df <- read.table("'"${TMP_OUTDIR}/true_vs_pred.tmp"'", header=TRUE)
+                    y_true <- df[[1]]
+                    y_pred <- df[[2]]
+                    sd_true <- sd(y_true)
+                    sd_pred <- sd(y_pred)
+                    mod <- lm(y_true ~ y_pred)
+                    lm_intercept <- coef(mod)["(Intercept)"]
+                    lm_slope <- coef(mod)["y_pred"]
+                    mse <- mean((y_true-y_pred)^2)
+                    mae <- mean(abs(y_true-y_pred))
+                    rmse <- sqrt(mse)
+                    pcor <- cor(y_true,y_pred)
+                    r2 <- 1 - sum((y_true-y_pred)^2) / sum((y_true-mean(y_true))^2)
+                    if (is.na(pcor)) {
+                        pcor = 0.0
+                    }
+                    if (is.na(r2)) {
+                        r2 = 0.0
+                    }
+                    cat(sprintf("%.12f %.12f %.12f %.12f %.12f %.12f %.12f %.12f %.12f\n", sd_true, sd_pred, lm_intercept, lm_slope, mae, mse, rmse, pcor, r2))
+                '
+            )
             rm ${TMP_OUTDIR}/VALIDATION_SET.tmp
             rm ${TMP_OUTDIR}/OUTPUT.tmp.json
             rm ${TMP_OUTDIR}/OUTPUT.tmp-predictions.tsv
@@ -168,7 +182,7 @@ else
             echo -ne "$SELECTED_N_HIDDEN_LAYERS\t$SELECTED_N_HIDDEN_NODES\t$SELECTED_DROPOUT_RATE\t$SELECTED_LEARNING_RATE\t" >> ${FNAME_OUTPUT_CV}.tmp
             echo -ne "$SELECTED_N_EPOCHS\t$SELECTED_N_BURNIN_EPOCHS\t$SELECTED_N_PATIENT_EPOCHS\t$SELECTED_N_VALIDATION\t" >> ${FNAME_OUTPUT_CV}.tmp
             echo -ne "$SELECTED_N_BATCHES\t$SELECTED_ACTIVATION\t$SELECTED_COST\t$SELECTED_OPTIMISER\t$SELECTED_WEIGHTS_INITIALISATION\t" >> ${FNAME_OUTPUT_CV}.tmp
-            echo -e "$CORR\t$R2" >> ${FNAME_OUTPUT_CV}.tmp
+            echo -e "$SD_TRUE\t$SD_PRED\t$LM_INTERCEPT\t$LM_SLOPE\t$MAE\t$MSE\t$RMSE\t$CORR\t$R2" >> ${FNAME_OUTPUT_CV}.tmp
             tail -n1 ${FNAME_OUTPUT_CV}.tmp
         done
     done
