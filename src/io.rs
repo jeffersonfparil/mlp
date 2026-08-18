@@ -251,27 +251,28 @@ impl Data {
             let n_rows = network.weights_per_layer[i].n_rows;
             let n_cols = network.weights_per_layer[i].n_cols;
             let m = n_rows * n_cols;
-            let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
-            let mut weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
-            let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
-            for col in 0..n_cols {
-                let u: f32 = rng.random();
-                let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
-                let mut target_rows: Vec<usize> = (0..n_rows).collect();
-                for r in 0..degree {
-                    let swap_idx = rng.random_range(r..n_rows);
-                    target_rows.swap(r, swap_idx);
-                }
-                for &row in target_rows.iter().take(degree) { 
-                    mask[row * n_cols + col] = true; 
-                }
-            }
-            for (idx, w) in weights_host.iter_mut().enumerate() { 
-                if !mask[idx] { 
-                    *w = 0.0; 
-                } 
-            }
-            let biases_host: Vec<f32> = simulate_weights("uniform", -1.0, 1.0, n_rows, seed + i)?; // dense continuous effects
+            let weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
+            // let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
+            // let mut weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
+            // let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
+            // for col in 0..n_cols {
+            //     let u: f32 = rng.random();
+            //     let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
+            //     let mut target_rows: Vec<usize> = (0..n_rows).collect();
+            //     for r in 0..degree {
+            //         let swap_idx = rng.random_range(r..n_rows);
+            //         target_rows.swap(r, swap_idx);
+            //     }
+            //     for &row in target_rows.iter().take(degree) { 
+            //         mask[row * n_cols + col] = true; 
+            //     }
+            // }
+            // for (idx, w) in weights_host.iter_mut().enumerate() { 
+            //     if !mask[idx] { 
+            //         *w = 0.0; 
+            //     } 
+            // }
+            let biases_host: Vec<f32> = simulate_weights("normal", 0.0, 1.0, n_rows, seed + i)?; // dense continuous effects
             network.biases_per_layer[i] = Matrix::new(stream.clone_htod(&biases_host)?, n_rows, 1)?;
             network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
             network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
@@ -959,6 +960,7 @@ impl Network {
         let predictions = Matrix::new(stream.clone_htod(&serdifiable_network.predictions)?, k, n)?;
         let weights_initialisation = match serdifiable_network.weights_initialisation.as_ref() {
             "He" => WeightsInitialisation::He,
+            "Xavier" => WeightsInitialisation::Xavier,
             "Cauchy" => WeightsInitialisation::Cauchy,
             "Uniform" => WeightsInitialisation::Uniform,
             "StandardNormal" => WeightsInitialisation::StandardNormal,

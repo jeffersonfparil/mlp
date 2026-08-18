@@ -106,6 +106,9 @@ elif [[ $ANALYSIS_TYPE == "gp" ]]; then
         --simulation-n-features-categorical 0 \
         --simulation-n-output-columns 1 \
         --simulation-n-hidden-layers ${HIDDEN_LAYERS} \
+        --simulation-features-distribution normal \
+        --simulation-features-distribution-param-1 0 \
+        --simulation-features-distribution-param-2 1 \
         --simulation-weights-distribution normal \
         --simulation-weights-distribution-param-1 0 \
         --simulation-weights-distribution-param-2 1 \

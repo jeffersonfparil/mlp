@@ -19,6 +19,7 @@ use std::sync::Arc;
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum WeightsInitialisation {
     He,
+    Xavier,
     Cauchy,
     Uniform,
     StandardNormal,
@@ -29,6 +30,9 @@ impl fmt::Display for WeightsInitialisation {
         match self {
             WeightsInitialisation::He => {
                 write!(f, "He")
+            }
+            WeightsInitialisation::Xavier => {
+                write!(f, "Xavier")
             }
             WeightsInitialisation::Cauchy => {
                 write!(f, "Cauchy")
@@ -312,7 +316,11 @@ impl Network {
                 };
                 let tmp: Vec<f32> = match init_type {
                     WeightsInitialisation::He => {
-                        let distribution = Normal::new(0.0, 2.0/(p as f32))?;
+                        let distribution = Normal::new(0.0, (2.0/(p as f32)).sqrt())?;
+                        (&mut rng).sample_iter(distribution).take(m).collect()
+                    },
+                    WeightsInitialisation::Xavier => {
+                        let distribution = Normal::new(0.0, (2.0/((n + p) as f32)).sqrt())?;
                         (&mut rng).sample_iter(distribution).take(m).collect()
                     },
                     WeightsInitialisation::Cauchy => {

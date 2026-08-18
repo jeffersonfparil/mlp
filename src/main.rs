@@ -171,7 +171,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Vector of number of hidden layers for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "2")]
     selection_hidden_layers: Vec<usize>,
 
     /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of features whichever is smaller)
@@ -179,7 +179,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "64,128"
+        default_value = "64"
     )]
     selection_hidden_layer_nodes: Vec<usize>,
 
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.01"
+        default_value = "0.1"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "AdamW"
+        default_value = "GradientDescent,Adam,AdamW"
     )]
     selection_optimisers: Vec<String>,
 
@@ -423,6 +423,7 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
     }
     let weights_initialisation = match args.weights_initialisation.as_ref() {
         "He" => WeightsInitialisation::He,
+        "Xavier" => WeightsInitialisation::Xavier,
         "Cauchy" => WeightsInitialisation::Cauchy,
         "Uniform" => WeightsInitialisation::Uniform,
         "StandardNormal" => WeightsInitialisation::StandardNormal,
@@ -697,6 +698,7 @@ fn train_with_hyperparameter_optimisation(
         for x in &args.selection_weights_initialisations {
             v.push(match x.as_ref() {
                 "He" => WeightsInitialisation::He,
+                "Xavier" => WeightsInitialisation::Xavier,
                 "Cauchy" => WeightsInitialisation::Cauchy,
                 "Uniform" => WeightsInitialisation::Uniform,
                 "StandardNormal" => WeightsInitialisation::StandardNormal,
