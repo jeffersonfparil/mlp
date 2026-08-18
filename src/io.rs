@@ -6,7 +6,7 @@ use crate::marginal::{Marginals, MarginalError};
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
-use rand_distr::{Beta, Cauchy, Gamma, LogNormal, Normal, Weibull};
+use rand_distr::{Beta, Cauchy, Gamma, LogNormal, Normal, Uniform, Weibull};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -39,6 +39,14 @@ impl fmt::Display for Data {
 fn simulate_weights(dist: &str, par1: f64, par2: f64, p: usize, seed: usize) -> Result<Vec<f32>, Box<dyn Error>> {
     let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
     let weights: Vec<f32> = match dist {
+        "uniform" => {
+            let distribution = Uniform::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
         "normal" => {
             let distribution = Normal::new(par1, par2)?;
             (&mut rng)
@@ -149,7 +157,7 @@ impl Data {
         // q = vector of the number of levels in categorical variable
         // k = number of response variables or targets
         // d = number of hidden layers
-        // weights_dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
+        // weights_dist = distribution of the weights (all biases will be uniformly distributed between -1 and 1 + all distributions will have 2 controllable parameters)
         // weights_par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
         // weights_par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
         // seed = randomisation seed for repeatability
@@ -218,10 +226,10 @@ impl Data {
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
         // println!("targets={}", targets);
         let n_hidden_layers: usize = d;
-        let n_hidden_nodes: Vec<usize> = vec![(n_features as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
+        let n_hidden_nodes: Vec<usize> = vec![64; n_hidden_layers]; // we fix hidden layer nodes to just 64
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
         if verbose {println!("(5/8) Simulating Network struct...")}
-        let time = Instant::now();
+        let time: Instant = Instant::now();
         let mut network = Network::new(
             &stream,
             features,
@@ -263,6 +271,8 @@ impl Data {
                     *w = 0.0; 
                 } 
             }
+            let biases_host: Vec<f32> = simulate_weights("uniform", -1.0, 1.0, n_rows, seed + i)?; // dense continuous effects
+            network.biases_per_layer[i] = Matrix::new(stream.clone_htod(&biases_host)?, n_rows, 1)?;
             network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
             network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
         }

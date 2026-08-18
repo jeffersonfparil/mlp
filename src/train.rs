@@ -286,7 +286,7 @@ impl Network {
             network_training.forwardpass()?;
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
-            network_training.predict()?;
+            // network_training.predict()?;
             network_training.n_epochs = epoch;
             if verbose {
                 pb.next();
