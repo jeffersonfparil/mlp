@@ -410,8 +410,8 @@ $MLP -v --optimiser=AdamMax
 rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
 
 T=CONTINUOUS
-N=10000
-P=1000
+N=1000
+P=100
 L=2
 R=3
 F=5

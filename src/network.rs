@@ -316,11 +316,11 @@ impl Network {
                 };
                 let tmp: Vec<f32> = match init_type {
                     WeightsInitialisation::He => {
-                        let distribution = Normal::new(0.0, (2.0/(p as f32)).sqrt())?;
+                        let distribution = Normal::new(0.0, (2.0/(p as f32)))?;
                         (&mut rng).sample_iter(distribution).take(m).collect()
                     },
                     WeightsInitialisation::Xavier => {
-                        let distribution = Normal::new(0.0, (2.0/((n + p) as f32)).sqrt())?;
+                        let distribution = Normal::new(0.0, (2.0/((n + p) as f32)))?;
                         (&mut rng).sample_iter(distribution).take(m).collect()
                     },
                     WeightsInitialisation::Cauchy => {

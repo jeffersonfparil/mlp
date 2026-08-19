@@ -197,12 +197,12 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "1e-4,1e-3"
+        default_value = "1e-4"
     )]
     selection_learning_rates: Vec<f32>,
 
     /// Vector of maximum number of training epochs for hyperparameter optimisaion
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.0"
+        default_value = "0.1"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -232,7 +232,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "Swish,ReLU,ELU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "GradientDescent,Adam,AdamW,AdamMax"
+        default_value = "Adam"
     )]
     selection_optimisers: Vec<String>,
 
