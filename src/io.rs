@@ -246,12 +246,12 @@ impl Data {
         if verbose {println!("(6/8) Simulating weights and replacing the ones initialised in the Network struct...")}
         let time = Instant::now();
         network.activation = Activation::Swish;
-        let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
+        // let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
         for i in 0..(network.n_hidden_layers+1) {
             let n_rows = network.weights_per_layer[i].n_rows;
-            let n_cols = network.weights_per_layer[i].n_cols;
-            let m = n_rows * n_cols;
-            let weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
+            // let n_cols = network.weights_per_layer[i].n_cols;
+            // let m = n_rows * n_cols;
+            // // let weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
             // let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
             // let mut weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
             // let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
@@ -274,8 +274,8 @@ impl Data {
             // }
             let biases_host: Vec<f32> = simulate_weights("normal", 0.0, 1.0, n_rows, seed + i)?; // dense continuous effects
             network.biases_per_layer[i] = Matrix::new(stream.clone_htod(&biases_host)?, n_rows, 1)?;
-            network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
-            network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
+            // network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
+            // network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
         }
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Extract non-dummy targets

@@ -214,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1"
+        default_value = "0.0"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
