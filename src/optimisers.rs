@@ -224,8 +224,7 @@ pub fn adammax(
         let g1: Matrix = optimiser_parameters.second_moments_of_weights_per_layer[i]
             .scalarmatmul(optimiser_parameters.second_moment_decay)?;
         let g2: Matrix = network.weights_gradients_per_layer[i].elementwisematabs()?;
-        optimiser_parameters.second_moments_of_weights_per_layer[i] =
-            if g1.summat()? >= g2.summat()? { g1 } else { g2 };
+        optimiser_parameters.second_moments_of_weights_per_layer[i] = g1.elementwisematmax(&g2)?;
         network.weights_per_layer[i] = network.weights_per_layer[i].elementwisematadd(
             &optimiser_parameters.first_moments_of_weights_per_layer[i]
                 .scalarmatmul(r_adj)?

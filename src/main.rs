@@ -171,7 +171,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Vector of number of hidden layers for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "2")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
     selection_hidden_layers: Vec<usize>,
 
     /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of features whichever is smaller)
@@ -232,7 +232,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "Swish")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "Swish,ReLU,ELU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -244,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "GradientDescent,Adam,AdamW"
+        default_value = "GradientDescent,Adam,AdamW,AdamMax"
     )]
     selection_optimisers: Vec<String>,
 

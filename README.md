@@ -406,7 +406,7 @@ cd mlp/tests/
 RUSTFLAGS="-Awarnings" pixi run cargo build --release
 MLP=${HOME}/Documents/mlp/target/release/mlp
 $MLP -h
-$MLP -v
+$MLP -v --optimiser=AdamMax
 rm input_simulated-* output_network-* Loss_* Marginal_* Observed_*
 
 T=CONTINUOUS

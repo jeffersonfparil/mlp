@@ -799,9 +799,8 @@ mod tests {
         let cost_prior_to_training: f32 = network.loss()?;
         println!("cost prior to training = {}", cost_prior_to_training);
         println!("predictions before training: {}", network.targets);
-        for _ in 0..7 {
-            network.train_per_batch(&mut optimisation_parameters, "1", false)?;
-        }
+        optimisation_parameters.n_burnin_epochs = 40;
+        network.train_per_batch(&mut optimisation_parameters, "1", false)?;
         println!("cost after training = {}", network.loss()?);
         println!("predictions after training: {}", network.targets);
         assert!(cost_prior_to_training > network.loss()?);

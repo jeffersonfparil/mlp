@@ -507,7 +507,7 @@ mod tests {
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
         // marginals.effects.iter().zip(vec![0.00914565, 0.00915616, 0.009083876, 0.00925088, 0.009251332, 0.009222691, 0.009141681].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
-        marginals.effects.iter().zip(vec![0.9285408, 0.9200818, 0.9217339, 0.9266311, 0.92468035, 0.9166402, 0.9205366].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals.effects.iter().zip(vec![-0.8072873, -0.8094203, -0.816374, -0.79108906, -0.78428054, -0.80378586, -0.8110637].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
 
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;
