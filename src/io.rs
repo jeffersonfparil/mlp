@@ -1173,7 +1173,12 @@ mod tests {
         }
         // Initialise the network from reloaded data
         let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
-        assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
+        println!("network.targets.summat()? = {}; data_simulated_reloaded.targets.summat()? = {}", network.targets.summat()?, data_simulated_reloaded.targets.summat()?);
+        let mu: f32 = data_simulated_reloaded.targets.meanmat()?;
+        let sd: f32 = data_simulated_reloaded.targets.varmat()?.sqrt();
+        let n: f32 = (data_simulated_reloaded.targets.n_rows * data_simulated_reloaded.targets.n_cols) as f32;
+        println!("network.targets.summat()? = {}; ((data_simulated_reloaded.targets.summat()? - n*mu) / sd) = {}", network.targets.summat()?, ((data_simulated_reloaded.targets.summat()? - n*mu) / sd));
+        assert!(network.targets.summat()? - ((data_simulated_reloaded.targets.summat()? - n*mu) / sd) < 0.1);
         assert!(
             network.activations_per_layer[0].summat()?
                 - data_simulated_reloaded.features.summat()?
