@@ -282,11 +282,12 @@ impl Network {
         };
         // Pre-training burn-in epochs
         let mut pb = ProgressBar::new(optimisation_parameters.n_burnin_epochs, 50, format!("Burn-in {} epochs", optimisation_parameters.n_burnin_epochs));
-        for _ in 0..optimisation_parameters.n_burnin_epochs {
+        for epoch in 0..optimisation_parameters.n_burnin_epochs {
             network_training.forwardpass()?;
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
-            network_training.predict()?;
+            // network_training.predict()?;
+            network_training.n_epochs = epoch;
             if verbose {
                 pb.next();
             }
@@ -294,39 +295,107 @@ impl Network {
         if verbose {
             pb.finish();
         }
-        // Training after burn-in
-        let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
+        // Training after burn-in (mini-batch 1 of 2, i.e. training set)
+        let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (mini-batch 1) (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
+        let mut lowest_training_cost: f64 = f64::INFINITY;
+        let mut lowest_validation_cost: f64 = f64::INFINITY;
         for epoch in 0..optimisation_parameters.n_epochs {
             network_training.forwardpass()?;
             network_training.backpropagation()?;
             network_training.optimise(optimisation_parameters)?;
             network_training.predict()?;
+            network_training.n_epochs = epoch;
             epochs.push(epoch as f64);
-            // Validate
-            if n_validation > 0 {
+            // Loss or cost
+            let training_cost = network_training.loss()? as f64;
+            let validation_cost = if n_validation > 0 {
                 network_validation.replace_model(&network_training)?;
-                network_validation.predict()?;
-                costs.push(network_validation.loss()? as f64);
+                network_validation.loss()? as f64
             } else {
-                costs.push(network_training.loss()? as f64);
-            }
-            // Update the network after training the training network
+                f64::INFINITY
+            };
+            lowest_training_cost = if training_cost < lowest_training_cost {
+                training_cost
+            } else {
+                lowest_training_cost
+            };
+            lowest_validation_cost = if validation_cost < lowest_validation_cost {
+                validation_cost
+            } else {
+                lowest_validation_cost
+            };
+            // Loss or costs is just the cost of the network being trained
+            costs.push(training_cost);
             if verbose {
                 pb.next();
             }
-            // Early stopping check, i.e. stop if no improvement in cost after n_patient_epochs
-            if (epoch > n_patient_epochs) && (costs[epoch] >= costs[epoch - n_patient_epochs]) {
+            // Early stopping check
+            if (epoch > n_patient_epochs) && ((training_cost > lowest_training_cost) || (validation_cost > lowest_validation_cost))  {
                 // println!("Early stopping at epoch {}", epoch);
                 break;
             }
-       }
-        // Update the network after training the training network
-        self.replace_model(&network_training)?;
+        }
         if verbose {
             pb.finish();
         }
-        self.predict()?;
+        // Training after burn-in and training set training (mini-batch 2 of 2, i.e. validation set's turn to be the training set)
+        if n_validation > 0 {
+            network_validation.replace_model(&network_training)?;
+            let mut lowest_training_cost: f64 = f64::INFINITY;
+            let mut lowest_validation_cost: f64 = f64::INFINITY;
+            let mut pb = ProgressBar::new(optimisation_parameters.n_epochs, 50, format!("Training {} batches (mini-batch 2) (seed={}, nt={}, nv={})", n_batches, self.seed, n-n_validation, n_validation));
+            for epoch in 0..optimisation_parameters.n_epochs {
+                network_validation.forwardpass()?;
+                network_validation.backpropagation()?;
+                network_validation.optimise(optimisation_parameters)?;
+                network_validation.predict()?;
+                let t = match epochs.last() {
+                    Some(x) => x + 1.00,
+                    None => 0.00,
+                };
+                epochs.push(t);
+                // Loss or cost
+                let validation_cost = network_validation.loss()? as f64;
+                let training_cost = {
+                    network_training.replace_model(&network_validation)?;
+                    network_training.loss()? as f64
+                };
+                lowest_validation_cost = if validation_cost < lowest_validation_cost {
+                    validation_cost
+                } else {
+                    lowest_validation_cost
+                };
+                lowest_training_cost = if training_cost < lowest_training_cost {
+                    training_cost
+                } else {
+                    lowest_training_cost
+                };
+                // Loss or costs is just the cost of the network being trained
+                costs.push(validation_cost);
+                if verbose {
+                    pb.next();
+                }
+                // Early stopping check
+                if (epoch > n_patient_epochs) && ((validation_cost > lowest_validation_cost) || (training_cost > lowest_training_cost))  {
+                    // println!("Early stopping at epoch {}", epoch);
+                    break;
+                }
+            }
+            if verbose {
+                pb.finish();
+            }
+            network_training.replace_model(&network_validation)?;
+        }
+        // Update the network after training the training network
+        self.replace_model(&network_training)?;
+        // Also update the number of epochs with the actual number of epochs ran accounting for:
+        //  (1) early stopping and 
+        //  (2) batching effect if there is an inner validation set
         self.n_epochs = epochs.len();
+        // Remove the dropout mask after training
+        for i in 0..self.n_hidden_layers {
+            self.drop_dropout_mask(i)?;
+        }
         Ok((epochs, costs))
     }
 
@@ -353,67 +422,53 @@ impl Network {
             // self.predict()?;
             (vec![epochs], vec![costs])
         } else {
-            // Multiple batches, split the dataset then average the parameters after training on each batch
-            let col_indexes_per_batch: Vec<Vec<usize>> =
-                self.shufflesplit(optimisation_parameters.n_batches)?;
-            let mut networks_per_batch: Vec<Network> =
-                Vec::with_capacity(optimisation_parameters.n_batches);
+            // Multiple batches, split the dataset then sequentially train one batch at a time (for very large datasets)
+            let n = optimisation_parameters.n_batches;
+            let col_indexes_per_batch: Vec<Vec<usize>> = self.shufflesplit(n)?;
+            let mut networks_per_batch: Vec<Network> = Vec::with_capacity(n);
             for col_indexes in col_indexes_per_batch {
                 // indexes for each batch, i.e. for observations
                 let network: Network = self.slice(&col_indexes)?;
                 networks_per_batch.push(network);
             }
-            // let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-            // let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(Vec::new());
-            let n = networks_per_batch.len();
-            let epochs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
-            let costs: Mutex<Vec<Vec<f64>>> = Mutex::new(vec![Vec::new(); n]);
-            networks_per_batch
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(i, network)| {
-                    if verbose {
-                        println!(
-                            "Training on batch {} with {} observations.",
-                            i, network.targets.n_cols
-                        );
+            let mut epochs: Vec<Vec<f64>> = Vec::with_capacity(n);
+            let mut costs: Vec<Vec<f64>> = Vec::with_capacity(n);
+            for (i, network) in networks_per_batch.iter_mut().enumerate() {
+                if verbose {
+                    println!(
+                        "Training on batch {} with {} observations.",
+                        i, network.targets.n_cols
+                    );
+                }
+                if i > 0 {
+                    network.replace_model(self)?;
+                }
+                let mut params = optimisation_parameters.clone();
+                let result = network.train_per_batch(&mut params, &format!("{}", n), verbose);
+                match result {
+                    Ok((epochs_batch, costs_batch)) => {
+                        epochs.push(epochs_batch);
+                        costs.push(costs_batch);
                     }
-                    let mut params = optimisation_parameters.clone();
-                    let result = network.train_per_batch(&mut params, &format!("{}", n), verbose);
-                    match result {
-                        Ok((epochs_batch, costs_batch)) => {
-                            // epochs.lock().unwrap().push(epochs_batch);
-                            // costs.lock().unwrap().push(costs_batch);
-                            // Lock the mutexes to get access
-                            let mut locked_epochs = epochs.lock().unwrap();
-                            let mut locked_costs = costs.lock().unwrap();
-                            // Replace the ith element safely
-                            if let Some(x) = locked_epochs.get_mut(i) {
-                                *x = epochs_batch;
-                            }
-                            if let Some(x) = locked_costs.get_mut(i) {
-                                *x = costs_batch;
-                            }
-                        }
-                        Err(e) => {
-                            // Skip the batch
-                            eprintln!("Error training on batch {}: {}", i+1, e);
-                        }
+                    Err(e) => {
+                        // Skip the batch
+                        eprintln!("Error training on batch {}: {}", i+1, e);
                     }
                 }
-            );
-            // Merge the parameters from each batch network back into the original network via simple averaging with a better method
-            self.average_weights_biases(&networks_per_batch)?;
-            // Return epochs, costs
-            (epochs.into_inner().unwrap(), costs.into_inner().unwrap())
+                self.replace_model(&network)?;
+            }
+            (epochs, costs)
         };
         // Assess cost after training
         let final_cost_value = self.loss()?;
         if verbose {
+            // println!("epochs: {:?}", epochs);
+            // println!("costs: {:?}", costs);
             let fname_loss_svg = self.plot_loss(epochs, costs, optimisation_parameters)?;
             let fname_scatter_svg = self.plot_true_vs_pred(optimisation_parameters)?;
             println!("===============================================");
             println!("Final cost after training: {}", final_cost_value);
+            println!("Total number of epochs: {}", self.n_epochs);
             println!("Find the loss curve saved as: {}", fname_loss_svg);
             println!("Find the observed vs predicted scatterplot saved as: {}", fname_scatter_svg);
             println!("===============================================");
@@ -456,21 +511,23 @@ impl Network {
         )?;
         // Hyper-parameter optimisations
         let mut results: Vec<(
-            usize,
-            usize,
             f32,
-            f32,
-            usize,
-            usize,
-            f32,
-            f32,
-            usize,
-            Activation,
-            Cost,
-            Optimiser,
-            WeightsInitialisation,
-            f32,
-        )> = Vec::new();
+            (
+                usize,
+                usize,
+                f32,
+                f32,
+                usize,
+                usize,
+                f32,
+                f32,
+                usize,
+                Activation,
+                Cost,
+                Optimiser,
+                WeightsInitialisation,
+            ),
+        )> = Vec::new(); // will store the loss and hyperparameters used
         let mut best_params = (f32::MAX, param_combinations[0].clone());
         if verbose {
             println!(
@@ -546,27 +603,32 @@ impl Network {
                 Ok(x) => x,
                 Err(_) => f32::MAX,
             };
+            // Store the loss and the hyperparameters used
+            let loss_and_params_used = (
+                loss,
+                (
+                    n_hidden_layers,
+                    n_hidden_nodes,
+                    dropout_rate,
+                    learning_rate,
+                    network.n_epochs, // using the actual number epochs ran
+                    n_burnin_epochs,
+                    f_patient_epochs,
+                    f_validation,
+                    n_batches,
+                    activation,
+                    cost,
+                    optimiser,
+                    weights_initialisation,
+                ),
+            );
+            // Store the result of the training
+            results.push(loss_and_params_used.clone());
             // Check if loss is better
             if loss < best_params.0 {
-                best_params = (loss, p.clone());
+                best_params = loss_and_params_used;
             }
-            // Store the result of the training
-            results.push((
-                n_hidden_layers,
-                n_hidden_nodes,
-                dropout_rate,
-                learning_rate,
-                network.n_epochs, // using the actual number epochs ran
-                n_burnin_epochs,
-                f_patient_epochs,
-                f_validation,
-                n_batches,
-                activation.clone(),
-                cost.clone(),
-                optimiser.clone(),
-                weights_initialisation.clone(),
-                loss,
-            ));
+            
         }
         // Print the results
         if verbose {
@@ -575,20 +637,22 @@ impl Network {
                 "| Hidden_Layers | Hidden_Nodes | Dropout_Rate | Learning_Rate | Epochs | Patient_Epochs | Validation_Set | Batches | Activation | Cost | Optimiser | Weights_Initialisation | Final_Cost |"
             );
             for (
-                n_hidden_layers,
-                n_hidden_nodes,
-                dropout_rate,
-                learning_rate,
-                n_epochs,
-                n_burnin_epochs,
-                f_patient_epochs,
-                f_validation,
-                n_batches,
-                activation,
-                cost,
-                optimiser,
-                weights_initialisation,
                 loss,
+                (
+                    n_hidden_layers,
+                    n_hidden_nodes,
+                    dropout_rate,
+                    learning_rate,
+                    n_epochs,
+                    n_burnin_epochs,
+                    f_patient_epochs,
+                    f_validation,
+                    n_batches,
+                    activation,
+                    cost,
+                    optimiser,
+                    weights_initialisation,
+                ),
             ) in &results
             {
                 println!(
@@ -610,6 +674,9 @@ impl Network {
                 );
             }
         }
+
+        // TODO: some interpolation to get the best combination?
+
         // Build and train the network using the best hyperparameters
         let (
             loss_expected,
@@ -701,7 +768,7 @@ mod tests {
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let (data, _network_simulated) = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 123, true)?;
+        let (data, _network_simulated) = Data::simulate(n, p, q, k, n_hidden_layers, "beta", 0.5, 0.5, "normal", 0.0, 1.0, 123, true)?;
         let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 123)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         println!("Network:\n{}\n\n", network);
@@ -732,9 +799,8 @@ mod tests {
         let cost_prior_to_training: f32 = network.loss()?;
         println!("cost prior to training = {}", cost_prior_to_training);
         println!("predictions before training: {}", network.targets);
-        for _ in 0..7 {
-            network.train_per_batch(&mut optimisation_parameters, "1", false)?;
-        }
+        optimisation_parameters.n_burnin_epochs = 40;
+        network.train_per_batch(&mut optimisation_parameters, "1", false)?;
         println!("cost after training = {}", network.loss()?);
         println!("predictions after training: {}", network.targets);
         assert!(cost_prior_to_training > network.loss()?);
@@ -743,6 +809,7 @@ mod tests {
         let mut network_epochs_200 = network.clone();
         optimisation_parameters.n_batches = 1;
         optimisation_parameters.n_epochs = 5;
+        optimisation_parameters.f_validation = 0.5;
         network_epochs_5.train(&mut optimisation_parameters, false)?;
         optimisation_parameters.n_epochs = 200;
         network_epochs_200.train(&mut optimisation_parameters, false)?;

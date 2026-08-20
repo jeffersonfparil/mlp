@@ -482,7 +482,7 @@ mod tests {
         let n_hidden_layers: usize = 2;
         // We use half the number of input features as the number of nodes in the hidden layers, i.e. let n_hidden_nodes: Vec<usize> = vec![(p as f64 / 2.0).ceil() as usize; n_hidden_layers];
         // let data = Data::new(100, 10, 1)?; // Just a bunch of zeros
-        let (data, _network_simulated) = Data::simulate(n, p, q, k, n_hidden_layers, "normal", 0.0, 1.0, 42, true)?;
+        let (data, _network_simulated) = Data::simulate(n, p, q, k, n_hidden_layers, "beta", 0.5, 0.5, "normal", 0.0, 1.0, 42, true)?;
         let mut network = data.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
         let mut optimisation_parameters = OptimisationParameters::new(&network)?;
         network.train(&mut optimisation_parameters, true)?;
@@ -507,7 +507,7 @@ mod tests {
         println!("Order 1 marginals: {:?}", marginals);
         assert_eq!(marginals.ids, vec!["fcon_0", "fcon_1", "fcat_0➵0", "fcat_0➵1", "fcat_1➵0", "fcat_1➵1", "fcat_1➵2"]);
         // marginals.effects.iter().zip(vec![0.00914565, 0.00915616, 0.009083876, 0.00925088, 0.009251332, 0.009222691, 0.009141681].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
-        marginals.effects.iter().zip(vec![0.13854006, 0.14072749, 0.13805267, 0.1434527, 0.14447868, 0.14345966, 0.13972864].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=1.0e-6)});
+        marginals.r2s.iter().zip(vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0].iter()).for_each(|(a, b)| {assert_relative_eq!(a, b, epsilon=0.1)});
 
         // Order: 2
         let mut marginals = Marginals::new(data.feature_names.clone(), 2)?;

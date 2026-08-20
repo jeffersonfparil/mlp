@@ -8,6 +8,7 @@ use rand::prelude::*;
 mod activations;
 mod backward;
 mod costs;
+mod dropout;
 mod forward;
 mod io;
 mod linalg;
@@ -150,7 +151,7 @@ struct Args {
     epsilon: f32,
 
     /// Randomisation seed
-    #[arg(long, default_value_t = 123)]
+    #[arg(long, default_value_t = 1114)]
     seed: usize,
 
     /// Filename of the output network model 
@@ -170,7 +171,7 @@ struct Args {
     hyperparameter_optimisation: bool,
 
     /// Vector of number of hidden layers for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "1")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1,2,3")]
     selection_hidden_layers: Vec<usize>,
 
     /// Vector of number of nodes per hidden layer for hyperparameter optimisation (Defaults to 1,024 or half the number of features whichever is smaller)
@@ -178,8 +179,9 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
+        default_value = "64"
     )]
-    selection_hidden_layer_nodes: Option<Vec<usize>>,
+    selection_hidden_layer_nodes: Vec<usize>,
 
     /// Vector of dropout rates per hidden layer for hyperparameter optimisation
     #[arg(
@@ -199,8 +201,8 @@ struct Args {
     )]
     selection_learning_rates: Vec<f32>,
 
-    /// Vector of maximum number of training epochs for hyperparameter optimisation
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "10000")]
+    /// Vector of maximum number of training epochs for hyperparameter optimisaion
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "1000")]
     selection_n_epochs: Vec<usize>,
 
     /// Vector of burnin epochs for hyperparameter optimisation
@@ -212,7 +214,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.001"
+        default_value = "0.1"
     )]
     selection_f_patient_epochs: Vec<f32>,
 
@@ -221,7 +223,7 @@ struct Args {
         long,
         value_parser=parse_bound_f32,
         value_delimiter = ',',
-        default_value = "0.1"
+        default_value = "0.0"
     )]
     selection_f_validation: Vec<f32>,
 
@@ -230,7 +232,7 @@ struct Args {
     selection_n_batches: Vec<usize>,
 
     /// Activation functions to test
-    #[arg(long, value_parser, value_delimiter = ',', default_value = "ReLU")]
+    #[arg(long, value_parser, value_delimiter = ',', default_value = "Swish,ReLU")]
     selection_activations: Vec<String>,
 
     /// Cost functions to test
@@ -242,7 +244,7 @@ struct Args {
         long,
         value_parser,
         value_delimiter = ',',
-        default_value = "Adam,AdamMax,GradientDescent"
+        default_value = "Adam,AdamMax"
     )]
     selection_optimisers: Vec<String>,
 
@@ -333,6 +335,21 @@ struct Args {
     #[arg(short = 'l', long, default_value_t = 2)]
     simulation_n_hidden_layers: usize,
 
+    /// Distribution from which synthetic continuous features are sampled
+    ///
+    /// Options: "normal", "lognormal", "cauchy", "weibull", "gamma", "beta".
+    #[arg(long, default_value = "beta")]
+    simulation_features_distribution: String,
+
+    /// Parameter 1 (e.g., mean or location or shape) for the feature distribution
+    #[arg(long, default_value_t = 0.5)]
+    simulation_features_distribution_param_1: f64,
+
+    /// Parameter 2 (e.g., variance or scale) for the feature distribution
+    #[arg(long, default_value_t = 0.5)]
+    simulation_features_distribution_param_2: f64,
+
+
     /// Distribution from which synthetic network weights are sampled
     ///
     /// Options: "normal", "lognormal", "cauchy", "weibull", "gamma", "beta".
@@ -346,13 +363,6 @@ struct Args {
     /// Parameter 2 (e.g., variance or scale) for the weight distribution
     #[arg(long, default_value_t = 1.0)]
     simulation_weights_distribution_param_2: f64,
-
-    ////////////////////////////////////////////////////////////////////////////////
-    // Miscellaneous flags and arguments
-
-    /// Do not save the network (for benchmarking purposes to save on time and resources by not writing the model as JSON into disk)
-    #[arg(long, action)]
-    do_not_save_network: bool,
 }
 
 fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
@@ -360,12 +370,15 @@ fn read_data(args: &Args) -> Result<Data, Box<dyn Error>> {
         Some(x) => x.to_owned(),
         None => {
             println!("No input file provided. Simulating data...");
-            let (data_simulated, network_simulated) = Data::simulate(
+            let (data_simulated, _network_simulated) = Data::simulate(
                 args.simulation_n_observations,
                 args.simulation_n_features_continuous,
                 args.simulation_n_features_categorical.clone(),
                 args.simulation_n_output_columns,
                 args.simulation_n_hidden_layers,
+                &args.simulation_features_distribution,
+                args.simulation_features_distribution_param_1,
+                args.simulation_features_distribution_param_2,
                 &args.simulation_weights_distribution,
                 args.simulation_weights_distribution_param_1,
                 args.simulation_weights_distribution_param_2,
@@ -410,6 +423,7 @@ fn prepare_network(args: &Args, data: &Data) -> Result<Network, Box<dyn Error>> 
     }
     let weights_initialisation = match args.weights_initialisation.as_ref() {
         "He" => WeightsInitialisation::He,
+        "Xavier" => WeightsInitialisation::Xavier,
         "Cauchy" => WeightsInitialisation::Cauchy,
         "Uniform" => WeightsInitialisation::Uniform,
         "StandardNormal" => WeightsInitialisation::StandardNormal,
@@ -434,6 +448,9 @@ fn simulate_only(args: &Args) -> Result<(), Box<dyn Error>> {
         args.simulation_n_features_categorical.clone(),
         args.simulation_n_output_columns,
         args.simulation_n_hidden_layers,
+        &args.simulation_features_distribution,
+        args.simulation_features_distribution_param_1,
+        args.simulation_features_distribution_param_2,
         &args.simulation_weights_distribution,
         args.simulation_weights_distribution_param_1,
         args.simulation_weights_distribution_param_2,
@@ -641,7 +658,9 @@ fn train_with_hyperparameter_optimisation(
         for x in &args.selection_activations {
             v.push(match x.as_ref() {
                 "ReLU" => Activation::ReLU,
+                "ELU" => Activation::ELU,
                 "Sigmoid" => Activation::Sigmoid,
+                "Swish" => Activation::Swish,
                 "HyperbolicTangent" => Activation::HyperbolicTangent,
                 "Linear" => Activation::Linear,
                 _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
@@ -666,6 +685,7 @@ fn train_with_hyperparameter_optimisation(
         for x in &args.selection_optimisers {
             v.push(match x.as_ref() {
                 "Adam" => Optimiser::Adam,
+                "AdamW" => Optimiser::AdamW,
                 "AdamMax" => Optimiser::AdamMax,
                 "GradientDescent" => Optimiser::GradientDescent,
                 _ => return Err(Box::new(OptimiserError::UnimplementedOptimiser)),
@@ -678,6 +698,7 @@ fn train_with_hyperparameter_optimisation(
         for x in &args.selection_weights_initialisations {
             v.push(match x.as_ref() {
                 "He" => WeightsInitialisation::He,
+                "Xavier" => WeightsInitialisation::Xavier,
                 "Cauchy" => WeightsInitialisation::Cauchy,
                 "Uniform" => WeightsInitialisation::Uniform,
                 "StandardNormal" => WeightsInitialisation::StandardNormal,
@@ -686,24 +707,24 @@ fn train_with_hyperparameter_optimisation(
         }
         v
     };
-    // Vector of number of nodes per hidden layer for hyperparameter optimisation.
-    // Defaults to 1,024 or half the number of features whichever is smaller.
-    let selection_hidden_layer_nodes: Vec<usize> = match &args.selection_hidden_layer_nodes {
-        Some(x) => x.to_owned(),
-        None => {
-            let n = network.activations_per_layer[0].n_rows; // number of features
-            let n_hidden_nodes = n / 2;
-            let n_hidden_nodes_max = 1_024;
-            if n_hidden_nodes < n_hidden_nodes_max {
-               vec![n_hidden_nodes] 
-            } else {
-                vec![n_hidden_nodes_max]
-            }
-        },
-    };
+    // // Vector of number of nodes per hidden layer for hyperparameter optimisation.
+    // // Defaults to 1,024 or half the number of features whichever is smaller.
+    // let selection_hidden_layer_nodes: Vec<usize> = match &args.selection_hidden_layer_nodes {
+    //     Some(x) => x.to_owned(),
+    //     None => {
+    //         let n = network.activations_per_layer[0].n_rows; // number of features
+    //         let n_hidden_nodes = n / 2;
+    //         let n_hidden_nodes_max = 1_024;
+    //         if n_hidden_nodes < n_hidden_nodes_max {
+    //            vec![n_hidden_nodes] 
+    //         } else {
+    //             vec![n_hidden_nodes_max]
+    //         }
+    //     },
+    // };
     let network_hyper_optimised = network.hyperoptimise(
         &args.selection_hidden_layers,
-        &selection_hidden_layer_nodes,
+        &args.selection_hidden_layer_nodes,
         &args.selection_dropout_rates,
         &args.selection_learning_rates,
         &args.selection_n_epochs,
@@ -739,7 +760,9 @@ fn train_with_fixed_hyperparameters(
 ) -> Result<String, Box<dyn Error>> {
     network.activation = match args.activation.as_ref() {
         "ReLU" => Activation::ReLU,
+        "ELU" => Activation::ELU,
         "Sigmoid" => Activation::Sigmoid,
+        "Swish" => Activation::Swish,
         "HyperbolicTangent" => Activation::HyperbolicTangent,
         "Linear" => Activation::Linear,
         _ => return Err(Box::new(ActivationError::UnimplementedActivation)),

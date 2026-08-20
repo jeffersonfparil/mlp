@@ -24,9 +24,11 @@ impl Network {
             let dc_over_da =
                 self.weights_per_layer[n_total_layers - i].matmult0(&delta[delta.len() - 1])?;
             // Activation derivative w.r.t. the sum of the weights (since Ω.S[end] == Ω.ŷ then the previous pre-activations are Ω.S[end-1])
+            let idx: usize = n_total_layers - (i + 1);
+            self.dropout(idx)?; // apply the dropout mask randomly generated during forward pass
             let da_over_ds = self
                 .activation
-                .derivative(&self.weights_x_biases_per_layer[n_total_layers - (i + 1)])?;
+                .derivative(&self.weights_x_biases_per_layer[idx])?;
             // Chain rule-derived cost derivative w.r.t. the sum of the weights
             let dc_over_ds = dc_over_da.elementwisematmul(&da_over_ds)?;
             // Add to Δ
@@ -39,9 +41,21 @@ impl Network {
         for i in 0..delta.len() {
             let j = delta.len() - (i + 1); // we start with the first hidden layer in Δ, i.e. we need to reverse Δ
             // Outer-product of the error in hidden layer 1 (l_1 x n) and the transpose of the activation at 1 layer below (n x l_0) to yield a gradient matrix corresponding to the weights matrix (l_1 x l_0)
-            self.weights_gradients_per_layer[i] = delta[j]
-                .matmul0t(&self.activations_per_layer[i])?
-                .clamp(CLAMP_LOWER, CLAMP_UPPER)?; // Clamping to prevent exploding gradients
+            self.weights_gradients_per_layer[i] = if self.lambda == 0.0 {
+                // No L2 penalty
+                delta[j]
+                    .matmul0t(&self.activations_per_layer[i])?
+                    .clamp(CLAMP_LOWER, CLAMP_UPPER)?
+            } else {
+                // L2 penalty
+                delta[j]
+                    .matmul0t(&self.activations_per_layer[i])?
+                    .elementwisematadd(
+                        &self.weights_per_layer[i]
+                            .scalarmatmul(self.lambda)?
+                    )?
+                    .clamp(CLAMP_LOWER, CLAMP_UPPER)?
+            };
             // Sum-up the errors across n samples in the current hidden layer to calculate the gradients for the bias
             self.biases_gradients_per_layer[i] =
                 delta[j].rowsummat()?.clamp(CLAMP_LOWER, CLAMP_UPPER)?; // Clamping to prevent exploding gradients

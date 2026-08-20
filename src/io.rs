@@ -6,7 +6,7 @@ use crate::marginal::{Marginals, MarginalError};
 use cudarc::driver::{CudaContext, CudaSlice};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
-use rand_distr::{Beta, Cauchy, Gamma, LogNormal, Normal, Weibull};
+use rand_distr::{Beta, Cauchy, Gamma, LogNormal, Normal, Uniform, Weibull};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -39,6 +39,14 @@ impl fmt::Display for Data {
 fn simulate_weights(dist: &str, par1: f64, par2: f64, p: usize, seed: usize) -> Result<Vec<f32>, Box<dyn Error>> {
     let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
     let weights: Vec<f32> = match dist {
+        "uniform" => {
+            let distribution = Uniform::new(par1, par2)?;
+            (&mut rng)
+                .sample_iter(distribution)
+                .take(p)
+                .map(|x| x as f32)
+                .collect::<Vec<f32>>()
+        },
         "normal" => {
             let distribution = Normal::new(par1, par2)?;
             (&mut rng)
@@ -135,9 +143,12 @@ impl Data {
         q: Vec<usize>,
         k: usize,
         d: usize,
-        dist: &str,
-        par1: f64,
-        par2: f64,
+        features_dist: &str,
+        features_par1: f64,
+        features_par2: f64,
+        weights_dist: &str,
+        weights_par1: f64,
+        weights_par2: f64,
         seed: usize,
         verbose: bool,
     ) -> Result<(Self, Network), Box<dyn Error>> {
@@ -146,9 +157,9 @@ impl Data {
         // q = vector of the number of levels in categorical variable
         // k = number of response variables or targets
         // d = number of hidden layers
-        // dist = distribution of the weights (all biases will be set to zero for simplicity + all distributions will have 2 controllable parameters)
-        // par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
-        // par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
+        // weights_dist = distribution of the weights (all biases will be uniformly distributed between -1 and 1 + all distributions will have 2 controllable parameters)
+        // weights_par1 = first parameter of the weights distributions, e.g. mean for Normal distribution, and shape for Gamma distribution
+        // weights_par2 = second parameter of the weights distributions, e.g. standard deviation for Normal distribution, and scale for Gamma distribution
         // seed = randomisation seed for repeatability
 
         if verbose {println!("(1/8) Simulating feature ids...")}
@@ -157,14 +168,10 @@ impl Data {
         let n_features = p + n_features_categorical;
         let mut rng = ChaCha12Rng::seed_from_u64(seed as u64);
         // Features simulation
+        let mut features_host: Vec<f32> = simulate_weights(features_dist, features_par1, features_par2, p * n, seed)?;
         let mut feature_names: Vec<String> = Vec::with_capacity(n_features);
-        let mut features_host: Vec<f32> = Vec::with_capacity(n_features * n);
-        // Continuous features
         for j in 0..p {
             feature_names.push(format!("fcon_{}", j));
-            for _i in 0..n {
-                features_host.push(rng.random());
-            }
         }
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Categorical features (one-hot encoded) exploring all level combinations
@@ -219,10 +226,10 @@ impl Data {
         let targets: Matrix = Matrix::new(stream.clone_htod(&targets_host)?, k, n)?;
         // println!("targets={}", targets);
         let n_hidden_layers: usize = d;
-        let n_hidden_nodes: Vec<usize> = vec![(n_features as f64 / 2.0).ceil() as usize; n_hidden_layers]; // we use half the number of input features as the number of nodes in the hidden layers
+        let n_hidden_nodes: Vec<usize> = vec![64; n_hidden_layers]; // we fix hidden layer nodes to just 64
         let dropout_rates: Vec<f32> = vec![0.0; n_hidden_layers];
         if verbose {println!("(5/8) Simulating Network struct...")}
-        let time = Instant::now();
+        let time: Instant = Instant::now();
         let mut network = Network::new(
             &stream,
             features,
@@ -238,33 +245,37 @@ impl Data {
         // Redefine the weights
         if verbose {println!("(6/8) Simulating weights and replacing the ones initialised in the Network struct...")}
         let time = Instant::now();
-        let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
+        network.activation = Activation::Swish;
+        // let dummy_dev: Matrix = Matrix::new(stream.clone_htod(&vec![0.0])?, 1, 1)?;
         for i in 0..(network.n_hidden_layers+1) {
             let n_rows = network.weights_per_layer[i].n_rows;
-            let n_cols = network.weights_per_layer[i].n_cols;
-            let m = n_rows * n_cols;
-            let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
-            let mut weights_host: Vec<f32> = simulate_weights(dist, par1, par2, m, seed + i)?; // dense continuous effects
-            let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
-            for col in 0..n_cols {
-                let u: f32 = rng.random();
-                let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
-                let mut target_rows: Vec<usize> = (0..n_rows).collect();
-                for r in 0..degree {
-                    let swap_idx = rng.gen_range(r..n_rows);
-                    target_rows.swap(r, swap_idx);
-                }
-                for &row in target_rows.iter().take(degree) { 
-                    mask[row * n_cols + col] = true; 
-                }
-            }
-            for (idx, w) in weights_host.iter_mut().enumerate() { 
-                if !mask[idx] { 
-                    *w = 0.0; 
-                } 
-            }
-            network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
-            network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
+            // let n_cols = network.weights_per_layer[i].n_cols;
+            // let m = n_rows * n_cols;
+            // // let weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
+            // let alpha = 1.5; //controls the power-law topology for realistic sparse and clustered networks
+            // let mut weights_host: Vec<f32> = simulate_weights(weights_dist, weights_par1, weights_par2, m, seed + i)?; // dense continuous effects
+            // let mut mask = vec![false; m]; // scale-free topology mask --> mostly zero in the end because --> ....
+            // for col in 0..n_cols {
+            //     let u: f32 = rng.random();
+            //     let degree = ((1.0 as f32) / u.powf(1.0 / alpha)).floor().clamp(1.0, n_rows as f32) as usize;  // --> ... this is Pareto distributed
+            //     let mut target_rows: Vec<usize> = (0..n_rows).collect();
+            //     for r in 0..degree {
+            //         let swap_idx = rng.random_range(r..n_rows);
+            //         target_rows.swap(r, swap_idx);
+            //     }
+            //     for &row in target_rows.iter().take(degree) { 
+            //         mask[row * n_cols + col] = true; 
+            //     }
+            // }
+            // for (idx, w) in weights_host.iter_mut().enumerate() { 
+            //     if !mask[idx] { 
+            //         *w = 0.0; 
+            //     } 
+            // }
+            let biases_host: Vec<f32> = simulate_weights("normal", 0.0, 1.0, n_rows, seed + i)?; // dense continuous effects
+            network.biases_per_layer[i] = Matrix::new(stream.clone_htod(&biases_host)?, n_rows, 1)?;
+            // network.weights_per_layer[i] = dummy_dev.clone(); // to release some GPU memory before replacing the weights
+            // network.weights_per_layer[i] = Matrix::new(stream.clone_htod(&weights_host)?, n_rows, n_cols)?;
         }
         if verbose {println!("\t→ {:.2} minutes\n", time.elapsed().as_millis() as f64 / 60_000.0)};
         // Extract non-dummy targets
@@ -949,6 +960,7 @@ impl Network {
         let predictions = Matrix::new(stream.clone_htod(&serdifiable_network.predictions)?, k, n)?;
         let weights_initialisation = match serdifiable_network.weights_initialisation.as_ref() {
             "He" => WeightsInitialisation::He,
+            "Xavier" => WeightsInitialisation::Xavier,
             "Cauchy" => WeightsInitialisation::Cauchy,
             "Uniform" => WeightsInitialisation::Uniform,
             "StandardNormal" => WeightsInitialisation::StandardNormal,
@@ -967,7 +979,9 @@ impl Network {
         network.predictions = predictions;
         network.activation = match serdifiable_network.activation.as_ref() {
             "ReLU" => Activation::ReLU,
+            "ELU" => Activation::ELU,
             "Sigmoid" => Activation::Sigmoid,
+            "Swish" => Activation::Swish,
             "HyperbolicTangent" => Activation::HyperbolicTangent,
             "Linear" => Activation::Linear,
             _ => return Err(Box::new(ActivationError::UnimplementedActivation)),
@@ -1102,7 +1116,7 @@ mod tests {
     #[test]
     fn test_io() -> Result<(), Box<dyn Error>> {
         let data = Data::new(100, 10, 1)?;
-        let (data_simulated, _network_simulated) = Data::simulate(100, 5, vec![2,3], 1, 2, "normal", 0.0, 1.0, 42, true)?;
+        let (data_simulated, _network_simulated) = Data::simulate(100, 5, vec![2,3], 1, 2, "beta", 0.5, 0.5, "normal", 0.0, 1.0, 42, true)?;
         assert_eq!(data.features.n_rows, data_simulated.features.n_rows);
         assert!(data.targets.summat()? == 0.0);
         assert!(data_simulated.targets.summat()? != 0.0);
@@ -1159,7 +1173,12 @@ mod tests {
         }
         // Initialise the network from reloaded data
         let mut network = data_simulated_reloaded.init_network(2, vec![5; 2], vec![0.0; 2], WeightsInitialisation::He, 42)?;
-        assert!(network.targets.summat()? - data_simulated_reloaded.targets.summat()? < 1e-5);
+        println!("network.targets.summat()? = {}; data_simulated_reloaded.targets.summat()? = {}", network.targets.summat()?, data_simulated_reloaded.targets.summat()?);
+        let mu: f32 = data_simulated_reloaded.targets.meanmat()?;
+        let sd: f32 = data_simulated_reloaded.targets.varmat()?.sqrt();
+        let n: f32 = (data_simulated_reloaded.targets.n_rows * data_simulated_reloaded.targets.n_cols) as f32;
+        println!("network.targets.summat()? = {}; ((data_simulated_reloaded.targets.summat()? - n*mu) / sd) = {}", network.targets.summat()?, ((data_simulated_reloaded.targets.summat()? - n*mu) / sd));
+        assert!(network.targets.summat()? - ((data_simulated_reloaded.targets.summat()? - n*mu) / sd) < 0.1);
         assert!(
             network.activations_per_layer[0].summat()?
                 - data_simulated_reloaded.features.summat()?

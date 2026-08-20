@@ -19,6 +19,7 @@ use std::sync::Arc;
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum WeightsInitialisation {
     He,
+    Xavier,
     Cauchy,
     Uniform,
     StandardNormal,
@@ -29,6 +30,9 @@ impl fmt::Display for WeightsInitialisation {
         match self {
             WeightsInitialisation::He => {
                 write!(f, "He")
+            }
+            WeightsInitialisation::Xavier => {
+                write!(f, "Xavier")
             }
             WeightsInitialisation::Cauchy => {
                 write!(f, "Cauchy")
@@ -63,6 +67,8 @@ pub struct Network {
     pub weights_initialisation: WeightsInitialisation, // weights initialisation
     pub n_epochs: usize,                               // number of epochs ran
     pub seed: usize,                                   // random seed for reproducibility
+    pub dropout_masks_per_layer: Vec<Matrix>,          // dropout masks
+    pub lambda: f32,                                   // L2 lambda penalty factor (default is 0.0, i.e. no penalty)
 }
 
 impl fmt::Display for Network {
@@ -109,7 +115,8 @@ impl fmt::Display for Network {
             biases_gradients_per_layer (len={}) = [
                 {} (sum={}), 
                 ..., 
-                {} (sum={})
+                {} (sum={}),
+            lambda = {}
             ]
             ",
             *stream,
@@ -196,6 +203,7 @@ impl fmt::Display for Network {
                 Ok(x) => x,
                 Err(_) => return Err(fmt::Error),
             },
+            self.lambda,
         )
     }
 }
@@ -308,7 +316,11 @@ impl Network {
                 };
                 let tmp: Vec<f32> = match init_type {
                     WeightsInitialisation::He => {
-                        let distribution = Normal::new(0.0, 2.0/(p as f32))?;
+                        let distribution = Normal::new(0.0, (2.0/(p as f32)))?;
+                        (&mut rng).sample_iter(distribution).take(m).collect()
+                    },
+                    WeightsInitialisation::Xavier => {
+                        let distribution = Normal::new(0.0, (2.0/((n + p) as f32)))?;
                         (&mut rng).sample_iter(distribution).take(m).collect()
                     },
                     WeightsInitialisation::Cauchy => {
@@ -392,6 +404,7 @@ impl Network {
         let predictions: Matrix = Matrix::new(predictions_dev, n_output_nodes, n_observations)?;
         let mut weights_per_layer: Vec<Matrix> = vec![];
         let mut weights_gradients_per_layer: Vec<Matrix> = vec![];
+        let mut dropout_masks_per_layer: Vec<Matrix> = vec![];
         let mut biases_per_layer: Vec<Matrix> = vec![];
         let mut biases_gradients_per_layer: Vec<Matrix> = vec![];
         let mut weights_x_biases_per_layer: Vec<Matrix> = vec![];
@@ -401,6 +414,7 @@ impl Network {
             let p: usize = n_nodes[i];
             let weights_host: Vec<f32> = vec![0f32; n * p];
             let dweights_host: Vec<f32> = vec![0f32; n * p];
+            let dropouts_host: Vec<f32> = vec![1f32; n * 1];
             let biases_host: Vec<f32> = vec![0f32; n * 1];
             let dbiases_host: Vec<f32> = vec![0f32; n * 1];
             let weights_x_biases_host: Vec<f32> = vec![0f32; n * n_observations];
@@ -412,17 +426,20 @@ impl Network {
             }
             let weights_dev: CudaSlice<f32> = stream.clone_htod(&weights_host)?;
             let dweights_dev: CudaSlice<f32> = stream.clone_htod(&dweights_host)?;
+            let dropouts_dev: CudaSlice<f32> = stream.clone_htod(&dropouts_host)?;
             let biases_dev: CudaSlice<f32> = stream.clone_htod(&biases_host)?;
             let dbiases_dev: CudaSlice<f32> = stream.clone_htod(&dbiases_host)?;
             let weights_x_biases_dev: CudaSlice<f32> = stream.clone_htod(&weights_x_biases_host)?;
             let weights_matrix: Matrix = Matrix::new(weights_dev, n, p)?;
             let dweights_matrix: Matrix = Matrix::new(dweights_dev, n, p)?;
+            let dropouts_matrix: Matrix = Matrix::new(dropouts_dev, n, 1)?;
             let biases_matrix: Matrix = Matrix::new(biases_dev, n, 1)?;
             let dbiases_matrix: Matrix = Matrix::new(dbiases_dev, n, 1)?;
             let weights_x_biases_matrix: Matrix =
                 Matrix::new(weights_x_biases_dev, n, n_observations)?;
             weights_per_layer.push(weights_matrix);
             weights_gradients_per_layer.push(dweights_matrix);
+            dropout_masks_per_layer.push(dropouts_matrix);
             biases_per_layer.push(biases_matrix);
             biases_gradients_per_layer.push(dbiases_matrix);
             weights_x_biases_per_layer.push(weights_x_biases_matrix);
@@ -456,6 +473,8 @@ impl Network {
             weights_initialisation: weights_initialisation,
             n_epochs: 0,
             seed: seed,
+            dropout_masks_per_layer: dropout_masks_per_layer,
+            lambda: 0.0, // Default no L2 penalty
         };
         // He/Kaiming initialisation of weights by default as ReLU is tha default activation function
         out.init_weights(&weights_initialisation, seed)?;
@@ -483,6 +502,7 @@ impl Network {
         )?;
         network.activation = self.activation.clone();
         network.cost = self.cost.clone();
+        network.lambda = self.lambda;
         network.check_dimensions()?;
         Ok(network)
     }
@@ -546,13 +566,18 @@ impl Network {
         self.weights_per_layer = other.weights_per_layer.clone();
         self.biases_per_layer = other.biases_per_layer.clone();
         self.weights_x_biases_per_layer = other.weights_x_biases_per_layer.clone();
-        // Skip the activation layers containing the input data (features)
-        // Also we did not replace the targets and prediction matrices
-        self.weights_gradients_per_layer = other.weights_gradients_per_layer.clone();
-        self.biases_gradients_per_layer = other.biases_gradients_per_layer.clone();
+        self.lambda = other.lambda;
+        // Notes:
+        // (1) Input layer, i.e. the first activation layer is not copied (uses existing input layer)
+        // (2) Output layer is also not copied (updated below with self.predict())
         self.activation = other.activation.clone();
         self.cost = other.cost.clone();
         self.n_epochs = other.n_epochs;
+        // Forward and backward pass to update the activations and gradients
+        self.forwardpass()?;
+        self.backpropagation()?;
+        // Update the predictions (output layer)
+        self.predict()?;
         Ok(())
     }
 }

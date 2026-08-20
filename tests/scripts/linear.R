@@ -594,10 +594,14 @@ fit_extract_effects_for_empirical_data <- function(df, time_limit_seconds = 1, e
   fit_extract_effects(df, model_strings, time_limit_seconds = time_limit_seconds, verbose = verbose)
 }
 
-#' Compute cross-validation metrics (Pearson correlation, MAE, MSE, RMSE, R-squared) between predicted and observed values.
+#' Compute cross-validation metrics (Pearson correlation, MAE, MSE, RMSE, R-squared, etc...) between predicted and observed values.
 cv_metrics <- function(yHat, y) {
   # yHat = rnorm(100); y = rnorm(100)
-  n <- length(y)
+  sd_true <- sd(y)
+  sd_pred <- sd(yHat)
+  mod <- lm(y ~ yHat)
+  lm_intercept <- coef(mod)["(Intercept)"]
+  lm_slope <- coef(mod)["yHat"]
   pcor <- cor(yHat, y)
   mae <- mean(abs(yHat - y))
   mse <- mean((yHat - y)^2)
@@ -610,6 +614,10 @@ cv_metrics <- function(yHat, y) {
     r2 = 0.0
   }
   list(
+    lm_intercept = lm_intercept,
+    lm_slope = lm_slope,
+    sd_true = sd_true,
+    sd_pred = sd_pred,
     pcor = pcor,
     mae = mae,
     mse = mse,
@@ -665,7 +673,7 @@ gp_repeated_kfold_cv <- function(params) {
   # params = get_params(args = c("gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/sorghum-YLD.tsv", "/home/jp3h/Documents/mlp/tests/tmp/gp", "/home/jp3h/Documents/mlp/tests/tmp/gp/output-sorghum-YLD-RANDOMISATION.tsv", "3", "10", "100", "10", "BRR,BayesA", "42", "TRUE"))
   fname_output <- define_fname_output(params$fname_input)
   fname_output_tmp <- paste0(fname_output, ".tmp")
-  cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
+  cat(paste(c("datasets", "reps", "folds", "nt", "nv", "models", "sd_true", "sd_pred", "lm_intercept", "lm_slope", "mae", "mse", "rmse", "corr", "r2"), collapse = "\t"), file = fname_output_tmp, sep = "\n")
   df <- read.table(params$fname_input, sep = "\t", header = TRUE)
   # df < df[complete.cases(df), ]
   # n <- nrow(df)
@@ -718,7 +726,7 @@ gp_repeated_kfold_cv <- function(params) {
         )
         yHat <- mod$yHat[idx_validation]
         res <- cv_metrics(yHat, y[idx_validation, ])
-        data <- paste(c(basename(params$fname_input), r, f, length(idx_training), length(idx_validation), model, res$pcor, res$r2), collapse = "\t")
+        data <- paste(c(basename(params$fname_input), r, f, length(idx_training), length(idx_validation), model, res$sd_true, res$sd_pred, res$lm_intercept, res$lm_slope, res$mae, res$mse, res$rmse, res$pcor, res$r2), collapse = "\t")
         cat(data, file = fname_output_tmp, sep = "\n", append = TRUE)
         unlink(paste0(params$fname_input, "-", model, "-*"))
       }

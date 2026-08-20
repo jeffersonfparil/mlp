@@ -35,9 +35,10 @@ impl fmt::Display for ActivationError {
 pub enum Activation {
     Linear,
     Sigmoid,
+    Swish,
     HyperbolicTangent,
     ReLU,
-    LeakyReLU, // needs work to account for the additional slope parameter
+    ELU,
 }
 
 impl fmt::Display for Activation {
@@ -49,14 +50,17 @@ impl fmt::Display for Activation {
             Activation::Sigmoid => {
                 write!(f, "Sigmoid")
             }
+            Activation::Swish => {
+                write!(f, "Swish")
+            }
             Activation::HyperbolicTangent => {
                 write!(f, "HyperbolicTangent")
             }
             Activation::ReLU => {
                 write!(f, "ReLU")
             }
-            Activation::LeakyReLU => {
-                write!(f, "LeakyReLU")
+            Activation::ELU => {
+                write!(f, "ELU")
             }
         }
     }
@@ -117,7 +121,7 @@ const SIGMOID: &str = "
         int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
         if ((i < n_rows) && (j < n_cols)) {
             int idx = (i * n_cols) + j; // Linear index for the A and B matrices
-            B[idx] = 1.00 / (1.00 + exp(A[idx]));
+            B[idx] = 1.00 / (1.00 + exp(-A[idx]));
         }
     }
 ";
@@ -137,8 +141,49 @@ const SIGMOID_DERIVATIVE: &str = "
         int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
         if ((i < n_rows) && (j < n_cols)) {
             int idx = (i * n_cols) + j; // Linear index for the A and B matrices
-            float s = 1.00 / (1.00 + exp(A[idx]));
+            float s = 1.00 / (1.00 + exp(-A[idx]));
             B[idx] = s * (1.00 - s);
+        }
+    }
+";
+
+const SWISH: &str = "
+    extern \"C\" __global__ void cuSwish(float* A, float* B, int n_rows, int n_cols) {
+        // Swish activation kernel implementation
+        // Arguments:
+        //  - A: input matrix (n_rows x n_cols)
+        //  - B: output matrix (n_rows x n_cols)
+        //  - n_rows: number of rows in A and B
+        //  - n_cols: number of columns in A and B
+        // Assumes:
+        //  - row-major storage
+        //  - matrices A and B are of the same size
+        int i = (blockIdx.y * blockDim.y) + threadIdx.y; // Row index
+        int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
+        if ((i < n_rows) && (j < n_cols)) {
+            int idx = (i * n_cols) + j; // Linear index for the A and B matrices
+            B[idx] = A[idx] / (1.00 + exp(-A[idx]));
+        }
+    }
+";
+
+const SWISH_DERIVATIVE: &str = "
+    extern \"C\" __global__ void cuSwishDerivative(float* A, float* B, int n_rows, int n_cols) {
+        // Swish activation derivative kernel implementation
+        // Arguments:
+        //  - A: input matrix (n_rows x n_cols)
+        //  - B: output matrix (n_rows x n_cols)
+        //  - n_rows: number of rows in A and B
+        //  - n_cols: number of columns in A and B
+        // Assumes:
+        //  - row-major storage
+        //  - matrices A and B are of the same size
+        int i = (blockIdx.y * blockDim.y) + threadIdx.y; // Row index
+        int j = (blockIdx.x * blockDim.x) + threadIdx.x; // Column index
+        if ((i < n_rows) && (j < n_cols)) {
+            int idx = (i * n_cols) + j; // Linear index for the A and B matrices
+            float s = 1.00 / (1.00 + exp(-A[idx]));
+            B[idx] = s + (A[idx] * s * (1.00 - s));
         }
     }
 ";
@@ -236,9 +281,9 @@ const RELU_DERIVATIVE: &str = "
     }
 ";
 
-const LEAKYRELU: &str = "
-    extern \"C\" __global__ void cuLeakyReLU(float a, float* A, float* B, int n_rows, int n_cols) {
-        // Leaky rectified linear unit activation kernel implementation
+const ELU: &str = "
+    extern \"C\" __global__ void cuELU(float* A, float* B, int n_rows, int n_cols) {
+        // Exponential linear unit activation kernel implementation
         // Arguments:
         //  - a: slope of the function
         //  - A: input matrix (n_rows x n_cols)
@@ -255,15 +300,15 @@ const LEAKYRELU: &str = "
             if (A[idx] > 0) {
                 B[idx] = A[idx];
             } else {
-                B[idx] = a * A[idx];
+                B[idx] = expf(A[idx]) - 1.0;
             }
         }
     }
 ";
 
-const LEAKYRELU_DERIVATIVE: &str = "
-    extern \"C\" __global__ void cuLeakyReLUDerivative(float a, float* A, float* B, int n_rows, int n_cols) {
-        // Leaky rectified linear unit activation derivative kernel implementation
+const ELU_DERIVATIVE: &str = "
+    extern \"C\" __global__ void cuELUDerivative(float* A, float* B, int n_rows, int n_cols) {
+        // Exponential linear unit activation derivative kernel implementation
         // Arguments:
         //  - a: slope of the function
         //  - A: input matrix (n_rows x n_cols)
@@ -280,7 +325,7 @@ const LEAKYRELU_DERIVATIVE: &str = "
             if (A[idx] > 0) {
                 B[idx] = 1.0;
             } else {
-                B[idx] = a;
+                B[idx] = expf(A[idx]);
             }
         }
     }
@@ -369,6 +414,60 @@ pub fn sigmoid(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
 
 pub fn sigmoidderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     let f: CudaFunction = a.get_cached_kernel("cuSigmoidDerivative", SIGMOID_DERIVATIVE)?;
+    let stream: Arc<CudaStream> = a.data.context().default_stream();
+    let mut builder: LaunchArgs = stream.launch_builder(&f);
+    let n_rows: u32 = a.n_rows as u32;
+    let n_cols: u32 = a.n_cols as u32;
+    let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+    let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
+    builder.arg(&a.data);
+    builder.arg(&mut out_dev);
+    builder.arg(&n_rows);
+    builder.arg(&n_cols);
+    let cfg = LaunchConfig {
+        block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
+        grid_dim: (
+            (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            1,
+        ),
+        shared_mem_bytes: 0,
+    };
+    unsafe {
+        let _ = builder.launch(cfg);
+    };
+    Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
+}
+
+pub fn swish(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuSwish", SWISH)?;
+    let stream: Arc<CudaStream> = a.data.context().default_stream();
+    let mut builder: LaunchArgs = stream.launch_builder(&f);
+    let n_rows: u32 = a.n_rows as u32;
+    let n_cols: u32 = a.n_cols as u32;
+    let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
+    let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
+    builder.arg(&a.data);
+    builder.arg(&mut out_dev);
+    builder.arg(&n_rows);
+    builder.arg(&n_cols);
+    let cfg = LaunchConfig {
+        block_dim: (BLOCK_SIZE, BLOCK_SIZE, 1),
+        grid_dim: (
+            (n_cols + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            (n_rows + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            1,
+        ),
+        shared_mem_bytes: 0,
+    };
+    unsafe {
+        let _ = builder.launch(cfg);
+    };
+    Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
+}
+
+pub fn swishderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuSwishDerivative", SWISH_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
@@ -502,17 +601,14 @@ pub fn reluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
     Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
 }
 
-// Different function signatures as above:
-
-pub fn leakyrelu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLU", LEAKYRELU)?;
+pub fn elu(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuELU", ELU)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
     let n_cols: u32 = a.n_cols as u32;
     let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
     let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
-    builder.arg(&s);
     builder.arg(&a.data);
     builder.arg(&mut out_dev);
     builder.arg(&n_rows);
@@ -532,15 +628,14 @@ pub fn leakyrelu(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
     Ok(Matrix::new(out_dev, n_rows as usize, n_cols as usize)?)
 }
 
-pub fn leakyreluderivative(a: &Matrix, s: f32) -> Result<Matrix, Box<dyn Error>> {
-    let f: CudaFunction = a.get_cached_kernel("cuLeakyReLUDerivative", LEAKYRELU_DERIVATIVE)?;
+pub fn eluderivative(a: &Matrix) -> Result<Matrix, Box<dyn Error>> {
+    let f: CudaFunction = a.get_cached_kernel("cuELUDerivative", ELU_DERIVATIVE)?;
     let stream: Arc<CudaStream> = a.data.context().default_stream();
     let mut builder: LaunchArgs = stream.launch_builder(&f);
     let n_rows: u32 = a.n_rows as u32;
     let n_cols: u32 = a.n_cols as u32;
     let out: Vec<f32> = vec![0.0; (n_rows * n_cols) as usize];
     let mut out_dev: CudaSlice<f32> = stream.clone_htod(&out)?;
-    builder.arg(&s);
     builder.arg(&a.data);
     builder.arg(&mut out_dev);
     builder.arg(&n_rows);
@@ -565,8 +660,10 @@ impl Activation {
         match self {
             Activation::Linear => linear(a),
             Activation::Sigmoid => sigmoid(a),
+            Activation::Swish => swish(a),
             Activation::HyperbolicTangent => hyperbolictangent(a),
             Activation::ReLU => relu(a),
+            Activation::ELU => elu(a),
             _ => {
                 return Err(Box::new(ActivationError::UnimplementedActivation));
             }
@@ -576,8 +673,10 @@ impl Activation {
         match self {
             Activation::Linear => linearderivative(a),
             Activation::Sigmoid => sigmoidderivative(a),
+            Activation::Swish => swishderivative(a),
             Activation::HyperbolicTangent => hyperbolictangentderivative(a),
             Activation::ReLU => reluderivative(a),
+            Activation::ELU => eluderivative(a),
             _ => {
                 return Err(Box::new(ActivationError::UnimplementedActivationDerivative));
             }
@@ -625,7 +724,7 @@ mod tests {
         let activation_1 = Activation::Sigmoid;
         let activation_2 = Activation::HyperbolicTangent;
         let activation_3 = Activation::ReLU;
-        let _activation_4 = Activation::LeakyReLU;
+        let _activation_4 = Activation::ELU;
 
         let matrix_1 = activation_1.activate(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_1.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
@@ -634,17 +733,17 @@ mod tests {
             a_host,
             vec![
                 0.5,
-                0.26894143,
-                0.11920292,
-                0.047425874,
-                0.01798621,
-                0.006692851,
-                0.002472623,
-                0.0009110512,
-                0.00033535014,
-                0.00012339458,
-                4.539787e-5,
-                1.670142e-5
+                0.73105854,
+                0.8807971,
+                0.95257413,
+                0.98201376,
+                0.9933072,
+                0.99752736,
+                0.99908894,
+                0.99966466,
+                0.9998766,
+                0.9999546,
+                0.9999833
             ]
         );
 
@@ -655,17 +754,17 @@ mod tests {
             a_host,
             vec![
                 0.25,
-                0.19661194,
-                0.10499358,
-                0.04517666,
-                0.017662706,
-                0.0066480567,
-                0.0024665091,
-                0.00091022113,
-                0.00033523768,
-                0.00012337936,
-                4.5395806e-5,
-                1.6701142e-5
+                0.19661196,
+                0.104993574,
+                0.045176655,
+                0.017662734,
+                0.006648033,
+                0.0024665252,
+                0.00091022695,
+                0.00033522327,
+                0.0001233664,
+                4.5416677e-5,
+                1.6689022e-5
             ]
         );
 
@@ -733,20 +832,20 @@ mod tests {
         );
 
         // Needs work because of the additional slope parameter
-        let matrix_7 = leakyrelu(&a_matrix, 0.1)?;
+        let matrix_7 = elu(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_7.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
-        println!("After `leakyrelu`: a_host {:?}", a_host);
+        println!("After `elu`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
             vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0]
         );
 
-        let matrix_8 = leakyreluderivative(&a_matrix, 0.1)?;
+        let matrix_8 = eluderivative(&a_matrix)?;
         stream.memcpy_dtoh(&matrix_8.data, &mut a_host)?; // does not interfere with a_matrix because the data in a_host is in CPU while a_matrix is in GPU
-        println!("After `leakyreluderivative`: a_host {:?}", a_host);
+        println!("After `eluderivative`: a_host {:?}", a_host);
         assert_eq!(
             a_host,
-            vec![0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         );
 
         Ok(())
